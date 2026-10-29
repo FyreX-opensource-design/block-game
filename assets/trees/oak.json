@@ -1,0 +1,17 @@
+{
+  "id": "oak",
+  "trunk": "log",
+  "leaves": "leaves",
+  "trunk_min": 4,
+  "trunk_extra": 1,
+  "extra_threshold": 0.55,
+  "radius": 2,
+  "leaf_down": 2,
+  "leaf_up": 2,
+  "top_radius": 1,
+  "skip_corners": true,
+  "max_manhattan": 4,
+  "thin_above": 2,
+  "thin_threshold": 0.72,
+  "valid_blocks": ["grass", "dirt", "muddy_grass", "mud"]
+}

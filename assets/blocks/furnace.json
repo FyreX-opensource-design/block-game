@@ -1,0 +1,20 @@
+{
+  "id": "furnace",
+  "lang": "block.furnace",
+  "tab": "building",
+  "model": "orientable",
+  "hardness": 3.5,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/furnace",
+  "properties": {
+    "rotation": "horizontal"
+  },
+  "textures": {
+    "top": "furnace_top",
+    "bottom": "furnace_top",
+    "side": "furnace_side",
+    "front": "furnace_front"
+  }
+}
+

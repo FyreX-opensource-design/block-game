@@ -1,0 +1,16 @@
+{
+  "id": "copper_ore",
+  "lang": "block.copper_ore",
+  "tab": ["natural"],
+  "model": "cube",
+  "hardness": 3.0,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/copper_ore",
+  "textures": {
+    "top": "copper_ore",
+    "side": "copper_ore",
+    "bottom": "copper_ore"
+  }
+}
+

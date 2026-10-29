@@ -1,0 +1,6 @@
+{
+  "id": "planks",
+  "type": "crafting_shapeless",
+  "ingredients": ["#logs"],
+  "result": {"item": "planks", "count": 4}
+}

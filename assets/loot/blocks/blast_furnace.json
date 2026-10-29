@@ -1,0 +1,23 @@
+{
+  "type": "block",
+  "pools": [
+    {
+      "rolls": 1,
+      "entries": [
+        {
+          "type": "item",
+          "name": "blast_furnace",
+          "count": 1,
+          "conditions": [
+            {
+              "condition": "match_tool",
+              "tool": "pickaxe",
+              "min_level": 1
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+

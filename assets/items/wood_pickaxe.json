@@ -1,0 +1,17 @@
+{
+  "id": "wood_pickaxe",
+  "lang": "item.wood_pickaxe",
+  "tab": "tools",
+  "model": "flat",
+  "texture": "wood_pickaxe",
+  "tool": "pickaxe",
+  "max_stack": 1,
+  "left": "mine",
+  "right": "none",
+  "durability": 59,
+  "mining_level": 1,
+  "mining_speed": 2,
+  "attack": 2,
+  "food": 0,
+  "repair": "stick"
+}

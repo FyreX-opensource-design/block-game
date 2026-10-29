@@ -1,0 +1,20 @@
+{
+  "id": "muddy_grass",
+  "lang": "block.muddy_grass",
+  "tab": "natural",
+  "model": "cube",
+  "solid": true,
+  "soil": true,
+  "transparent": false,
+  "hardness": 0.6,
+  "tool": "shovel",
+  "mining_level": 0,
+  "sound": "grass",
+  "tint": "grass",
+  "loot_table": "blocks/muddy_grass",
+  "textures": {
+    "top": "muddy_grass_top",
+    "side": "muddy_grass_side",
+    "bottom": "mud"
+  }
+}

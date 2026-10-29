@@ -1,0 +1,7 @@
+{
+  "type": "fluid_transform",
+  "fluid": "water",
+  "block": "grass",
+  "result": "muddy_grass"
+}
+

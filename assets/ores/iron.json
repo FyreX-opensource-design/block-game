@@ -1,0 +1,14 @@
+{
+  "id": "iron",
+  "block": "iron_ore",
+  "target": "stone",
+  "min_y": 5,
+  "max_y": 75,
+  "scale": 0.14,
+  "threshold": 0.66,
+  "octaves": 2,
+  "seed_offset": 305,
+  "max_vein_size": 8,
+  "enabled": true
+}
+

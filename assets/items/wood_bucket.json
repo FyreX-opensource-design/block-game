@@ -1,0 +1,18 @@
+{
+  "id": "wood_bucket",
+  "lang": "item.wood_bucket",
+  "tab": [
+    "tools"
+  ],
+  "model": "flat",
+  "texture": "wood_bucket",
+  "max_stack": 16,
+  "left": "none",
+  "right": "use",
+  "durability": 0,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 1,
+  "food": 0
+}
+

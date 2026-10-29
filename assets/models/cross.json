@@ -1,0 +1,13 @@
+{
+  "elements": [
+    {
+      "from": [0, 0, 0],
+      "to": [16, 16, 16],
+      "faces": {
+        "cross_a": {"texture": "#cross", "uv": [0, 0, 16, 16]},
+        "cross_b": {"texture": "#cross", "uv": [0, 0, 16, 16]}
+      }
+    }
+  ]
+}
+

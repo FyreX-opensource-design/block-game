@@ -1,0 +1,19 @@
+{
+  "id": "ocean",
+  "surface": "sand",
+  "soil": "sand",
+  "soil_depth": 3,
+  "scale": 0.006,
+  "octaves": 2,
+  "seed_offset": 90,
+  "ceiling": 0.30,
+  "inland": false,
+  "transition": {
+    "floor": 50.0,
+    "floor_detail": 4.0,
+    "curve": "smoothstep"
+  },
+  "tree_chance": 0.0,
+  "trees": [],
+  "grass_color": "#8eb971"
+}

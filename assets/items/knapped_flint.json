@@ -1,0 +1,15 @@
+{
+  "id": "knapped_flint",
+  "lang": "item.knapped_flint",
+  "tab": "materials",
+  "model": "flat",
+  "texture": "knapped_flint",
+  "max_stack": 64,
+  "left": "attack",
+  "right": "use",
+  "durability": 0,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 1,
+  "food": 0
+}

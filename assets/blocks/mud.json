@@ -1,0 +1,19 @@
+{
+  "id": "mud",
+  "lang": "block.mud",
+  "tab": "natural",
+  "model": "cube",
+  "solid": true,
+  "soil": true,
+  "transparent": false,
+  "hardness": 0.5,
+  "tool": "shovel",
+  "mining_level": 0,
+  "sound": "gravel",
+  "loot_table": "blocks/mud",
+  "textures": {
+    "top": "mud",
+    "side": "mud",
+    "bottom": "mud"
+  }
+}

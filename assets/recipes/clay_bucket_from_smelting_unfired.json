@@ -1,0 +1,12 @@
+{
+  "id": "clay_bucket_from_smelting_unfired",
+  "type": "smelting",
+  "ingredient": "unfired_clay_bucket",
+  "result": {
+    "item": "clay_bucket",
+    "count": 1
+  },
+  "cookingtime": 10.0,
+  "experience": 0.35
+}
+

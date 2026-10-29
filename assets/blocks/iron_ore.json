@@ -1,0 +1,16 @@
+{
+  "id": "iron_ore",
+  "lang": "block.iron_ore",
+  "tab": ["natural"],
+  "model": "cube",
+  "hardness": 3.0,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/iron_ore",
+  "textures": {
+    "top": "iron_ore",
+    "side": "iron_ore",
+    "bottom": "iron_ore"
+  }
+}
+

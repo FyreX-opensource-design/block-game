@@ -1,0 +1,13 @@
+{
+  "id": "stone_slab",
+  "lang": "block.stone_slab",
+  "type": "slab",
+  "tab": ["building"],
+  "model": "slab",
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/stone_slab",
+  "textures": {"top": "stone", "side": "stone", "bottom": "stone"}
+}
+

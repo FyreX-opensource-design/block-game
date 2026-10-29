@@ -1,0 +1,14 @@
+{
+  "id": "coal",
+  "block": "coal_ore",
+  "target": "stone",
+  "min_y": 5,
+  "max_y": 128,
+  "scale": 0.12,
+  "threshold": 0.62,
+  "octaves": 2,
+  "seed_offset": 101,
+  "max_vein_size": 16,
+  "enabled": true
+}
+

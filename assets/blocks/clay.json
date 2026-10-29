@@ -1,0 +1,12 @@
+{
+  "id": "clay",
+  "lang": "block.clay",
+  "tab": "natural",
+  "model": "cube",
+  "hardness": 0.6,
+  "tool": "shovel",
+  "mining_level": 0,
+  "loot_table": "blocks/clay",
+  "textures": {"top": "clay", "side": "clay", "bottom": "clay"}
+}
+

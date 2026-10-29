@@ -1,0 +1,15 @@
+{
+  "id": "carpenters_sticks",
+  "type": "carpenters_table",
+  "pattern": [
+    "#"
+  ],
+  "key": {
+    "#": "log"
+  },
+  "result": {
+    "item": "stick",
+    "count": 16
+  }
+}
+

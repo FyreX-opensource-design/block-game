@@ -1,0 +1,13 @@
+{
+  "id": "cobble_slab",
+  "lang": "block.cobble_slab",
+  "type": "slab",
+  "tab": ["building"],
+  "model": "slab",
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/cobble_slab",
+  "textures": {"top": "cobble", "side": "cobble", "bottom": "cobble"}
+}
+

@@ -1,0 +1,12 @@
+{
+  "id": "copper_nugget_from_smelting_raw_copper_bit",
+  "type": "smelting",
+  "ingredient": "raw_copper_bit",
+  "result": {
+    "item": "copper_nugget",
+    "count": 1
+  },
+  "cookingtime": 10.0,
+  "experience": 0.1
+}
+

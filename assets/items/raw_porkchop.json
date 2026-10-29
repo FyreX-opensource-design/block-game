@@ -1,0 +1,17 @@
+{
+  "id": "raw_porkchop",
+  "name": "Raw Porkchop",
+  "tab": [
+    "materials"
+  ],
+  "model": "flat",
+  "texture": "raw_porkchop",
+  "max_stack": 64,
+  "left": "none",
+  "right": "none",
+  "durability": 0,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 1,
+  "food": 3
+}

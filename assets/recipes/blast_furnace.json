@@ -1,0 +1,19 @@
+{
+  "id": "blast_furnace",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#F#",
+    "SSS"
+  ],
+  "key": {
+    "#": "iron_ingot",
+    "F": "furnace",
+    "S": "stone"
+  },
+  "result": {
+    "item": "blast_furnace",
+    "count": 1
+  }
+}
+

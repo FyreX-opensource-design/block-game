@@ -1,0 +1,16 @@
+{
+  "id": "iron_bucket",
+  "type": "crafting_shaped",
+  "pattern": [
+    "# #",
+    " # "
+  ],
+  "key": {
+    "#": "iron_ingot"
+  },
+  "result": {
+    "item": "iron_bucket",
+    "count": 1
+  }
+}
+

@@ -1,0 +1,16 @@
+{
+  "id": "fancy_oak",
+  "shape": "branching",
+  "trunk": "log",
+  "leaves": "leaves",
+  "trunk_min": 6,
+  "trunk_extra": 2,
+  "extra_threshold": 0.4,
+  "radius": 2,
+  "leaf_down": 2,
+  "leaf_up": 2,
+  "branch_count": 3,
+  "branch_length": 2,
+  "valid_blocks": ["#soil"]
+}
+

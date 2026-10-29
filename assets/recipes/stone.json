@@ -1,0 +1,12 @@
+{
+  "id": "stone",
+  "type": "smelting",
+  "ingredient": "cobble",
+  "result": {
+    "item": "stone",
+    "count": 1
+  },
+  "cookingtime": 10.0,
+  "experience": 0.1
+}
+

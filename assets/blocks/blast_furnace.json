@@ -1,0 +1,23 @@
+{
+  "id": "blast_furnace",
+  "lang": "block.blast_furnace",
+  "station": "furnace",
+  "recipe_types": ["blasting"],
+  "cook_speed": 2.0,
+  "tab": "building",
+  "model": "orientable",
+  "hardness": 3.5,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/blast_furnace",
+  "properties": {
+    "rotation": "horizontal"
+  },
+  "textures": {
+    "top": "stone",
+    "bottom": "stone",
+    "side": "furnace_side",
+    "front": "furnace_front"
+  }
+}
+

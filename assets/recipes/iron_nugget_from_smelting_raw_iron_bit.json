@@ -1,0 +1,12 @@
+{
+  "id": "iron_nugget_from_smelting_raw_iron_bit",
+  "type": "smelting",
+  "ingredient": "raw_iron_bit",
+  "result": {
+    "item": "iron_nugget",
+    "count": 1
+  },
+  "cookingtime": 10.0,
+  "experience": 0.1
+}
+

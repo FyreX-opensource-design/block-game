@@ -1,0 +1,16 @@
+{
+  "id": "crafting_table",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "##"
+  ],
+  "key": {
+    "#": "planks"
+  },
+  "result": {
+    "item": "crafting_table",
+    "count": 1
+  }
+}
+

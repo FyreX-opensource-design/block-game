@@ -1,0 +1,17 @@
+{
+  "id": "furnace",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "# #",
+    "###"
+  ],
+  "key": {
+    "#": "cobble"
+  },
+  "result": {
+    "item": "furnace",
+    "count": 1
+  }
+}
+

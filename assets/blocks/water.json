@@ -1,0 +1,15 @@
+{
+  "id": "water",
+  "lang": "block.water",
+  "tab": "natural",
+  "model": "cube",
+  "render": "cutout",
+  "solid": false,
+  "opacity": 0.6,
+  "hardness": 100.0,
+  "tool": "none",
+  "mining_level": 0,
+  "properties": {"fluid": "water", "level": 8},
+  "textures": {"top": "water", "side": "water", "bottom": "water"}
+}
+

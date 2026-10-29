@@ -1,0 +1,7 @@
+{
+  "id": "rose",
+  "block": "rose",
+  "chance": 0.02,
+  "surfaces": ["grass"]
+}
+

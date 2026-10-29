@@ -1,0 +1,16 @@
+{
+  "id": "copper_dust",
+  "lang": "item.copper_dust",
+  "tab": "natural",
+  "model": "flat",
+  "texture": "copper_dust",
+  "max_stack": 64,
+  "left": "none",
+  "right": "none",
+  "durability": 0,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 1,
+  "food": 0
+}
+

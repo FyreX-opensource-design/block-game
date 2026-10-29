@@ -1,0 +1,16 @@
+{
+  "id": "coal_ore",
+  "lang": "block.coal_ore",
+  "tab": ["natural"],
+  "model": "cube",
+  "hardness": 3.0,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/coal_ore",
+  "textures": {
+    "top": "coal_ore",
+    "side": "coal_ore",
+    "bottom": "coal_ore"
+  }
+}
+

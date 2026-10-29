@@ -1,0 +1,17 @@
+{
+  "id": "carpenters_table",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "//"
+  ],
+  "key": {
+    "#": "planks",
+    "/": "log"
+  },
+  "result": {
+    "item": "carpenters_table",
+    "count": 1
+  }
+}
+

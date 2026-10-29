@@ -1,0 +1,16 @@
+{
+  "id": "leaves",
+  "lang": "block.leaves",
+  "tab": "natural",
+  "model": "cube",
+  "render": "cutout",
+  "hardness": 0.2,
+  "tool": "none",
+  "mining_level": 0,
+  "loot_table": "blocks/leaves",
+  "textures": {"top": "leaves", "side": "leaves", "bottom": "leaves"},
+  "properties": {
+    "leaf": true,
+    "decayable": true
+  }
+}

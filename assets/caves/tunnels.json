@@ -1,0 +1,15 @@
+{
+  "id": "tunnels",
+  "style": "tunnel",
+  "min_y": 8,
+  "max_y": 100,
+  "surface_margin": 0,
+  "horizontal_scale": 0.04,
+  "vertical_scale": 0.055,
+  "octaves": 2,
+  "thickness": 0.022,
+  "breach_depth": 4,
+  "breach_scale": 0.08,
+  "breach_threshold": 0.66,
+  "seed_offset": 17
+}

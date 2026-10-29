@@ -1,0 +1,11 @@
+{
+  "id": "cobble",
+  "lang": "block.cobble",
+  "tab": "building",
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/cobble",
+  "textures": {"top": "cobble", "side": "cobble", "bottom": "cobble"}
+}

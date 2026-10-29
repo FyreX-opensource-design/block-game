@@ -1,0 +1,16 @@
+{
+  "id": "stick",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "#"
+  ],
+  "key": {
+    "#": "planks"
+  },
+  "result": {
+    "item": "stick",
+    "count": 4
+  }
+}
+

@@ -1,0 +1,12 @@
+{
+  "id": "iron_ingot_from_blasting",
+  "type": "blasting",
+  "ingredient": "raw_iron",
+  "result": {
+    "item": "iron_ingot",
+    "count": 1
+  },
+  "cookingtime": 10.0,
+  "experience": 0.7
+}
+

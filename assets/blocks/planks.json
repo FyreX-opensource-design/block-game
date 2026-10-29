@@ -1,0 +1,11 @@
+{
+  "id": "planks",
+  "lang": "block.planks",
+  "tab": "building",
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "axe",
+  "mining_level": 0,
+  "loot_table": "blocks/planks",
+  "textures": {"top": "planks", "side": "planks", "bottom": "planks"}
+}

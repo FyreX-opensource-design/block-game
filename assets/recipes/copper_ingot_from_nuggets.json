@@ -1,0 +1,17 @@
+{
+  "id": "copper_ingot_from_nuggets",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "###",
+    "###"
+  ],
+  "key": {
+    "#": "copper_nugget"
+  },
+  "result": {
+    "item": "copper_ingot",
+    "count": 1
+  }
+}
+

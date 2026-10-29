@@ -1,0 +1,17 @@
+{
+  "id": "iron_ingot_from_nuggets",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "###",
+    "###"
+  ],
+  "key": {
+    "#": "iron_nugget"
+  },
+  "result": {
+    "item": "iron_ingot",
+    "count": 1
+  }
+}
+

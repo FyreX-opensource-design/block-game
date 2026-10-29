@@ -1,0 +1,21 @@
+{
+  "id": "mountain_meadow",
+  "surface": "grass",
+  "soil": "dirt",
+  "soil_depth": 2,
+  "scale": 0.006,
+  "octaves": 2,
+  "seed_offset": 90,
+  "ceiling": 0.80,
+  "tree_chance": 0.003,
+  "height_offset": 22,
+  "height_scale": 1.5,
+  "cliff": false,
+  "transition": {
+    "blend": 0.08,
+    "curve": "smoothstep"
+  },
+  "trees": ["shrub", "oak"],
+  "decorations": ["tall_grass", "dandelion", "rose"],
+  "grass_color": "#6cdb3e"
+}

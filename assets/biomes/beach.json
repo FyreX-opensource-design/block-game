@@ -1,0 +1,19 @@
+{
+  "id": "beach",
+  "surface": "sand",
+  "soil": "sand",
+  "soil_depth": 3,
+  "scale": 0.006,
+  "octaves": 2,
+  "seed_offset": 90,
+  "ceiling": 0.36,
+  "inland": false,
+  "transition": {
+    "ceiling": 0.42,
+    "width": 0.16,
+    "curve": "smoothstep"
+  },
+  "tree_chance": 0.0,
+  "trees": [],
+  "grass_color": "#a7cf5b"
+}

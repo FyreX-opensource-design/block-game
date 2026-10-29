@@ -1,0 +1,13 @@
+{
+  "id": "gravel",
+  "lang": "block.gravel",
+  "tab": "natural",
+  "model": "cube",
+  "hardness": 0.6,
+  "tool": "shovel",
+  "mining_level": 0,
+  "loot_table": "blocks/gravel",
+  "gravity": true,
+  "textures": {"top": "gravel", "side": "gravel", "bottom": "gravel"}
+}
+

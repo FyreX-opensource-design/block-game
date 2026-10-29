@@ -1,0 +1,15 @@
+{
+  "id": "unfired_clay_bucket",
+  "type": "crafting_shaped",
+  "pattern": [
+    "# #",
+    " # "
+  ],
+  "key": {
+    "#": "clay_ball"
+  },
+  "result": {
+    "item": "unfired_clay_bucket",
+    "count": 1
+  }
+}

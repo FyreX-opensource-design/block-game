@@ -1,0 +1,13 @@
+{
+  "id": "grass",
+  "lang": "block.grass",
+  "tab": "natural",
+  "model": "cube",
+  "soil": true,
+  "hardness": 0.6,
+  "tool": "shovel",
+  "mining_level": 0,
+  "loot_table": "blocks/grass",
+  "tint": "grass",
+  "textures": {"top": "grass_top", "side": "grass_side", "bottom": "dirt"}
+}

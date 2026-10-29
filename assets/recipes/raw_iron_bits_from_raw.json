@@ -1,0 +1,12 @@
+{
+  "id": "raw_iron_bits_from_raw",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "raw_iron"
+  ],
+  "result": {
+    "item": "raw_iron_bit",
+    "count": 9
+  }
+}
+

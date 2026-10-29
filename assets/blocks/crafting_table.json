@@ -1,0 +1,16 @@
+{
+  "id": "crafting_table",
+  "lang": "block.crafting_table",
+  "tab": "building",
+  "model": "cube",
+  "hardness": 2.5,
+  "tool": "axe",
+  "mining_level": 0,
+  "loot_table": "blocks/crafting_table",
+  "textures": {
+    "top": "crafting_table_top",
+    "side": "crafting_table_side",
+    "bottom": "planks"
+  }
+}
+

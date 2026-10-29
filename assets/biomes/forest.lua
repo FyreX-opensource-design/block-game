@@ -1,0 +1,21 @@
+return {
+  id = "forest",
+  surface = "grass",
+  soil = "dirt",
+  soil_depth = 3,
+  scale = 0.006,
+  octaves = 2,
+  seed_offset = 90,
+  ceiling = 0.64,
+  tree_chance = 0.014,
+  height_offset = 8,
+  height_scale = 1.1,
+  cliff = false,
+  transition = {
+    blend = 0.08,
+    curve = "smoothstep",
+  },
+  trees = { "oak", "fancy_oak", "tall_oak" },
+  decorations = { "tall_grass", "fern", "dandelion", "rose" },
+  grass_color = "#5da73b",
+}

@@ -1,0 +1,14 @@
+{
+  "id": "pine",
+  "shape": "conifer",
+  "trunk": "log",
+  "leaves": "leaves",
+  "trunk_min": 7,
+  "trunk_extra": 3,
+  "extra_threshold": 0.5,
+  "radius": 2,
+  "leaf_down": 5,
+  "leaf_up": 1,
+  "valid_blocks": ["#soil"]
+}
+

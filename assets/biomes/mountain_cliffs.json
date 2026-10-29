@@ -1,0 +1,25 @@
+{
+  "id": "mountain_cliffs",
+  "surface": "stone",
+  "soil": "stone",
+  "soil_depth": 1,
+  "scale": 0.006,
+  "octaves": 2,
+  "seed_offset": 90,
+  "ceiling": 1.0,
+  "tree_chance": 0.0,
+  "height_offset": 32,
+  "height_scale": 1.1,
+  "cliff": true,
+  "cliff_step": 10.0,
+  "transition": {
+    "blend": 0.008,
+    "cliff": true,
+    "cliff_step": 10.0,
+    "curve": "smoothstep"
+  },
+  "trees": [],
+  "decorations": [],
+  "grass_color": "#6fa076"
+}
+

@@ -1,0 +1,12 @@
+{
+  "id": "sand",
+  "lang": "block.sand",
+  "tab": "natural",
+  "model": "cube",
+  "hardness": 0.5,
+  "tool": "shovel",
+  "mining_level": 0,
+  "loot_table": "blocks/sand",
+  "gravity": true,
+  "textures": {"top": "sand", "side": "sand", "bottom": "sand"}
+}

@@ -1,0 +1,18 @@
+{
+  "id": "wood_pickaxe",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    " X ",
+    " X "
+  ],
+  "key": {
+    "#": "planks",
+    "X": "stick"
+  },
+  "result": {
+    "item": "wood_pickaxe",
+    "count": 1
+  }
+}
+

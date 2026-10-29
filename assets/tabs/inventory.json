@@ -1,0 +1,6 @@
+{
+  "id": "inventory",
+  "lang": "tab.inventory",
+  "order": 100,
+  "screen": "player"
+}

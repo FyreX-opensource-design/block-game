@@ -1,0 +1,14 @@
+{
+  "id": "log",
+  "lang": "block.log",
+  "tab": ["building", "natural"],
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "axe",
+  "mining_level": 0,
+  "loot_table": "blocks/log",
+  "properties": {
+    "rotation": "axis"
+  },
+  "textures": {"top": "log_top", "side": "log_side", "bottom": "log_top"}
+}

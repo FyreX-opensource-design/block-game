@@ -1,0 +1,22 @@
+{
+  "id": "mountain_peaks",
+  "surface": "stone",
+  "soil": "stone",
+  "soil_depth": 1,
+  "scale": 0.006,
+  "octaves": 2,
+  "seed_offset": 90,
+  "ceiling": 0.85,
+  "tree_chance": 0.0,
+  "height_offset": 26,
+  "height_scale": 1.6,
+  "cliff": false,
+  "transition": {
+    "blend": 0.08,
+    "curve": "smoothstep"
+  },
+  "trees": [],
+  "decorations": [],
+  "grass_color": "#78a783"
+}
+

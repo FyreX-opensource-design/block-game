@@ -1,0 +1,11 @@
+{
+  "id": "stone",
+  "lang": "block.stone",
+  "tab": ["building", "natural"],
+  "model": "cube",
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/stone",
+  "textures": {"top": "stone", "side": "stone", "bottom": "stone"}
+}

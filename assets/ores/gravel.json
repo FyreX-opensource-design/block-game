@@ -1,0 +1,14 @@
+{
+  "id": "gravel",
+  "block": "gravel",
+  "target": "stone",
+  "min_y": 5,
+  "max_y": 120,
+  "scale": 0.10,
+  "threshold": 0.68,
+  "octaves": 2,
+  "seed_offset": 404,
+  "max_vein_size": 32,
+  "enabled": true
+}
+

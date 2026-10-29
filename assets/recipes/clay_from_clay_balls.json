@@ -1,0 +1,16 @@
+{
+  "id": "clay_from_clay_balls",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "##"
+  ],
+  "key": {
+    "#": "clay_ball"
+  },
+  "result": {
+    "item": "clay",
+    "count": 1
+  }
+}
+

@@ -1,0 +1,16 @@
+{
+  "id": "crafting_table",
+  "lang": "block.crafting_table",
+  "tab": "building",
+  "model": "block",
+  "block": "crafting_table",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 1,
+  "food": 0
+}
+

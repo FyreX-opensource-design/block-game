@@ -1,0 +1,14 @@
+{
+  "id": "tall_oak",
+  "shape": "tall",
+  "trunk": "log",
+  "leaves": "leaves",
+  "trunk_min": 6,
+  "trunk_extra": 2,
+  "extra_threshold": 0.5,
+  "radius": 1,
+  "leaf_down": 3,
+  "leaf_up": 1,
+  "valid_blocks": ["#soil"]
+}
+

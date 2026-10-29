@@ -1,0 +1,16 @@
+{
+  "id": "raw_copper_bit",
+  "lang": "item.raw_copper_bit",
+  "tab": "natural",
+  "model": "flat",
+  "texture": "raw_copper_bit",
+  "max_stack": 64,
+  "left": "none",
+  "right": "none",
+  "durability": 0,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 1,
+  "food": 0
+}
+

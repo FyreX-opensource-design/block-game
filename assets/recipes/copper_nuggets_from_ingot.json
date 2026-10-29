@@ -1,0 +1,12 @@
+{
+  "id": "copper_nuggets_from_ingot",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "copper_ingot"
+  ],
+  "result": {
+    "item": "copper_nugget",
+    "count": 9
+  }
+}
+

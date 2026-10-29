@@ -1,0 +1,9 @@
+{
+  "type": "block_hit",
+  "item": "flint",
+  "blocks": ["stone", "cobble"],
+  "chance": 0.60,
+  "loot_table": "knapped_flint",
+  "consume_item": true
+}
+

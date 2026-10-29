@@ -1,0 +1,18 @@
+{
+  "id": "tall_grass",
+  "lang": "block.tall_grass",
+  "tab": "natural",
+  "model": "cross",
+  "render": "cutout",
+  "solid": false,
+  "hardness": 0.0,
+  "tool": "none",
+  "mining_level": 0,
+  "loot_table": "blocks/tall_grass",
+  "fluid_breakable": true,
+  "plant": true,
+  "requires_soil": true,
+  "tint": "grass",
+  "textures": {"cross": "tall_grass"}
+}
+

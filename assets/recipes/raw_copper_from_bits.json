@@ -1,0 +1,17 @@
+{
+  "id": "raw_copper_from_bits",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "###",
+    "###"
+  ],
+  "key": {
+    "#": "raw_copper_bit"
+  },
+  "result": {
+    "item": "raw_copper",
+    "count": 1
+  }
+}
+

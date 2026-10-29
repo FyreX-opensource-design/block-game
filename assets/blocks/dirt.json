@@ -1,0 +1,12 @@
+{
+  "id": "dirt",
+  "lang": "block.dirt",
+  "tab": "natural",
+  "model": "cube",
+  "soil": true,
+  "hardness": 0.5,
+  "tool": "shovel",
+  "mining_level": 0,
+  "loot_table": "blocks/dirt",
+  "textures": {"top": "dirt", "side": "dirt", "bottom": "dirt"}
+}

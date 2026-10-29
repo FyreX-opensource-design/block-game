@@ -1,0 +1,23 @@
+{
+  "type": "block",
+  "pools": [
+    {
+      "rolls": 1,
+      "entries": [
+        {
+          "type": "item",
+          "name": "flint",
+          "weight": 1,
+          "count": 1
+        },
+        {
+          "type": "item",
+          "name": "gravel",
+          "weight": 9,
+          "count": 1
+        }
+      ]
+    }
+  ]
+}
+

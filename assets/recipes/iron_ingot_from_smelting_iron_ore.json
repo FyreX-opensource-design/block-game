@@ -1,0 +1,12 @@
+{
+  "id": "iron_ingot_from_smelting_iron_ore",
+  "type": "smelting",
+  "ingredient": "iron_ore",
+  "result": {
+    "item": "iron_ingot",
+    "count": 1
+  },
+  "cookingtime": 10.0,
+  "experience": 0.7
+}
+

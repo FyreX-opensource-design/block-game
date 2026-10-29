@@ -1,0 +1,21 @@
+{
+  "id": "wooded_mountains",
+  "surface": "grass",
+  "soil": "dirt",
+  "soil_depth": 3,
+  "scale": 0.006,
+  "octaves": 2,
+  "seed_offset": 90,
+  "ceiling": 0.75,
+  "tree_chance": 0.022,
+  "height_offset": 16,
+  "height_scale": 1.35,
+  "cliff": false,
+  "transition": {
+    "blend": 0.08,
+    "curve": "smoothstep"
+  },
+  "trees": ["pine", "tall_oak", "oak"],
+  "decorations": ["tall_grass", "fern", "rose"],
+  "grass_color": "#689b52"
+}

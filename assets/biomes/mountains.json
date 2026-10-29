@@ -1,0 +1,22 @@
+{
+  "id": "mountains",
+  "surface": "grass",
+  "soil": "dirt",
+  "soil_depth": 2,
+  "scale": 0.006,
+  "octaves": 2,
+  "seed_offset": 90,
+  "ceiling": 0.70,
+  "tree_chance": 0.005,
+  "height_offset": 12,
+  "height_scale": 1.2,
+  "cliff": false,
+  "transition": {
+    "blend": 0.08,
+    "curve": "smoothstep"
+  },
+  "trees": ["pine", "oak"],
+  "decorations": ["tall_grass", "dandelion"],
+  "grass_color": "#8ab689"
+}
+

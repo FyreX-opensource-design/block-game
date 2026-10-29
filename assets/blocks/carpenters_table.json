@@ -1,0 +1,18 @@
+{
+  "id": "carpenters_table",
+  "lang": "block.carpenters_table",
+  "station": "crafting_table",
+  "recipe_types": ["carpenters_table"],
+  "tab": "building",
+  "model": "cube",
+  "hardness": 2.5,
+  "tool": "axe",
+  "mining_level": 0,
+  "loot_table": "blocks/carpenters_table",
+  "textures": {
+    "top": "crafting_table_top",
+    "side": "planks",
+    "bottom": "log_top"
+  }
+}
+

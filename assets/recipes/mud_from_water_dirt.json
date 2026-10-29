@@ -1,0 +1,7 @@
+{
+  "type": "fluid_transform",
+  "fluid": "water",
+  "block": "dirt",
+  "result": "mud"
+}
+

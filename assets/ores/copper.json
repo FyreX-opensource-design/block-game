@@ -1,0 +1,14 @@
+{
+  "id": "copper",
+  "block": "copper_ore",
+  "target": "stone",
+  "min_y": 20,
+  "max_y": 90,
+  "scale": 0.13,
+  "threshold": 0.65,
+  "octaves": 2,
+  "seed_offset": 202,
+  "max_vein_size": 12,
+  "enabled": true
+}
+
