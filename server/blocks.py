@@ -242,14 +242,16 @@ def get_slab_info(block_or_id):
         return None
 
     is_double = bool(props.get("double_slab") or getattr(block, "double_slab", False))
-    half = "double" if is_double else props.get("half", "bottom")
+    half = "double" if is_double else props.get("half", getattr(block, "slab_half", "bottom"))
     waterlogged = bool(props.get("waterlogged") or getattr(block, "waterlogged", False))
+    level = int(props.get("level", 8 if waterlogged else 0))
     base_id = getattr(block, "base_id", block.id)
-    if base_id.endswith("_top_waterlogged"):
-        base_id = base_id[:-16]
-    elif base_id.endswith("_waterlogged"):
-        base_id = base_id[:-12]
-    elif base_id.endswith("_top"):
+    for sfx in ("_top_waterlogged", "_waterlogged"):
+        if sfx in base_id:
+            idx = base_id.find(sfx)
+            base_id = base_id[:idx]
+            break
+    if base_id.endswith("_top"):
         base_id = base_id[:-4]
 
     bottom = props.get("bottom", base_id)
@@ -263,7 +265,20 @@ def get_slab_info(block_or_id):
         "waterlogged": waterlogged,
         "bottom": bottom,
         "top": top,
+        "level": level,
     }
+
+
+def get_waterlogged_slab(base_id, half="bottom", level=8):
+    s_info = get_slab_info(base_id)
+    b_id = s_info["base_id"] if s_info else base_id
+    if level >= 8:
+        target = f"{b_id}_top_waterlogged" if half == "top" else f"{b_id}_waterlogged"
+    elif level > 0:
+        target = f"{b_id}_top_waterlogged_{level}" if half == "top" else f"{b_id}_waterlogged_{level}"
+    else:
+        target = f"{b_id}_top" if half == "top" else b_id
+    return target if target in BLOCKS else (f"{b_id}_top" if half == "top" else b_id)
 
 
 def get_double_slab(bottom_id, top_id):
@@ -391,6 +406,11 @@ def canonical_id(value):
             return norm[:-16]
         if norm.endswith("_waterlogged") and norm[:-12] in BLOCKS:
             return norm[:-12]
+        for sfx in ("_top_waterlogged_", "_waterlogged_"):
+            if sfx in norm:
+                base = norm[:norm.find(sfx)]
+                if base in BLOCKS:
+                    return base
         if norm.endswith("_top") and norm[:-4] in BLOCKS:
             return norm[:-4]
     if isinstance(value, int) or (isinstance(value, str) and value.isdigit()):
@@ -1072,6 +1092,69 @@ def _load_registry():
             by_index.append(wlt_block)
             index_of[wlt_id] = len(by_index) - 1
 
+            for lvl in range(7, 0, -1):
+                wl_flow_id = f"{block.id}_waterlogged_{lvl}"
+                wl_flow_props = dict(base_props)
+                wl_flow_props["waterlogged"] = True
+                wl_flow_props["fluid"] = "water"
+                wl_flow_props["level"] = lvl
+                wl_flow_block = Block(
+                    wl_flow_id,
+                    f"{name} (Waterlogged {lvl})",
+                    True,
+                    False,
+                    face_uvs,
+                    resolved,
+                    cutout,
+                    opacity,
+                    membership,
+                    properties=wl_flow_props,
+                    base_id=block.id,
+                    is_variant=True,
+                    hardness=block.hardness,
+                    tool=block.tool,
+                    mining_level=block.mining_level,
+                    loot_table=block.loot_table,
+                    emission=block.emission,
+                    slab=True,
+                    slab_half="bottom",
+                    waterlogged=True,
+                )
+                blocks[wl_flow_id] = wl_flow_block
+                by_index.append(wl_flow_block)
+                index_of[wl_flow_id] = len(by_index) - 1
+
+                wlt_flow_id = f"{block.id}_top_waterlogged_{lvl}"
+                wlt_flow_props = dict(top_props)
+                wlt_flow_props["waterlogged"] = True
+                wlt_flow_props["fluid"] = "water"
+                wlt_flow_props["level"] = lvl
+                wlt_flow_block = Block(
+                    wlt_flow_id,
+                    f"{name} (Top Waterlogged {lvl})",
+                    True,
+                    False,
+                    face_uvs,
+                    top_resolved,
+                    cutout,
+                    opacity,
+                    membership,
+                    properties=wlt_flow_props,
+                    base_id=block.id,
+                    is_variant=True,
+                    hardness=block.hardness,
+                    tool=block.tool,
+                    mining_level=block.mining_level,
+                    loot_table=block.loot_table,
+                    emission=block.emission,
+                    slab=True,
+                    slab_half="top",
+                    waterlogged=True,
+                )
+                blocks[wlt_flow_id] = wlt_flow_block
+                by_index.append(wlt_flow_block)
+                index_of[wlt_flow_id] = len(by_index) - 1
+
     import itertools
 
     slab_blocks = [
@@ -1125,6 +1208,8 @@ def _load_registry():
             slab_half="double",
             double_slab=True,
         )
+        if len(by_index) == 99:
+            by_index.append(None)
         blocks[double_id] = d_block
         by_index.append(d_block)
         index_of[double_id] = len(by_index) - 1

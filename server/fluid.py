@@ -101,9 +101,12 @@ def is_water(block_id):
 def is_water_source(block_id):
     if block_id == WATER_SOURCE:
         return True
-    from server.blocks import is_waterlogged_slab
+    from server.blocks import get_slab_info
 
-    return is_waterlogged_slab(block_id)
+    s_info = get_slab_info(block_id)
+    if s_info is not None and s_info["waterlogged"]:
+        return s_info.get("level", 8) == 8
+    return False
 
 
 def get_fluid_level(block_id):
@@ -111,10 +114,11 @@ def get_fluid_level(block_id):
         return 0
     if block_id in FLUID_LEVELS:
         return FLUID_LEVELS[block_id]
-    from server.blocks import is_waterlogged_slab
+    from server.blocks import get_slab_info
 
-    if is_waterlogged_slab(block_id):
-        return 8
+    s_info = get_slab_info(block_id)
+    if s_info is not None and s_info["waterlogged"]:
+        return s_info.get("level", 8)
     return 0
 
 
@@ -148,7 +152,7 @@ def can_flow_into(world, x, y, z, from_level=None, from_y=None):
 
     s_info = get_slab_info(block)
     if s_info is not None:
-        if s_info["double"] or s_info["waterlogged"]:
+        if s_info["double"] or is_water_source(block):
             return False
         if s_info["half"] == "bottom":
             if from_y is not None and from_y == y + 1:
@@ -365,23 +369,54 @@ def compute_new_fluid_state(world, x, y, z):
 
     s_info = get_slab_info(cur)
     if s_info is not None:
-        if s_info["double"] or s_info["waterlogged"]:
+        if s_info["double"] or is_water_source(cur):
             return cur
+        from server.blocks import get_waterlogged_slab
+
+        max_level = 0
         if s_info["half"] == "bottom":
             above = world.get_block(x, y + 1, z) if (y + 1 < WORLD_HEIGHT) else AIR
             if is_water(above):
-                return f"{s_info['base_id']}_waterlogged"
+                max_level = 7
             for dx, dz in CARDINALS:
-                nbr = world.get_block(x + dx, y, z + dz)
-                if is_water(nbr) and get_fluid_level(nbr) > 4:
-                    return f"{s_info['base_id']}_waterlogged"
-            return cur
+                nx = x + dx
+                nz = z + dz
+                nbr = world.get_block(nx, y, nz)
+                if not is_water(nbr):
+                    continue
+                nbr_level = get_fluid_level(nbr)
+                if nbr_level <= 4:
+                    continue
+                if y > 0 and (can_flow_into(world, nx, y - 1, nz) or is_water(world.get_block(nx, y - 1, nz))):
+                    continue
+                dirs = find_dropoff_directions(world, nx, y, nz)
+                if (-dx, -dz) in dirs:
+                    pot = nbr_level - 1
+                    if pot > max_level:
+                        max_level = pot
         elif s_info["half"] == "top":
             for dx, dz in CARDINALS:
-                nbr = world.get_block(x + dx, y, z + dz)
-                if is_water(nbr):
-                    return f"{s_info['base_id']}_top_waterlogged"
+                nx = x + dx
+                nz = z + dz
+                nbr = world.get_block(nx, y, nz)
+                if not is_water(nbr):
+                    continue
+                nbr_level = get_fluid_level(nbr)
+                if nbr_level <= 1:
+                    continue
+                if y > 0 and (can_flow_into(world, nx, y - 1, nz) or is_water(world.get_block(nx, y - 1, nz))):
+                    continue
+                dirs = find_dropoff_directions(world, nx, y, nz)
+                if (-dx, -dz) in dirs:
+                    pot = nbr_level - 1
+                    if pot > max_level:
+                        max_level = pot
+
+        if max_level <= 0:
+            if s_info["waterlogged"]:
+                return f"{s_info['base_id']}_top" if s_info["half"] == "top" else s_info["base_id"]
             return cur
+        return get_waterlogged_slab(s_info["base_id"], half=s_info["half"], level=max_level)
 
     if is_water_source(cur):
         return WATER_SOURCE

@@ -873,7 +873,15 @@ class Game(pyglet.window.Window):
         if s_info is not None:
             broken_id = s_info["base_id"]
             if s_info.get("waterlogged"):
-                next_block = "water"
+                from server.fluid import WATER_LEVEL_BLOCKS
+
+                lvl = s_info.get("level", 8)
+                if lvl >= 8:
+                    next_block = "water"
+                elif lvl in WATER_LEVEL_BLOCKS:
+                    next_block = WATER_LEVEL_BLOCKS[lvl]
+                else:
+                    next_block = AIR
         else:
             broken_id = block_id
 
@@ -1919,8 +1927,9 @@ class Game(pyglet.window.Window):
                 fx, fy, fz = fluid_hit["x"], fluid_hit["y"], fluid_hit["z"]
                 target_block = self.world.get_block(fx, fy, fz)
                 from server.blocks import is_waterlogged_slab, get_slab_info
+                from server.fluid import is_water_source
 
-                if is_waterlogged_slab(target_block):
+                if is_waterlogged_slab(target_block) and is_water_source(target_block):
                     s_info = get_slab_info(target_block)
                     unlogged_id = s_info["base_id"] if s_info["half"] == "bottom" else f"{s_info['base_id']}_top"
                     filled_id = get_filled_bucket(held_id, "water")
@@ -1978,9 +1987,10 @@ class Game(pyglet.window.Window):
             hx, hy, hz = hit["x"], hit["y"], hit["z"]
             cur_target = self.world.get_block(hx, hy, hz)
             from server.blocks import is_slab, get_slab_info
+            from server.fluid import is_water_source
 
             s_info = get_slab_info(cur_target)
-            if s_info is not None and not s_info["double"] and not s_info["waterlogged"]:
+            if s_info is not None and not s_info["double"] and not is_water_source(cur_target):
                 logged_id = (
                     f"{s_info['base_id']}_waterlogged"
                     if s_info["half"] == "bottom"

@@ -193,12 +193,29 @@ class TestSlabs(unittest.TestCase):
         MockGame._break_block = Game._break_block
         MockGame._aim = lambda self: None
 
+        # 1. Source waterlogged slab leaves water source
         self.world.set_block(2, 80, 2, "stone_slab_waterlogged")
         game = MockGame(self.world)
         game._break_block()
-
-        # Water remains
         self.assertEqual(self.world.get_block(2, 80, 2), "water")
+
+        # 2. Flowing waterlogged bottom slab leaves flowing water with same level
+        self.world.set_block(2, 80, 2, "stone_slab_waterlogged_4")
+        game = MockGame(self.world)
+        game._break_block()
+        self.assertEqual(self.world.get_block(2, 80, 2), "water_4")
+
+        # 3. Flowing waterlogged top slab leaves flowing water with same level
+        self.world.set_block(2, 80, 2, "stone_slab_top_waterlogged_2")
+        game = MockGame(self.world)
+        game._break_block()
+        self.assertEqual(self.world.get_block(2, 80, 2), "water_2")
+
+        # 4. Dry slab leaves air
+        self.world.set_block(2, 80, 2, "stone_slab")
+        game = MockGame(self.world)
+        game._break_block()
+        self.assertEqual(self.world.get_block(2, 80, 2), AIR)
 
     def test_bucket_waterlogging(self):
         from client.app import Game
@@ -252,8 +269,13 @@ class TestSlabs(unittest.TestCase):
 
         # Case 2: Water level > 4 (level 6, over half height) at x=1
         self.world.set_block(1, 80, 0, "water_6")
-        # Flows over bottom slab, waterlogging it
-        self.assertEqual(compute_new_fluid_state(self.world, 2, 80, 0), "stone_slab_waterlogged")
+        # Flows over bottom slab with level 5
+        self.assertEqual(compute_new_fluid_state(self.world, 2, 80, 0), "stone_slab_waterlogged_5")
+
+        # Recedes when water is removed
+        self.world.set_block(2, 80, 0, "stone_slab_waterlogged_5")
+        self.world.set_block(1, 80, 0, AIR)
+        self.assertEqual(compute_new_fluid_state(self.world, 2, 80, 0), "stone_slab")
 
     def test_fluid_flows_under_top_slab(self):
         from server.fluid import compute_new_fluid_state
@@ -267,8 +289,13 @@ class TestSlabs(unittest.TestCase):
         # Low level water at x=1, y=80 (level 2)
         self.world.set_block(1, 80, 0, "water_2")
 
-        # Flows under top slab, waterlogging it
-        self.assertEqual(compute_new_fluid_state(self.world, 2, 80, 0), "stone_slab_top_waterlogged")
+        # Flows under top slab with level 1
+        self.assertEqual(compute_new_fluid_state(self.world, 2, 80, 0), "stone_slab_top_waterlogged_1")
+
+        # Recedes when water is removed
+        self.world.set_block(2, 80, 0, "stone_slab_top_waterlogged_1")
+        self.world.set_block(1, 80, 0, AIR)
+        self.assertEqual(compute_new_fluid_state(self.world, 2, 80, 0), "stone_slab_top")
 
     def test_placing_slabs_into_double_slabs(self):
         from client.app import Game
@@ -467,6 +494,39 @@ class TestSlabs(unittest.TestCase):
 
         # Pickaxe is effective on stone slab but NOT wood slab, so stone breaks much faster with pickaxe!
         self.assertLess(time_stone_with_pick, time_wood_with_pick)
+
+    def test_waterlogged_slab_fluid_mesh_uvs_and_height(self):
+        from server.mesh import build_chunk_mesh
+        import numpy as np
+
+        self.world.chunks[(self.cx, self.cy, self.cz)].data.fill(0)
+        # Place waterlogged bottom slab at (2, 80, 2) with level 6 (height = 12/16 = 0.75)
+        self.world.set_block(2, 80, 2, "cobble_slab_waterlogged_6")
+        mesh = build_chunk_mesh(self.world, self.cx, self.cy, self.cz)
+        self.assertIsNotNone(mesh)
+        self.assertIsNotNone(mesh.translucent)
+
+        # Translucent mesh should have water vertices
+        t_verts = mesh.translucent[0]
+        self.assertGreater(len(t_verts), 0)
+        water_uv = BLOCKS["water"].face_uvs[2]
+        cobble_uv = BLOCKS["cobble_slab"].face_uvs[2]
+
+        # Top face should use water UV, not cobblestone UV!
+        # Top face normal is (0, 1, 0)
+        top_quads = [
+            t_verts[i:i+4] for i in range(0, len(t_verts), 4)
+            if np.allclose(t_verts[i:i+4, 3:6], [0, 1, 0])
+        ]
+        self.assertGreater(len(top_quads), 0)
+        top_quad = top_quads[0]
+        # Height of top quad should be 0.75 (chunk-local y=0 + 0.75), not full block 1.0
+        self.assertAlmostEqual(float(top_quad[0, 1]), 0.75, places=2)
+        # UV should match water, not cobble
+        uv_diff_water = np.max(np.abs(top_quad[:, 6:8] - np.array(water_uv)))
+        uv_diff_cobble = np.max(np.abs(top_quad[:, 6:8] - np.array(cobble_uv)))
+        self.assertAlmostEqual(uv_diff_water, 0.0, places=4)
+        self.assertGreater(uv_diff_cobble, 0.05)
 
 
 if __name__ == "__main__":

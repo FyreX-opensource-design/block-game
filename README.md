@@ -1,6 +1,6 @@
 # Block Game
 
-A fast, highly-moddable voxel sandbox game and engine implemented in Python, ModernGL, and NumPy. Features procedurally generated multi-biome worlds, a 6-channel multi-spectral dynamic lighting engine, cellular automaton fluids, survival mechanics, and client-server multiplayer.
+A fast, highly-moddable voxel sandbox game and engine implemented in Python, ModernGL, and Pyglet. Features procedurally generated multi-biome worlds, a 6-channel multi-spectral dynamic lighting engine, cellular automaton fluids, survival mechanics, and client-server multiplayer.
 
 ---
 
