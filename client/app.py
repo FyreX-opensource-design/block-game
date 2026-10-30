@@ -3,6 +3,7 @@ import math
 import random
 import sys
 import tempfile
+import threading
 import time
 
 import pyglet
@@ -55,13 +56,15 @@ from server.stacks import (
     stack_count,
     stack_id,
 )
-from server.entity import FallingBlockEntity, ItemEntity, entity_from_dict, Mob, Pig
+from server.entity import FallingBlockEntity, ItemEntity, entity_from_dict, Mob, Pig, Sheep
 from server.loot import calculate_break_time, get_block_drops
 from server.mesh import build_chunk_mesh
 from server.player import Player, look_direction
-from server.profile import load_profile, load_skin_rgba
+from server.profile import load_profile, load_skin_rgba, save_profile
 from server.storage import WorldCatalog, display_path
 from server.world import World
+from client.settings import get_local_ips, load_settings, save_settings
+from client.web_ui import WebCompanion
 
 
 class LabelPool:
@@ -133,7 +136,9 @@ class Game(pyglet.window.Window):
         item_atlas, item_size = build_item_atlas()
         self.renderer = Renderer(self.ctx, atlas, size, item_atlas, item_size)
         self.catalog = WorldCatalog(saves_dir)
+        self.profile_dir = profile_dir
         self.profile = load_profile(profile_dir)
+        self._custom_title = bool(title)
         if player_uuid:
             self.profile["uuid"] = str(player_uuid)
         if username:
@@ -141,6 +146,14 @@ class Game(pyglet.window.Window):
         elif "username" not in self.profile:
             self.profile["username"] = "Player"
         self.menu = MenuState()
+        self.menu.username = self.profile.get("username", "Player")
+        self.lock = threading.RLock()
+        self.settings = load_settings(profile_dir)
+        self.menu.web_ui_enabled = self.settings.get("web_ui_enabled", False)
+        self.menu.web_ui_port = self.settings.get("web_ui_port", 5000)
+        self.web_companion = None
+        if self.settings.get("web_ui_enabled", False):
+            self._start_web_companion()
         self.inventory = CreativeInventory()
         self.hotbar = empty_slots(HOTBAR_SLOTS)
         self.storage = empty_slots(INVENTORY_SLOTS)
@@ -252,6 +265,7 @@ class Game(pyglet.window.Window):
             if self.network_client is None:
                 self.world.update_fluids(min(dt, 0.05))
                 self.world.update_leaves(min(dt, 0.05))
+                self.world.update_transformations(min(dt, 0.05))
                 self.world.update_furnaces(min(dt, 0.05))
             if self.player is not None and self.mode == "play":
                 px = self.player.pos[0]
@@ -422,6 +436,10 @@ class Game(pyglet.window.Window):
                             mob.vel = list(md.get("vel", mob.vel))
                             mob.health = float(md.get("health", mob.health))
                             mob.hurt_time = float(md.get("hurt_time", mob.hurt_time))
+                            if "sheared" in md:
+                                mob.sheared = bool(md["sheared"])
+                            if "color" in md:
+                                mob.color = str(md["color"])
                         else:
                             mob = entity_from_dict(md)
                             if getattr(mob, "is_mob", False):
@@ -1214,12 +1232,38 @@ class Game(pyglet.window.Window):
         self.set_exclusive_mouse(False)
         self.keys.clear()
 
+    def _save_username(self):
+        name = self.menu.username.strip() or "Player"
+        self.profile["username"] = name
+        save_profile(self.profile, getattr(self, "profile_dir", None))
+        if not getattr(self, "_custom_title", False):
+            self.set_caption(f"Block Game - {name}")
+
+    def _start_web_companion(self):
+        if getattr(self, "web_companion", None) is not None:
+            self.web_companion.stop()
+        port = int(self.settings.get("web_ui_port", 5000))
+        self.web_companion = WebCompanion(self, host="0.0.0.0", port=port)
+        self.web_companion.start()
+
+    def _stop_web_companion(self):
+        if getattr(self, "web_companion", None) is not None:
+            self.web_companion.stop()
+            self.web_companion = None
+
+    def _save_settings(self):
+        save_settings(self.settings, getattr(self, "profile_dir", None))
+        if getattr(self, "player", None) is not None:
+            self.player.name = name
+
     def _open_server(self, address):
         self._drop_view()
         self.info = None
         host, port = parse_address(address)
         skin = load_skin_rgba(self.profile["skin"])
-        self.network_client = NetworkClient(host, port, self.profile["uuid"], username="Player", skin_rgba=skin)
+        self.network_client = NetworkClient(
+            host, port, self.profile["uuid"], username=self.profile.get("username", "Player"), skin_rgba=skin
+        )
         if not self.network_client.connect(timeout=4.0):
             err = self.network_client.error or "Connection failed"
             self.network_client = None
@@ -1251,6 +1295,9 @@ class Game(pyglet.window.Window):
         self._open_world(self.catalog.create(name, seed, gamemode=self.menu.gamemode))
 
     def _run_action(self, action):
+        if action in ("singleplayer", "multiplayer", "options", "quit"):
+            self._save_username()
+            self.menu.focus = ""
         if action == "singleplayer":
             self.mode = "worlds"
             self.menu.screen = "worlds"
@@ -1310,9 +1357,30 @@ class Game(pyglet.window.Window):
                 self._open_server(server["address"])
         elif action == "quit":
             self._quit()
+        elif action == "options":
+            self.mode = "options"
+            self.menu.screen = "options"
+            self.menu.local_ips = get_local_ips()
+            self.menu.focus = ""
+        elif action == "toggle-web-ui":
+            self.settings["web_ui_enabled"] = self.menu.web_ui_enabled
+            self.menu.local_ips = get_local_ips()
+            self._save_settings()
+            if self.menu.web_ui_enabled:
+                self._start_web_companion()
+            else:
+                self._stop_web_companion()
+        elif action == "back-options":
+            self.mode = self.menu.screen
+            self.settings["web_ui_port"] = self.menu.web_ui_port
+            self._save_settings()
+            if self.menu.web_ui_enabled:
+                self._start_web_companion()
         elif action == "back":
             self.mode = "title"
             self.menu.screen = "title"
+            self.menu.username = self.profile.get("username", "Player")
+            self.menu.focus = ""
         elif action == "new":
             self.mode = "create"
             self.menu.screen = "create"
@@ -1427,7 +1495,7 @@ class Game(pyglet.window.Window):
         self.ctx.clear(*sky_color, 1.0, depth=1.0)
         self._aim()
         vp = None
-        if self.mode in ("play", "pause", "loading", "inventory") and self.world is not None:
+        if self.mode in ("play", "pause", "loading", "inventory", "options") and self.world is not None:
             aspect = max(fw, 1) / max(fh, 1)
             # Near plane stays short for world detail; the FP hand is placed past 0.2.
             projection = perspective(75, aspect, 0.05, 220)
@@ -1440,7 +1508,7 @@ class Game(pyglet.window.Window):
             if hasattr(self.renderer, "draw_sky"):
                 self.renderer.draw_sky(vp, self.camera, day_time)
             self.renderer.draw_world(vp, self.camera, cutout=True, day_time=day_time)
-            if self.mode in ("play", "pause", "inventory") and self.player is not None and self.ready:
+            if self.mode in ("play", "pause", "inventory", "options") and self.player is not None and self.ready:
                 if self.other_players:
                     self.renderer.draw_other_players(
                         vp,
@@ -1465,7 +1533,7 @@ class Game(pyglet.window.Window):
                 if self.gamemode == "survival" and self._breaking_block == target_key:
                     stage = min(9, max(0, int(self._break_progress * 10)))
                     self.renderer.draw_crack(vp, target_coords, stage, box=target_box)
-            if self.mode in ("play", "pause", "inventory") and self.player is not None and self.ready:
+            if self.mode in ("play", "pause", "inventory", "options") and self.player is not None and self.ready:
                 if self.view_mode != VIEW_FIRST:
                     self.renderer.draw_player(
                         vp,
@@ -1478,7 +1546,7 @@ class Game(pyglet.window.Window):
                         day_time=day_time,
                     )
             self.renderer.draw_translucent(vp, self.camera, day_time=day_time)
-            if self.mode in ("play", "pause", "inventory") and self.player is not None and self.ready:
+            if self.mode in ("play", "pause", "inventory", "options") and self.player is not None and self.ready:
                 if self.view_mode == VIEW_FIRST:
                     self.renderer.draw_player(
                         vp,
@@ -1491,7 +1559,7 @@ class Game(pyglet.window.Window):
                         day_time=day_time,
                     )
         scale = fw / max(self.width, 1)
-        if vp is not None and self.other_players and self.mode in ("play", "pause", "inventory"):
+        if vp is not None and self.other_players and self.mode in ("play", "pause", "inventory", "options"):
             tag_rects, self._nametag_labels = self._collect_nametags(vp, fw, fh)
             if tag_rects:
                 self.renderer.draw_rects(
@@ -1529,7 +1597,7 @@ class Game(pyglet.window.Window):
             )
         elif self.mode == "loading":
             self.renderer.draw_panel(fw, fh, 560 * scale, 120 * scale)
-        elif self.mode in ("title", "worlds", "servers", "add_server", "direct_connect", "create", "confirm", "pause"):
+        elif self.mode in ("title", "worlds", "servers", "add_server", "direct_connect", "create", "confirm", "pause", "options"):
             frame = self._menu_frame()
             self.renderer.draw_rects(
                 fw,
@@ -1581,7 +1649,7 @@ class Game(pyglet.window.Window):
                 self.status_label.draw()
             elif self.mode == "inventory":
                 self.labels.draw(self._inventory_frame().labels)
-            elif self.mode in ("title", "worlds", "servers", "add_server", "direct_connect", "create", "confirm", "pause"):
+            elif self.mode in ("title", "worlds", "servers", "add_server", "direct_connect", "create", "confirm", "pause", "options"):
                 self.labels.draw(self._menu_frame().labels)
         except Exception as exc:
             print(f"On-screen text error: {exc}", file=sys.stderr)
@@ -1657,12 +1725,24 @@ class Game(pyglet.window.Window):
                 return
 
         if symbol == key.BACKSPACE:
-            if self.mode == "create":
+            if self.mode == "title":
+                if self.menu.focus == "username":
+                    self.menu.username = self.menu.username[:-1]
+                    self._save_username()
+                    return
+            elif self.mode == "create":
                 if self.menu.focus == "name":
                     self.menu.name = self.menu.name[:-1]
                 elif self.menu.focus == "seed":
                     self.menu.seed_text = self.menu.seed_text[:-1]
                 self.menu.message = ""
+            elif self.mode == "options":
+                if self.menu.focus == "web_ui_port":
+                    port_str = str(self.menu.web_ui_port)
+                    self.menu.web_ui_port = int(port_str[:-1]) if len(port_str) > 1 else 0
+                    self.settings["web_ui_port"] = self.menu.web_ui_port
+                    self._save_settings()
+                    return
                 return
             elif self.mode in ("add_server", "direct_connect"):
                 if self.menu.focus == "server_name":
@@ -1675,12 +1755,18 @@ class Game(pyglet.window.Window):
             self._on_escape()
             return
         if symbol in (key.ENTER, key.RETURN):
-            if self.mode == "worlds":
+            if self.mode == "title":
+                self.menu.focus = ""
+                self._save_username()
+                return
+            elif self.mode == "worlds":
                 self._run_action("play")
             elif self.mode == "create":
                 self._run_action("create")
             elif self.mode == "pause":
                 self._run_action("resume")
+            elif self.mode == "options":
+                self._run_action("back-options")
             elif self.mode == "servers":
                 self._run_action("join-server")
             elif self.mode == "add_server":
@@ -1831,6 +1917,8 @@ class Game(pyglet.window.Window):
             self.set_exclusive_mouse(True)
 
     def _on_right_click(self, modifiers=0):
+        if self._handle_mob_interaction():
+            return
         self._aim()
         hit = self.target
         if hit is not None:
@@ -1854,6 +1942,50 @@ class Game(pyglet.window.Window):
             return
 
         self._place_block()
+
+    def _handle_mob_interaction(self):
+        if self.player is None or self.world is None:
+            return False
+        ex, ey, ez = self.player.pos
+        ey += self.player.eye
+        fx, fy, fz = look_direction(self.player.yaw, self.player.pitch)
+        hit_mob = self.world.raycast_entity(ex, ey, ez, fx, fy, fz, max_dist=3.5)
+        if hit_mob is None or not getattr(hit_mob, "alive", True):
+            return False
+
+        held_slot = self.hotbar[self.selected] if self.selected < len(self.hotbar) else empty_stack()
+        held_id = stack_id(held_slot)
+
+        if getattr(hit_mob, "mob_type", "") == "sheep":
+            if held_id == "shears":
+                if getattr(hit_mob, "sheared", False):
+                    return True
+                if self.network_client is not None:
+                    self.network_client.send_interact_mob(hit_mob.id, held_id)
+                else:
+                    hit_mob.shear(world=self.world)
+                return True
+            if hasattr(hit_mob, "dye") and held_id.endswith("_dye"):
+                if self.network_client is not None:
+                    if hit_mob.dye(held_id):
+                        self.network_client.send_interact_mob(hit_mob.id, held_id)
+                        if self.gamemode != "creative":
+                            cnt = stack_count(held_slot)
+                            if cnt <= 1:
+                                self.hotbar[self.selected] = empty_stack()
+                            else:
+                                self.hotbar[self.selected] = make_stack(held_id, cnt - 1)
+                    return True
+                else:
+                    if hit_mob.dye(held_id):
+                        if self.gamemode != "creative":
+                            cnt = stack_count(held_slot)
+                            if cnt <= 1:
+                                self.hotbar[self.selected] = empty_stack()
+                            else:
+                                self.hotbar[self.selected] = make_stack(held_id, cnt - 1)
+                    return True
+        return False
 
     def _handle_block_hit_interaction(self, hit):
         if self.player is None or self.world is None or hit is None:
@@ -2076,6 +2208,8 @@ class Game(pyglet.window.Window):
                 self.player.input.sprint = False
         elif self.mode == "pause":
             self._run_action("resume")
+        elif self.mode == "options":
+            self._run_action("back-options")
         elif self.mode == "loading":
             self._return_to_worlds()
         elif self.mode == "confirm":
@@ -2108,7 +2242,12 @@ class Game(pyglet.window.Window):
         if self.chat.open:
             self.chat.add_char(text)
             return
-        if self.mode == "create":
+        if self.mode == "title":
+            if self.menu.focus == "username" and len(self.menu.username) < 24:
+                self.menu.username += text
+                self._save_username()
+                return
+        elif self.mode == "create":
             if self.menu.focus == "name" and len(self.menu.name) < 32:
                 self.menu.name += text
                 self.menu.message = ""
@@ -2122,6 +2261,13 @@ class Game(pyglet.window.Window):
             elif self.menu.focus == "server_address" and len(self.menu.server_address) < 64:
                 self.menu.server_address += text
                 self.menu.message = ""
+        elif self.mode == "options":
+            if self.menu.focus == "web_ui_port" and text.isdigit():
+                port_str = str(self.menu.web_ui_port) if self.menu.web_ui_port else ""
+                if len(port_str) < 5:
+                    self.menu.web_ui_port = int(port_str + text)
+                    self.settings["web_ui_port"] = self.menu.web_ui_port
+                    self._save_settings()
 
     def on_mouse_motion(self, x, y, dx, dy):
         self._mouse = (x, y)
@@ -2266,6 +2412,7 @@ class Game(pyglet.window.Window):
         if self._closing:
             return
         self._closing = True
+        self._stop_web_companion()
         if self.network_client is not None:
             self.network_client.disconnect()
             self.network_client = None

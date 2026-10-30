@@ -52,6 +52,8 @@ def get_tool_type(item):
         return "axe"
     if "shovel" in item_id:
         return "shovel"
+    if "shears" in item_id:
+        return "shears"
     return None
 
 

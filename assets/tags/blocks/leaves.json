@@ -1,7 +1,8 @@
 {
   "values": [
     "leaves",
-    "leaves_persistent"
+    "leaves_persistent",
+    "pine_leaves",
+    "pine_leaves_persistent"
   ]
 }
-

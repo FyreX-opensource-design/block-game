@@ -141,13 +141,13 @@ class MountainBiomeTests(unittest.TestCase):
         mtn_ceil = biome_map["mountains"].ceiling
         forest_ceil = biome_map["forest"].ceiling
 
-        # Find transitions from forest to mountains
+        # Find transitions from forest/pine_forest to mountains
         found_transition = False
         for z in range(-200, 201, 15):
             for x in range(-200, 200):
                 b1 = biome_at(x, z, 1, BIOMES)
                 b2 = biome_at(x + 1, z, 1, BIOMES)
-                if b1.id == "forest" and b2.id == "mountains":
+                if b1.id in ("forest", "pine_forest") and b2.id == "mountains":
                     found_transition = True
                     # Check local step size along 10 blocks across the transition
                     row = [terrain_height(px, z, 1) for px in range(x - 5, x + 6)]
@@ -218,7 +218,7 @@ class MountainBiomeTests(unittest.TestCase):
                 for z in range(cz * 16, (cz + 1) * 16):
                     for x in range(cx * 16, (cx + 1) * 16):
                         for y in range(50, 120):
-                            if world.get_block(x, y, z) == LOG:
+                            if world.get_block(x, y, z) in (LOG, "pine_log"):
                                 under = world.get_block(x, y - 1, z)
                                 self.assertNotEqual(
                                     under,
@@ -227,7 +227,7 @@ class MountainBiomeTests(unittest.TestCase):
                                 )
                                 self.assertIn(
                                     under,
-                                    (GRASS, "dirt", LOG),
+                                    (GRASS, "dirt", LOG, "pine_log"),
                                     f"Tree at ({x}, {y}, {z}) must sit on grass, dirt, or trunk log, but found {under}",
                                 )
 

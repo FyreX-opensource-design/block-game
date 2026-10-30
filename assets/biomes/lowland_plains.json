@@ -8,6 +8,7 @@
   "octaves": 2,
   "seed_offset": 90,
   "ceiling": 0.43,
+  "min_size": 22,
   "tree_chance": 0.0018,
   "height_offset": -8.0,
   "height_scale": 0.75,

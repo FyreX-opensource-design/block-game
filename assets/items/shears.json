@@ -1,0 +1,19 @@
+{
+  "id": "shears",
+  "lang": "item.shears",
+  "tab": [
+    "tools"
+  ],
+  "model": "flat",
+  "texture": "shears",
+  "tool": "shears",
+  "max_stack": 1,
+  "left": "mine",
+  "right": "use",
+  "durability": 238,
+  "mining_level": 1,
+  "mining_speed": 5,
+  "attack": 1,
+  "food": 0,
+  "repair": "iron_ingot"
+}

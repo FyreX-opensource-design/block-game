@@ -1,0 +1,12 @@
+{
+  "id": "green_wool",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "#wool",
+    "green_dye"
+  ],
+  "result": {
+    "item": "green_wool",
+    "count": 1
+  }
+}

@@ -2,12 +2,14 @@ import math
 import unittest
 from unittest.mock import MagicMock
 
-from server.ai import Goal, GoalSelector, PanicGoal, WanderGoal
+from server.ai import EatGrassGoal, Goal, GoalSelector, PanicGoal, WanderGoal, is_direction_safe, is_position_hazardous
 from server.blocks import AIR, DIRT, GRASS, STONE
-from server.entity import Mob, Pig, entity_from_dict
+from server.entity import Mob, Pig, Sheep, entity_from_dict
 from server.loot import get_mob_drops
 from server.pig_model import PigMeshes, build_pig_meshes, pig_pose
+from server.sheep_model import SheepMeshes, build_sheep_meshes, sheep_pose
 from server.player import Player
+from server.recipes import craft_match
 from server.spawner import MobSpawner
 from server.world import Chunk, World
 
@@ -318,4 +320,199 @@ class TestMultiplayerMobs(unittest.TestCase):
             self.assertGreater(pig.hurt_time, 0.0)
             # Server broadcasted damage_mob packet
             self.assertTrue(any(p.get("type") == "damage_mob" and p.get("id") == pig.id for p in broadcasted))
+
+
+class TestSheepAndWool(unittest.TestCase):
+    def setUp(self):
+        self.world = World(seed=1)
+        self.chunk = Chunk(0, 0, 0)
+        self.chunk.data.fill(0)
+        self.world.chunks[(0, 0, 0)] = self.chunk
+
+    def test_sheep_initialization_and_serialization(self):
+        sheep = Sheep(pos=[4.5, 6.0, 4.5], yaw=0.75, sheared=True, color="red", regrow_cooldown=8.5)
+        self.assertEqual(sheep.mob_type, "sheep")
+        self.assertTrue(sheep.sheared)
+        self.assertEqual(sheep.color, "red")
+        self.assertEqual(sheep.wool_block, "red_wool")
+
+        goals_types = [type(g) for _, g in sheep.goals.goals]
+        self.assertIn(PanicGoal, goals_types)
+        self.assertIn(WanderGoal, goals_types)
+        self.assertIn(EatGrassGoal, goals_types)
+
+        data = sheep.to_dict()
+        self.assertEqual(data["type"], "sheep")
+        self.assertTrue(data["sheared"])
+        self.assertEqual(data["color"], "red")
+
+        restored = entity_from_dict(data)
+        self.assertIsInstance(restored, Sheep)
+        self.assertTrue(restored.sheared)
+        self.assertEqual(restored.color, "red")
+        self.assertAlmostEqual(restored.regrow_cooldown, 8.5, places=1)
+
+    def test_shearing_drops_1_to_3_wool_and_marks_sheared(self):
+        sheep = Sheep(pos=[5.5, 6.0, 5.5])
+        self.world.spawn_mob(sheep)
+        self.assertFalse(sheep.sheared)
+
+        drops = sheep.shear(world=self.world)
+        self.assertTrue(sheep.sheared)
+        self.assertEqual(len(drops), 1)
+        wool_id, count = drops[0]
+        self.assertEqual(wool_id, "wool")
+        self.assertGreaterEqual(count, 1)
+        self.assertLessEqual(count, 3)
+
+        # Verify ItemEntities spawned in world
+        spawned_wool = [e for e in self.world.entities if getattr(e, "item", "") == "wool"]
+        self.assertEqual(len(spawned_wool), count)
+
+        # Shearing an already-sheared sheep yields nothing
+        again = sheep.shear(world=self.world)
+        self.assertEqual(again, [])
+
+    def test_sheared_sheep_eats_grass_not_muddy_grass_and_regrows_wool(self):
+        # Set up ground: muddy_grass at (5, 5, 5)
+        for x in range(2, 9):
+            for z in range(2, 9):
+                self.world.set_block(x, 5, z, STONE)
+        self.world.set_block(5, 5, 5, "muddy_grass")
+
+        sheep = Sheep(pos=[5.5, 6.0, 5.5], sheared=True, regrow_cooldown=0.0)
+        sheep.on_ground = True
+        self.world.spawn_mob(sheep)
+
+        eat_goal = next(g for _, g in sheep.goals.goals if isinstance(g, EatGrassGoal))
+        # Standing on muddy_grass with no grass nearby: cannot start EatGrassGoal
+        self.assertFalse(eat_goal.can_start())
+        for _ in range(25):
+            sheep.update(0.05, self.world)
+        self.assertEqual(self.world.get_block(5, 5, 5), "muddy_grass")
+        self.assertTrue(sheep.sheared)
+
+        # Now place actual 'grass' under the sheep at (5, 5, 5)
+        self.world.set_block(5, 5, 5, "grass")
+        sheep.pos = [5.5, 6.0, 5.5]
+        self.assertTrue(eat_goal.can_start())
+
+        # Tick the sheep until it finishes eating grass (~0.8s)
+        sheep.update(0.05, self.world)
+        self.assertLess(sheep.pitch, 0.0)  # Head pitched downward while eating grass
+
+        for _ in range(25):
+            sheep.update(0.05, self.world)
+
+        # Grass turned into dirt and sheep regrew its wool!
+        self.assertEqual(self.world.get_block(5, 5, 5), "dirt")
+        self.assertFalse(sheep.sheared)
+        self.assertEqual(sheep.pitch, 0.0)
+
+    def test_wool_dyeing_recipes(self):
+        # Dye white wool with red_dye -> red_wool
+        res = craft_match(["wool", "red_dye", "", ""])
+        self.assertIsNotNone(res)
+        self.assertEqual(res[0], "red_wool")
+        self.assertEqual(res[1], 1)
+
+        # Dye red_wool with yellow_dye -> yellow_wool (via #wool tag)
+        res2 = craft_match(["red_wool", "yellow_dye", "", ""])
+        self.assertIsNotNone(res2)
+        self.assertEqual(res2[0], "yellow_wool")
+        self.assertEqual(res2[1], 1)
+
+        # Craft red_dye from rose and yellow_dye from dandelion
+        r_dye = craft_match(["rose", "", "", ""])
+        self.assertIsNotNone(r_dye)
+        self.assertEqual(r_dye[0], "red_dye")
+
+        y_dye = craft_match(["dandelion", "", "", ""])
+        self.assertIsNotNone(y_dye)
+        self.assertEqual(y_dye[0], "yellow_dye")
+
+        # Craft shears from 2 iron ingots
+        shears_res = craft_match(["", "iron_ingot", "iron_ingot", ""])
+        self.assertIsNotNone(shears_res)
+        self.assertEqual(shears_res[0], "shears")
+
+    def test_sheep_model_meshes(self):
+        meshes = build_sheep_meshes()
+        self.assertIn("wool_body", meshes)
+        self.assertIn("body", meshes)
+        sheep_meshes = SheepMeshes()
+        poses = sheep_pose(1.0, 1.0, 0.0)
+        v_full, _ = sheep_meshes.posed_vertices([0.0, 0.0, 0.0], 0.0, poses, sheared=False)
+        v_sheared, _ = sheep_meshes.posed_vertices([0.0, 0.0, 0.0], 0.0, poses, sheared=True)
+        self.assertGreater(len(v_full), len(v_sheared))
+
+
+class TestPathfindingHazardAvoidance(unittest.TestCase):
+    def setUp(self):
+        self.world = World(seed=1)
+        self.chunk = Chunk(0, 0, 0)
+        self.chunk.data.fill(0)
+        self.world.chunks[(0, 0, 0)] = self.chunk
+
+    def test_pig_and_sheep_avoid_falls_greater_than_4_blocks(self):
+        # Create a ledge at y=10 for x in 2..5, z in 2..8
+        # For x >= 6, ground is at y=4 (a 6-block drop, which is > 4 blocks!)
+        for x in range(2, 6):
+            for z in range(2, 8):
+                self.world.set_block(x, 10, z, STONE)
+        for x in range(6, 12):
+            for z in range(2, 8):
+                self.world.set_block(x, 4, z, STONE)
+
+        for mob_cls in (Pig, Sheep):
+            mob = mob_cls(pos=[5.2, 11.0, 5.0], yaw=-math.pi / 2)  # Facing +X toward the 6-block cliff
+            mob.on_ground = True
+            self.world.spawn_mob(mob)
+
+            # Moving toward +X should be recognized as hazardous
+            self.assertFalse(is_direction_safe(mob, -math.pi / 2, world=self.world))
+            self.assertTrue(is_position_hazardous(self.world, 6.5, 11.0, 5.0, max_fall=4))
+
+            # Attempting horizontal movement toward the cliff with avoid_hazards=True stops before falling
+            mob.vel = [2.5, 0.0, 0.0]
+            for _ in range(20):
+                mob.update(0.05, self.world)
+            self.assertLess(mob.pos[0], 6.0)
+            self.assertAlmostEqual(mob.pos[1], 11.0, delta=0.1)
+
+    def test_fall_of_4_blocks_or_less_is_allowed(self):
+        # Ledge at y=10 for x in 2..5; ground at y=6 for x in 6..10 (exact 4-block drop: 11 -> 7)
+        for x in range(2, 6):
+            for z in range(2, 8):
+                self.world.set_block(x, 10, z, STONE)
+        for x in range(6, 10):
+            for z in range(2, 8):
+                self.world.set_block(x, 6, z, STONE)
+
+        self.assertFalse(is_position_hazardous(self.world, 6.5, 11.0, 5.0, max_fall=4))
+
+    def test_pig_and_sheep_avoid_fluids(self):
+        # Solid ground at y=5 everywhere, except x >= 6 has water pool at y=5..6
+        for x in range(2, 10):
+            for z in range(2, 8):
+                if x < 6:
+                    self.world.set_block(x, 5, z, STONE)
+                else:
+                    self.world.set_block(x, 4, z, STONE)
+                    self.world.set_block(x, 5, z, "water")
+
+        for mob_cls in (Pig, Sheep):
+            mob = mob_cls(pos=[5.2, 6.0, 5.0], yaw=-math.pi / 2)  # Facing +X toward water
+            mob.on_ground = True
+            self.world.spawn_mob(mob)
+
+            self.assertFalse(is_direction_safe(mob, -math.pi / 2, world=self.world))
+            self.assertTrue(is_position_hazardous(self.world, 6.5, 6.0, 5.0, max_fall=4))
+
+            mob.vel = [2.5, 0.0, 0.0]
+            for _ in range(20):
+                mob.update(0.05, self.world)
+            self.assertLess(mob.pos[0], 6.0)
+            self.assertFalse(mob.in_water(self.world))
+
 

@@ -214,6 +214,9 @@ class World:
         from server.leaf_decay import LeafDecaySystem
 
         self.leaf_decay = LeafDecaySystem(self)
+        from server.transformations import TransformationSystem
+
+        self.transformations = TransformationSystem(self)
         self._singleplayer_player = None
 
     def advance_time(self, dt):
@@ -299,6 +302,11 @@ class World:
             return self.leaf_decay.update(dt)
         return []
 
+    def update_transformations(self, dt):
+        if getattr(self, "transformations", None) is not None:
+            return self.transformations.update(dt)
+        return []
+
     def spawn_item(self, item, count=1, pos=None, vel=None, despawn_timer=300.0, pickup_delay=0.0):
         from server.entity import ItemEntity
 
@@ -314,16 +322,19 @@ class World:
         return entity
 
     def spawn_mob(self, mob_or_type, pos=None, vel=None, yaw=0.0, pitch=0.0):
-        from server.entity import Mob, Pig
+        from server.entity import Mob, Pig, Sheep
 
-        if isinstance(mob_or_type, (Mob, Pig)):
+        if isinstance(mob_or_type, (Mob, Pig, Sheep)):
             mob = mob_or_type
             if pos is not None:
                 mob.pos = list(pos)
         elif str(mob_or_type) == "pig":
             mob = Pig(pos=pos, vel=vel, yaw=yaw, pitch=pitch)
+        elif str(mob_or_type) == "sheep":
+            mob = Sheep(pos=pos, vel=vel, yaw=yaw, pitch=pitch)
         else:
             mob = Mob(mob_type=str(mob_or_type), pos=pos, vel=vel, yaw=yaw, pitch=pitch)
+        mob.world = self
         self.entities.append(mob)
         return mob
 

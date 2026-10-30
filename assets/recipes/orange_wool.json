@@ -1,0 +1,12 @@
+{
+  "id": "orange_wool",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "#wool",
+    "orange_dye"
+  ],
+  "result": {
+    "item": "orange_wool",
+    "count": 1
+  }
+}

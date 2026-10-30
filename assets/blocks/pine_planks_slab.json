@@ -1,0 +1,12 @@
+{
+  "id": "pine_planks_slab",
+  "lang": "block.pine_planks_slab",
+  "type": "slab",
+  "tab": ["building"],
+  "model": "slab",
+  "hardness": 1.0,
+  "tool": "axe",
+  "mining_level": 0,
+  "loot_table": "blocks/pine_planks_slab",
+  "textures": {"top": "pine_planks", "side": "pine_planks", "bottom": "pine_planks"}
+}

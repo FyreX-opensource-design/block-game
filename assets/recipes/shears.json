@@ -1,0 +1,15 @@
+{
+  "id": "shears",
+  "type": "crafting_shaped",
+  "pattern": [
+    " #",
+    "# "
+  ],
+  "key": {
+    "#": "iron_ingot"
+  },
+  "result": {
+    "item": "shears",
+    "count": 1
+  }
+}

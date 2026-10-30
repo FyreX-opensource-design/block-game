@@ -1,0 +1,21 @@
+{
+  "id": "blue_wool",
+  "lang": "block.blue_wool",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 0.8,
+  "tool": "shears",
+  "mining_level": 0,
+  "textures": {
+    "top": "blue_wool",
+    "side": "blue_wool",
+    "bottom": "blue_wool"
+  },
+  "properties": {
+    "tags": [
+      "wool"
+    ]
+  }
+}

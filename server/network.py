@@ -469,6 +469,7 @@ class MultiplayerServer:
                                 if f_pos == pos and c_uuid in self.clients:
                                     self.clients[c_uuid].send(prog_msg)
             self.world.update_leaves(0.02)
+            self.world.update_transformations(0.02)
             changed = self.world.update_fluids(0.02)
             if getattr(self.world, "on_block_set", None) is None:
                 for x, y, z, block in changed:
@@ -767,6 +768,35 @@ class MultiplayerServer:
                                 "vel": entity.vel,
                                 "pos": entity.pos,
                             })
+
+        elif p_type == "interact_entity":
+            entity_id = int(packet.get("id", 0))
+            item_id = str(packet.get("item", ""))
+            if self.world is not None:
+                entity = next((e for e in self.world.entities if e.id == entity_id), None)
+                if entity is not None and getattr(entity, "is_mob", False) and getattr(entity, "alive", True):
+                    p_pos = client.pos
+                    dist = math.hypot(entity.pos[0] - p_pos[0], entity.pos[2] - p_pos[2])
+                    if dist <= 6.0:
+                        if getattr(entity, "mob_type", "") == "sheep":
+                            if item_id in ("shears", ""):
+                                prev_ids = {e.id for e in self.world.entities}
+                                drops = entity.shear(world=self.world)
+                                if drops:
+                                    for e in self.world.entities:
+                                        if e.id not in prev_ids and hasattr(e, "item"):
+                                            self.broadcast({
+                                                "type": "spawn_item",
+                                                "id": e.id,
+                                                "item": e.item,
+                                                "count": e.count,
+                                                "pos": e.pos,
+                                                "vel": e.vel,
+                                                "pickup_delay": e.pickup_delay,
+                                            })
+                                    self.broadcast({"type": "mobs_update", "mobs": [entity.to_dict()]})
+                            elif hasattr(entity, "dye") and entity.dye(item_id):
+                                self.broadcast({"type": "mobs_update", "mobs": [entity.to_dict()]})
 
         elif p_type == "chat":
             text = str(packet.get("message", "")).strip()

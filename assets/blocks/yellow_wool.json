@@ -1,0 +1,21 @@
+{
+  "id": "yellow_wool",
+  "lang": "block.yellow_wool",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 0.8,
+  "tool": "shears",
+  "mining_level": 0,
+  "textures": {
+    "top": "yellow_wool",
+    "side": "yellow_wool",
+    "bottom": "yellow_wool"
+  },
+  "properties": {
+    "tags": [
+      "wool"
+    ]
+  }
+}

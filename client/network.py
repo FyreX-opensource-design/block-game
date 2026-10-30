@@ -131,6 +131,17 @@ class NetworkClient:
         }
         self._enqueue(packet)
 
+    def send_interact_mob(self, entity_id, item_id=""):
+        """Send right-click mob interaction packet (e.g. shearing or dyeing) to the server."""
+        if not self.connected:
+            return
+        packet = {
+            "type": "interact_entity",
+            "id": int(entity_id),
+            "item": str(item_id or ""),
+        }
+        self._enqueue(packet)
+
     def send_furnace_open(self, x, y, z):
         """Notify the server that this player opened a furnace."""
         if not self.connected:

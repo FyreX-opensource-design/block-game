@@ -2,7 +2,9 @@
   "values": [
     "log",
     "log_x",
-    "log_z"
+    "log_z",
+    "pine_log",
+    "pine_log_x",
+    "pine_log_z"
   ]
 }
-

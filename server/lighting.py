@@ -64,7 +64,7 @@ def get_block_opacity(block_obj):
     base = getattr(block_obj, "base_id", bid)
     if bid == "air":
         return 0
-    if bid == "leaves" or base == "leaves":
+    if bid == "leaves" or base == "leaves" or "leaves" in bid or (hasattr(block_obj, "properties") and block_obj.properties.get("leaf")):
         return 1
     if bid.startswith("water") or (hasattr(block_obj, "properties") and block_obj.properties.get("fluid") == "water"):
         return 2

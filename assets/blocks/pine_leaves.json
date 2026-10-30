@@ -1,0 +1,16 @@
+{
+  "id": "pine_leaves",
+  "lang": "block.pine_leaves",
+  "tab": "natural",
+  "model": "cube",
+  "render": "cutout",
+  "hardness": 0.2,
+  "tool": "none",
+  "mining_level": 0,
+  "loot_table": "blocks/pine_leaves",
+  "textures": {"top": "pine_leaves", "side": "pine_leaves", "bottom": "pine_leaves"},
+  "properties": {
+    "leaf": true,
+    "decayable": true
+  }
+}

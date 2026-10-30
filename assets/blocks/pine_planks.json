@@ -1,0 +1,11 @@
+{
+  "id": "pine_planks",
+  "lang": "block.pine_planks",
+  "tab": "building",
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "axe",
+  "mining_level": 0,
+  "loot_table": "blocks/pine_planks",
+  "textures": {"top": "pine_planks", "side": "pine_planks", "bottom": "pine_planks"}
+}

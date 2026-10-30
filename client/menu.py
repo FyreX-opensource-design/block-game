@@ -77,6 +77,7 @@ class MenuState:
         self.name = ""
         self.seed_text = ""
         self.gamemode = "survival"
+        self.username = "Player"
         self.server_name = ""
         self.server_address = ""
         self.focus = "name"
@@ -84,6 +85,10 @@ class MenuState:
         self.message = ""
         self.saves_hint = ""
         self._row_click = 0.0
+        self.web_ui_enabled = False
+        self.web_ui_port = 5000
+        self.local_ips = []
+        self._prev_screen = "title"
 
     def layout(self, width, height):
         if self.screen == "title":
@@ -100,6 +105,8 @@ class MenuState:
             return self._create(width, height)
         if self.screen == "confirm":
             return self._confirm(width, height)
+        if self.screen == "options":
+            return self._options(width, height)
         if self.screen == "pause":
             return self._pause(width, height)
         return Frame()
@@ -128,6 +135,16 @@ class MenuState:
         if action == "toggle-gamemode":
             self.gamemode = "creative" if self.gamemode == "survival" else "survival"
             return None
+        if action == "options":
+            self._prev_screen = self.screen
+            self.screen = "options"
+            return "options"
+        if action == "toggle-web-ui":
+            self.web_ui_enabled = not self.web_ui_enabled
+            return "toggle-web-ui"
+        if action == "back-options":
+            self.screen = getattr(self, "_prev_screen", "title") or "title"
+            return "back-options"
         return action
 
     def _active_items(self):
@@ -177,21 +194,27 @@ class MenuState:
 
     def _title(self, width, height):
         frame = Frame()
-        x, y, w, h = self._panel(frame, width, height, 460, 380)
-        frame.label("Block Game", x + w / 2, y + h - 78, 46, "center", "center", TITLE)
-        frame.label("A small sandbox", x + w / 2, y + h - 122, 16, "center", "center", MUTED)
+        x, y, w, h = self._panel(frame, width, height, 460, 490)
+        frame.label("Block Game", x + w / 2, y + h - 58, 46, "center", "center", TITLE)
+        frame.label("A small sandbox", x + w / 2, y + h - 96, 16, "center", "center", MUTED)
+        field_w = 280
+        field_x = x + (w - field_w) / 2
+        frame.label("Player Name", field_x, y + h - 128, 14, "left", "center", MUTED)
+        self._field(frame, field_x, y + h - 170, field_w, 38, "username", self.username or "", "Player")
         self._stack(
             frame,
-            x + (w - 280) / 2,
-            y + 60,
+            field_x,
+            y + 36,
             [
                 ("Singleplayer", "singleplayer", True),
                 ("Multiplayer", "multiplayer", True),
+                ("Options", "options", True),
                 ("Quit", "quit", True),
             ],
+            button_w=field_w,
         )
         if self.saves_hint:
-            frame.label(self.saves_hint, x + w / 2, y + 24, 13, "center", "center", MUTED)
+            frame.label(self.saves_hint, x + w / 2, y + 16, 13, "center", "center", MUTED)
         return frame
 
     def _worlds(self, width, height):
@@ -381,13 +404,49 @@ class MenuState:
     def _pause(self, width, height):
         frame = Frame()
         frame.rect(0, 0, width, height, DIM)
-        x, y, w, h = self._panel(frame, width, height, 420, 300)
-        frame.label("Paused", x + w / 2, y + h - 58, 34, "center", "center")
+        x, y, w, h = self._panel(frame, width, height, 420, 360)
+        frame.label("Paused", x + w / 2, y + h - 54, 34, "center", "center")
         self._stack(
             frame,
             x + (w - 260) / 2,
-            y + 64,
-            [("Resume", "resume", True), ("Save and Quit", "save-quit", True)],
+            y + 44,
+            [("Resume", "resume", True), ("Options", "options", True), ("Save and Quit", "save-quit", True)],
+        )
+        return frame
+
+    def _options(self, width, height):
+        frame = Frame()
+        x, y, w, h = self._panel(frame, width, height, 520, 420)
+        frame.label("Options", x + w / 2, y + h - 46, 32, "center", "center")
+        field_w = 340
+        field_x = x + (w - field_w) / 2
+
+        status_text = f"Web UI: {'ON' if self.web_ui_enabled else 'OFF'}"
+        frame.button(field_x, y + h - 108, field_w, 44, status_text, "toggle-web-ui", self.hover)
+
+        frame.label("Web UI Port", field_x, y + h - 144, 14, "left", "center", MUTED)
+        self._field(frame, field_x, y + h - 192, field_w, 40, "web_ui_port", str(self.web_ui_port), "5000")
+
+        if self.web_ui_enabled:
+            port = self.web_ui_port
+            ips = getattr(self, "local_ips", []) or []
+            if ips:
+                frame.label("Phone / Tablet URL:", x + w / 2, y + h - 230, 13, "center", "center", MUTED)
+                frame.label(f"http://{ips[0]}:{port}", x + w / 2, y + h - 252, 16, "center", "center", TITLE)
+                if len(ips) > 1:
+                    frame.label(f"Alt: http://{ips[1]}:{port}   |   localhost:{port}", x + w / 2, y + h - 274, 12, "center", "center", MUTED)
+                else:
+                    frame.label(f"Local: http://localhost:{port}", x + w / 2, y + h - 274, 12, "center", "center", MUTED)
+            else:
+                frame.label(f"Running: http://localhost:{port}", x + w / 2, y + h - 234, 15, "center", "center", TITLE)
+                frame.label("(Connect to Wi-Fi to access from your phone or tablet)", x + w / 2, y + h - 258, 12, "center", "center", MUTED)
+
+        self._row_buttons(
+            frame,
+            field_x,
+            y + 26,
+            [("Done", "back-options", True)],
+            field_w,
         )
         return frame
 

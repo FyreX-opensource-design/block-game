@@ -752,9 +752,14 @@ def _load_registry():
             slab=is_slab_type,
             slab_half=("bottom" if is_slab_type else None),
         )
-        blocks[block.id] = block
-        by_index.append(block)
-        index_of[block.id] = len(by_index) - 1
+        def _register_block(b_id, b_obj):
+            if len(by_index) == 99:
+                by_index.append(None)
+            blocks[b_id] = b_obj
+            by_index.append(b_obj)
+            index_of[b_id] = len(by_index) - 1
+
+        _register_block(block.id, block)
         if creative_tab:
             creative.append(block.id)
 
@@ -820,9 +825,7 @@ def _load_registry():
                     recipe_types=block.recipe_types,
                     cook_speed=block.cook_speed,
                 )
-                blocks[variant_id] = var_block
-                by_index.append(var_block)
-                index_of[variant_id] = len(by_index) - 1
+                _register_block(variant_id, var_block)
 
         elif rotation_type in ("horizontal", "cardinal", "facing") or "facing" in properties:
             top_uv = face_uvs[FACE_INDEX["up"]]
@@ -879,9 +882,7 @@ def _load_registry():
                     recipe_types=block.recipe_types,
                     cook_speed=block.cook_speed,
                 )
-                blocks[variant_id] = var_block
-                by_index.append(var_block)
-                index_of[variant_id] = len(by_index) - 1
+                _register_block(variant_id, var_block)
 
         if entry.get("id") == "water" or properties.get("fluid") == "water":
             fall_id = "water_falling"
@@ -908,9 +909,7 @@ def _load_registry():
                 loot_table=block.loot_table,
                 emission=block.emission,
             )
-            blocks[fall_id] = fall_block
-            by_index.append(fall_block)
-            index_of[fall_id] = len(by_index) - 1
+            _register_block(fall_id, fall_block)
 
             for level in range(7, 0, -1):
                 flow_id = f"water_{level}"
@@ -951,9 +950,7 @@ def _load_registry():
                     requires_soil=block.requires_soil,
                     valid_ground=block.valid_ground,
                 )
-                blocks[flow_id] = flow_block
-                by_index.append(flow_block)
-                index_of[flow_id] = len(by_index) - 1
+                _register_block(flow_id, flow_block)
 
         if entry.get("id") == "leaves" or properties.get("decayable") or properties.get("leaf"):
             pers_props = dict(base_props)
@@ -985,9 +982,7 @@ def _load_registry():
                 requires_soil=block.requires_soil,
                 valid_ground=block.valid_ground,
             )
-            blocks[pers_id] = pers_block
-            by_index.append(pers_block)
-            index_of[pers_id] = len(by_index) - 1
+            _register_block(pers_id, pers_block)
 
         if is_slab_type:
             top_model_elements = _load_model("slab_top")
@@ -1026,9 +1021,7 @@ def _load_registry():
                 slab=True,
                 slab_half="top",
             )
-            blocks[top_id] = top_block
-            by_index.append(top_block)
-            index_of[top_id] = len(by_index) - 1
+            _register_block(top_id, top_block)
 
             wl_id = f"{block.id}_waterlogged"
             wl_props = dict(base_props)
@@ -1057,9 +1050,7 @@ def _load_registry():
                 slab_half="bottom",
                 waterlogged=True,
             )
-            blocks[wl_id] = wl_block
-            by_index.append(wl_block)
-            index_of[wl_id] = len(by_index) - 1
+            _register_block(wl_id, wl_block)
 
             wlt_id = f"{block.id}_top_waterlogged"
             wlt_props = dict(top_props)
@@ -1088,9 +1079,7 @@ def _load_registry():
                 slab_half="top",
                 waterlogged=True,
             )
-            blocks[wlt_id] = wlt_block
-            by_index.append(wlt_block)
-            index_of[wlt_id] = len(by_index) - 1
+            _register_block(wlt_id, wlt_block)
 
             for lvl in range(7, 0, -1):
                 wl_flow_id = f"{block.id}_waterlogged_{lvl}"
@@ -1120,9 +1109,7 @@ def _load_registry():
                     slab_half="bottom",
                     waterlogged=True,
                 )
-                blocks[wl_flow_id] = wl_flow_block
-                by_index.append(wl_flow_block)
-                index_of[wl_flow_id] = len(by_index) - 1
+                _register_block(wl_flow_id, wl_flow_block)
 
                 wlt_flow_id = f"{block.id}_top_waterlogged_{lvl}"
                 wlt_flow_props = dict(top_props)
@@ -1151,9 +1138,7 @@ def _load_registry():
                     slab_half="top",
                     waterlogged=True,
                 )
-                blocks[wlt_flow_id] = wlt_flow_block
-                by_index.append(wlt_flow_block)
-                index_of[wlt_flow_id] = len(by_index) - 1
+                _register_block(wlt_flow_id, wlt_flow_block)
 
     import itertools
 

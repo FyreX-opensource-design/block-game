@@ -1,0 +1,10 @@
+{
+  "id": "pine_planks",
+  "type": "crafting_shapeless",
+  "ingredients": ["pine_log"],
+  "result": {
+    "item": "pine_planks",
+    "count": 4
+  }
+}
+

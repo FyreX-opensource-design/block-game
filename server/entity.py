@@ -625,12 +625,30 @@ class Mob:
         self.sweep(1, -1.1, world)
         return True
 
-    def move_horizontal(self, dx, dz, world):
+    def move_horizontal(self, dx, dz, world, avoid_hazards=False):
         if world is None:
             self.pos[0] += dx
             self.pos[2] += dz
             return
         start_x, start_y, start_z = self.pos
+
+        if avoid_hazards and self.on_ground and self.hurt_time <= 0 and not self.in_water(world):
+            from server.ai import is_position_hazardous
+
+            # Look slightly ahead along the movement vector so the mob stops before stepping into water or off a >4 block cliff
+            dist = math.hypot(dx, dz)
+            if dist > 1e-6:
+                ux, uz = dx / dist, dz / dist
+                check_x = start_x + dx + ux * self.radius
+                check_z = start_z + dz + uz * self.radius
+                if is_position_hazardous(world, check_x, start_y, check_z, max_fall=4, already_in_water=False) or is_position_hazardous(
+                    world, start_x + dx, start_y, start_z + dz, max_fall=4, already_in_water=False
+                ):
+                    self.vel[0] = 0.0
+                    self.vel[2] = 0.0
+                    self.desired_speed = 0.0
+                    return
+
         hit_x = self.sweep(0, dx, world)
         hit_z = self.sweep(2, dz, world)
         if not hit_x and not hit_z:
@@ -665,12 +683,16 @@ class Mob:
     def update(self, dt, world=None):
         if not self.alive:
             return
+        if world is not None:
+            self.world = world
 
         dt = min(dt, 0.05)
         if self.hurt_time > 0:
             self.hurt_time = max(0.0, self.hurt_time - dt)
         if self.panic_timer > 0:
             self.panic_timer = max(0.0, self.panic_timer - dt)
+        if getattr(self, "regrow_cooldown", 0.0) > 0:
+            self.regrow_cooldown = max(0.0, self.regrow_cooldown - dt)
 
         if getattr(self, "is_remote", False):
             target_pos = getattr(self, "target_pos", None)
@@ -771,7 +793,7 @@ class Mob:
             dx = self.vel[0] * dt
             dz = self.vel[2] * dt
             if dx != 0 or dz != 0:
-                self.move_horizontal(dx, dz, world)
+                self.move_horizontal(dx, dz, world, avoid_hazards=True)
 
             # Vertical move
             dy = self.vel[1] * dt
@@ -818,6 +840,8 @@ class Mob:
         mob_type = data.get("type", data.get("mob_type", "pig"))
         if mob_type == "pig":
             return Pig.from_dict(data)
+        if mob_type == "sheep":
+            return Sheep.from_dict(data)
         mob = cls(
             mob_type=mob_type,
             pos=data.get("pos"),
@@ -880,12 +904,149 @@ class Pig(Mob):
         return pig
 
 
+SHEEP_WOOL_BLOCKS = {
+    "white": "wool",
+    "red": "red_wool",
+    "yellow": "yellow_wool",
+    "orange": "orange_wool",
+    "green": "green_wool",
+    "blue": "blue_wool",
+    "black": "black_wool",
+}
+
+DYE_TO_SHEEP_COLOR = {
+    "white_dye": "white",
+    "red_dye": "red",
+    "yellow_dye": "yellow",
+    "orange_dye": "orange",
+    "green_dye": "green",
+    "blue_dye": "blue",
+    "black_dye": "black",
+}
+
+
+class Sheep(Mob):
+    """Sheep mob entity with panic, eat grass (regrow wool), and wander goals."""
+
+    def __init__(
+        self,
+        pos=None,
+        vel=None,
+        yaw=0.0,
+        pitch=0.0,
+        health=8.0,
+        max_health=8.0,
+        entity_id=None,
+        sheared=False,
+        color="white",
+        regrow_cooldown=0.0,
+    ):
+        super().__init__(
+            mob_type="sheep",
+            pos=pos,
+            vel=vel,
+            yaw=yaw,
+            pitch=pitch,
+            health=health,
+            max_health=max_health,
+            entity_id=entity_id,
+        )
+        self.walk_speed = 1.2
+        self.run_speed = 2.8
+        self.radius = 0.45
+        self.height = 1.1
+        self.sheared = bool(sheared)
+        self.color = str(color) if color in SHEEP_WOOL_BLOCKS else "white"
+        self.regrow_cooldown = float(regrow_cooldown)
+
+        from server.ai import EatGrassGoal, GoalSelector, PanicGoal, WanderGoal
+
+        self.goals = GoalSelector()
+        self.goals.add_goal(1, PanicGoal(self, speed_mult=2.3))
+        self.goals.add_goal(2, EatGrassGoal(self))
+        self.goals.add_goal(3, WanderGoal(self))
+
+    @property
+    def wool_block(self):
+        return SHEEP_WOOL_BLOCKS.get(self.color, "wool")
+
+    def shear(self, world=None, rng=None):
+        """Shear the sheep for 1-3 wool blocks if not already sheared.
+
+        Returns list of (wool_block_id, count) drops, or empty list if unable to shear.
+        """
+        if not self.alive or self.sheared:
+            return []
+        rng = rng or random
+        self.sheared = True
+        self.regrow_cooldown = rng.uniform(5.0, 15.0)
+        count = rng.randint(1, 3)
+        wool_id = self.wool_block
+        if world is not None:
+            for _ in range(count):
+                vx = rng.uniform(-1.2, 1.2)
+                vy = rng.uniform(2.0, 3.5)
+                vz = rng.uniform(-1.2, 1.2)
+                world.spawn_item(
+                    wool_id,
+                    count=1,
+                    pos=[self.pos[0], self.pos[1] + 0.5, self.pos[2]],
+                    vel=[vx, vy, vz],
+                    pickup_delay=0.3,
+                )
+        return [(wool_id, count)]
+
+    def dye(self, dye_item_id):
+        """Dye the sheep's wool with a dye item."""
+        if not self.alive:
+            return False
+        new_color = DYE_TO_SHEEP_COLOR.get(str(dye_item_id))
+        if not new_color or new_color == self.color:
+            return False
+        self.color = new_color
+        return True
+
+    def on_death(self, world=None, killer=None):
+        if world is not None:
+            if not self.sheared:
+                world.spawn_item(
+                    self.wool_block,
+                    count=1,
+                    pos=[self.pos[0], self.pos[1] + 0.3, self.pos[2]],
+                )
+
+    def to_dict(self):
+        d = super().to_dict()
+        d["sheared"] = self.sheared
+        d["color"] = self.color
+        d["regrow_cooldown"] = round(self.regrow_cooldown, 2)
+        return d
+
+    @classmethod
+    def from_dict(cls, data):
+        sheep = cls(
+            pos=data.get("pos"),
+            vel=data.get("vel"),
+            yaw=data.get("yaw", 0.0),
+            pitch=data.get("pitch", 0.0),
+            health=data.get("health", 8.0),
+            entity_id=data.get("id"),
+            sheared=data.get("sheared", False),
+            color=data.get("color", "white"),
+            regrow_cooldown=data.get("regrow_cooldown", 0.0),
+        )
+        sheep.hurt_time = float(data.get("hurt_time", 0.0))
+        return sheep
+
+
 def entity_from_dict(data):
     etype = data.get("type")
     if etype == "falling_block" or "block" in data:
         return FallingBlockEntity.from_dict(data)
     elif etype == "pig" or data.get("mob_type") == "pig":
         return Pig.from_dict(data)
+    elif etype == "sheep" or data.get("mob_type") == "sheep":
+        return Sheep.from_dict(data)
     elif etype == "mob":
         return Mob.from_dict(data)
     return ItemEntity.from_dict(data)

@@ -1,0 +1,12 @@
+{
+  "id": "yellow_wool",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "#wool",
+    "yellow_dye"
+  ],
+  "result": {
+    "item": "yellow_wool",
+    "count": 1
+  }
+}

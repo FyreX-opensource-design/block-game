@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
-from server.biomes import BIOMES, biome_at, climate_grid, load_biomes
+from server.biomes import BIOMES, biome_at, climate_at, climate_grid, load_biomes
 from server.blocks import AIR, CLAY, GRAVEL, GRASS, LOG, SAND, WATER, WATER_LEVEL
 from server.noise import fbm, terrain_height
 from server.trees import DECORATORS, load_trees
@@ -23,6 +23,7 @@ class BiomeTests(unittest.TestCase):
                 "plains",
                 "highland_plains",
                 "forest",
+                "pine_forest",
                 "mountains",
                 "wooded_mountains",
                 "mountain_meadow",
@@ -49,6 +50,7 @@ class BiomeTests(unittest.TestCase):
             "plains",
             "highland_plains",
             "forest",
+            "pine_forest",
             "mountains",
             "wooded_mountains",
             "mountain_meadow",
@@ -58,7 +60,7 @@ class BiomeTests(unittest.TestCase):
             self.assertGreater(counts[name], 0)
         biome = BIOMES[0]
         grid = climate_grid(np.array([[4.0]]), np.array([[-6.0]]), 1, BIOMES)
-        expected = fbm(4 * biome.scale, -6 * biome.scale, biome.octaves, 1 + biome.seed_offset)
+        expected = climate_at(4, -6, 1, BIOMES)
         self.assertAlmostEqual(float(grid[0, 0]), expected)
 
     def test_forests_grow_trees_more_often_than_plains(self):
@@ -415,3 +417,27 @@ class BiomeTests(unittest.TestCase):
             self.assertTrue(cl.inland)
             self.assertEqual(cl.blend, 0.05)
             self.assertEqual(cl.curve, "smootherstep")
+
+    def test_biome_min_size_setting_and_wide_dry_beaches(self):
+        # Every built-in biome has a positive min_size setting
+        for b in BIOMES:
+            self.assertGreater(b.min_size, 0.0, f"{b.id} should define a positive min_size")
+
+        # Verify dry beaches (terrain_height >= WATER_LEVEL) are wide and not thin 1-3 block strips
+        dry_beach_runs = []
+        for z in range(-300, 301, 25):
+            dry_len = 0
+            for x in range(-300, 301):
+                b = biome_at(x, z, 1, BIOMES).id
+                h = terrain_height(x, z, 1, BIOMES)
+                if b == "beach" and h >= WATER_LEVEL:
+                    dry_len += 1
+                else:
+                    if dry_len > 0:
+                        dry_beach_runs.append(dry_len)
+                        dry_len = 0
+            if dry_len > 0:
+                dry_beach_runs.append(dry_len)
+
+        self.assertTrue(dry_beach_runs)
+        self.assertGreaterEqual(float(np.median(dry_beach_runs)), 12.0)

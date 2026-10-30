@@ -1,0 +1,11 @@
+{
+  "id": "green_dye_from_fern",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "fern"
+  ],
+  "result": {
+    "item": "green_dye",
+    "count": 1
+  }
+}

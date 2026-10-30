@@ -1,6 +1,9 @@
+import functools
 import json
 import re
 from pathlib import Path
+
+import numpy as np
 
 from server.blocks import ASSETS, BLOCKS
 from server.decorations import DECORATIONS, DecorationFeature, decoration_from_mapping
@@ -42,6 +45,7 @@ class Biome:
         floor=None,
         floor_detail=None,
         curve="smoothstep",
+        min_size=0.0,
     ):
         self.id = biome_id
         self.name = str(name or biome_id.replace("_", " ").title())
@@ -61,6 +65,7 @@ class Biome:
         self.cliff = bool(cliff)
         self.cliff_step = float(cliff_step)
         self.transition = dict(transition or {})
+        self.min_size = float(min_size)
 
         trans_blend = self.transition.get("blend")
         actual_blend = blend if blend is not None else trans_blend
@@ -240,6 +245,10 @@ def biome_from_mapping(fields, source, trees, decorations=None):
     floor_val = fields.get("floor") or trans.get("floor")
     floor_detail_val = fields.get("floor_detail") or trans.get("floor_detail")
     curve_val = fields.get("curve") or trans.get("curve", "smoothstep")
+    raw_min_size = fields.get("min_size", fields.get("min_biome_size", trans.get("min_size", 0.0)))
+    min_size = _number(raw_min_size, "min_size", source) if raw_min_size is not None else 0.0
+    if min_size < 0:
+        raise ValueError(f"{source}: min_size must be non-negative")
 
     if blend is None and "blend" in trans:
         blend = _number(trans["blend"], "blend", source)
@@ -286,17 +295,146 @@ def biome_from_mapping(fields, source, trees, decorations=None):
         floor=floor_val,
         floor_detail=floor_detail_val,
         curve=curve_val,
+        min_size=min_size,
     )
 
 
+@functools.lru_cache(maxsize=64)
+def _biome_climate_params(biomes_tuple):
+    if not biomes_tuple:
+        return 0.006, 0.0, (), ()
+    b0 = biomes_tuple[0]
+    s = float(b0.scale)
+    c = tuple(float(b.ceiling) for b in biomes_tuple)
+    pos_sizes = [float(getattr(b, "min_size", 0.0)) for b in biomes_tuple if getattr(b, "min_size", 0.0) > 0.0]
+    if not pos_sizes:
+        return s, 0.0, c, c
+
+    g0 = 0.36
+    n = len(biomes_tuple)
+    dc = [c[0]] + [c[i] - c[i - 1] for i in range(1, n)]
+    m = [max(0.0, float(getattr(b, "min_size", 0.0))) for b in biomes_tuple]
+
+    if n >= 3:
+        interior_span = max(1e-6, c[n - 2] - c[0])
+        req = [max(dc[i], m[i] * g0 * s) for i in range(1, n - 1)]
+        req_sum = sum(req)
+        c0_eff = max(0.05, min(dc[0], 0.12))
+        cn_eff = max(0.05, min(dc[n - 1], 0.10))
+        stretch = max(
+            1.0,
+            req_sum / interior_span,
+            (m[0] * g0 * s) / c0_eff,
+            (m[n - 1] * g0 * s) / cn_eff,
+        )
+        r = [0.0] * n
+        r[0] = c[0]
+        cur = c[0]
+        for idx, i in enumerate(range(1, n - 1)):
+            cur += interior_span * (req[idx] / req_sum)
+            r[i] = cur
+        r[n - 1] = c[n - 1]
+    elif n == 2:
+        w0 = max(dc[0], m[0] * g0 * s)
+        w1 = max(dc[1], m[1] * g0 * s)
+        total_span = max(1e-6, c[1])
+        stretch = max(1.0, (w0 + w1) / total_span)
+        r = [total_span * (w0 / (w0 + w1)), c[1]]
+    else:
+        stretch = max(1.0, m[0] * g0 * s)
+        r = [c[0]]
+
+    s_eff = s / stretch
+    d = min(14.0, 0.45 * (sum(pos_sizes) / len(pos_sizes)))
+    return s_eff, d, tuple(r), c
+
+
+def _remap_climate_scalar(val, r_tuple, c_tuple):
+    if r_tuple == c_tuple:
+        return val
+    prev_r = 0.0
+    prev_c = 0.0
+    n = len(r_tuple)
+    for i in range(n):
+        ri = r_tuple[i]
+        ci = c_tuple[i]
+        if val <= ri or i == n - 1:
+            span_r = max(1e-9, ri - prev_r)
+            t = (val - prev_r) / span_r
+            return prev_c + t * (ci - prev_c)
+        prev_r = ri
+        prev_c = ci
+    return val
+
+
+def _remap_climate_grid(grid, r_tuple, c_tuple):
+    if r_tuple == c_tuple:
+        return grid
+    xp = (0.0,) + r_tuple
+    fp = (0.0,) + c_tuple
+    return np.interp(grid, xp, fp)
+
+
+def _median3_scalar(a, b, c):
+    if a > b:
+        a, b = b, a
+    if b > c:
+        b = a if a > c else c
+    return b
+
+
+def _median3_grid(a, b, c):
+    ab_min = np.minimum(a, b)
+    ab_max = np.maximum(a, b)
+    return np.maximum(ab_min, np.minimum(ab_max, c))
+
+
 def climate_grid(x, z, seed, biomes):
-    biome = biomes[0]
-    return fbm_grid(x * biome.scale, z * biome.scale, biome.octaves, int(seed) + biome.seed_offset)
+    biomes_tuple = tuple(biomes)
+    biome = biomes_tuple[0]
+    s_eff, d, r_tuple, c_tuple = _biome_climate_params(biomes_tuple)
+    f_seed = int(seed) + biome.seed_offset
+    if d <= 0.0:
+        raw = fbm_grid(x * s_eff, z * s_eff, biome.octaves, f_seed)
+        return _remap_climate_grid(raw, r_tuple, c_tuple)
+
+    c0 = fbm_grid(x * s_eff, z * s_eff, biome.octaves, f_seed)
+    cx1 = fbm_grid((x - d) * s_eff, z * s_eff, biome.octaves, f_seed)
+    cx2 = fbm_grid((x + d) * s_eff, z * s_eff, biome.octaves, f_seed)
+    cz1 = fbm_grid(x * s_eff, (z - d) * s_eff, biome.octaves, f_seed)
+    cz2 = fbm_grid(x * s_eff, (z + d) * s_eff, biome.octaves, f_seed)
+    med_x = _median3_grid(cx1, c0, cx2)
+    raw = _median3_grid(cz1, med_x, cz2)
+    return _remap_climate_grid(raw, r_tuple, c_tuple)
+
+
+@functools.lru_cache(maxsize=262144)
+def _cached_climate_at(x, z, seed, biomes_tuple):
+    biome = biomes_tuple[0]
+    s_eff, d, r_tuple, c_tuple = _biome_climate_params(biomes_tuple)
+    f_seed = seed + biome.seed_offset
+    fx = float(x)
+    fz = float(z)
+    if d <= 0.0:
+        raw = fbm(fx * s_eff, fz * s_eff, biome.octaves, f_seed)
+        return _remap_climate_scalar(raw, r_tuple, c_tuple)
+
+    c0 = fbm(fx * s_eff, fz * s_eff, biome.octaves, f_seed)
+    cx1 = fbm((fx - d) * s_eff, fz * s_eff, biome.octaves, f_seed)
+    cx2 = fbm((fx + d) * s_eff, fz * s_eff, biome.octaves, f_seed)
+    cz1 = fbm(fx * s_eff, (fz - d) * s_eff, biome.octaves, f_seed)
+    cz2 = fbm(fx * s_eff, (fz + d) * s_eff, biome.octaves, f_seed)
+    med_x = _median3_scalar(cx1, c0, cx2)
+    raw = _median3_scalar(cz1, med_x, cz2)
+    return _remap_climate_scalar(raw, r_tuple, c_tuple)
+
+
+def climate_at(x, z, seed, biomes):
+    return _cached_climate_at(int(x), int(z), int(seed), tuple(biomes))
 
 
 def biome_at(x, z, seed, biomes):
-    biome = biomes[0]
-    sample = fbm(int(x) * biome.scale, int(z) * biome.scale, biome.octaves, int(seed) + biome.seed_offset)
+    sample = climate_at(x, z, seed, biomes)
     return pick_biome(sample, biomes)
 
 

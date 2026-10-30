@@ -1,0 +1,11 @@
+{
+  "id": "black_dye_from_coal",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "coal"
+  ],
+  "result": {
+    "item": "black_dye",
+    "count": 1
+  }
+}

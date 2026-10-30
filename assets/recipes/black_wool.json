@@ -1,0 +1,12 @@
+{
+  "id": "black_wool",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "#wool",
+    "black_dye"
+  ],
+  "result": {
+    "item": "black_wool",
+    "count": 1
+  }
+}

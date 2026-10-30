@@ -1,8 +1,8 @@
 {
   "id": "pine",
   "shape": "conifer",
-  "trunk": "log",
-  "leaves": "leaves",
+  "trunk": "pine_log",
+  "leaves": "pine_leaves",
   "trunk_min": 7,
   "trunk_extra": 3,
   "extra_threshold": 0.5,

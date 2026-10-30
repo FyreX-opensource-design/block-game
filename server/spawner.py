@@ -75,12 +75,13 @@ class MobSpawner:
 
                 if self._can_spawn_at(x, y, z):
                     herd_size = random.randint(1, 3)
+                    mob_type = random.choice(("pig", "sheep"))
                     for _ in range(herd_size):
                         hx = x + random.randint(-2, 2)
                         hz = z + random.randint(-2, 2)
                         hy = self._find_ground_y(hx, hz)
                         if hy is not None and self._can_spawn_at(hx, hy, hz):
-                            self.world.spawn_mob("pig", pos=[hx + 0.5, hy + 1.0, hz + 0.5])
+                            self.world.spawn_mob(mob_type, pos=[hx + 0.5, hy + 1.0, hz + 0.5])
                     return
 
     def _find_ground_y(self, x, z):

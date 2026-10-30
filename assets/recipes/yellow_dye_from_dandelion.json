@@ -1,0 +1,11 @@
+{
+  "id": "yellow_dye_from_dandelion",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "dandelion"
+  ],
+  "result": {
+    "item": "yellow_dye",
+    "count": 1
+  }
+}

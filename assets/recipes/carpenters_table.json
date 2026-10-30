@@ -6,8 +6,8 @@
     "//"
   ],
   "key": {
-    "#": "planks",
-    "/": "log"
+    "#": "#planks",
+    "/": "#logs"
   },
   "result": {
     "item": "carpenters_table",

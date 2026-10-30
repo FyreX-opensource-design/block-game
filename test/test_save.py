@@ -123,6 +123,36 @@ class MenuTests(unittest.TestCase):
         self.assertFalse(delete.enabled)
         self.assertIsNone(menu.hit_test(frame, delete.x + 2, delete.y + 2))
 
+    def test_title_player_name_field_and_saving(self):
+        import tempfile
+        import shutil
+        from server.profile import load_profile, save_profile
+
+        menu = MenuState()
+        frame = menu.layout(1280, 720)
+        # Check that username field exists and is clickable
+        actions = [hit.action for hit in frame.hits]
+        self.assertIn("focus:username", actions)
+
+        # Applying focus:username focuses username
+        menu.apply("focus:username")
+        self.assertEqual(menu.focus, "username")
+
+        # Test profile save and reload with custom username
+        temp_dir = tempfile.mkdtemp()
+        try:
+            profile = load_profile(temp_dir)
+            self.assertEqual(profile["username"], "Player")
+
+            profile["username"] = "MinerBob"
+            save_profile(profile, temp_dir)
+
+            reloaded = load_profile(temp_dir)
+            self.assertEqual(reloaded["username"], "MinerBob")
+            self.assertEqual(reloaded["uuid"], profile["uuid"])
+        finally:
+            shutil.rmtree(temp_dir)
+
 
 class _FakeWorld:
     def __init__(self, name, seed):

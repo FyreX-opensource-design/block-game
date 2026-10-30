@@ -3,7 +3,7 @@ import math
 
 import numpy as np
 
-from server.blocks import STONE_BASE
+from server.blocks import STONE_BASE, WATER_LEVEL
 
 MASK = 0xFFFFFFFF
 
@@ -133,17 +133,15 @@ def terrain_grid(x, z, seed, biomes=None):
     cover = 13.0 + broad * 16.0 + detail * detail * 7.0
     lift = np.rint(cover) - 11.0
     base_h = STONE_BASE + np.clip(lift, 4.0, 32.0)
-    climate = fbm_grid(x * 0.006, z * 0.006, 2, int(seed) + 90)
+
+    from server.biomes import BIOMES, climate_grid
 
     if biomes is None:
-        from server.biomes import BIOMES
-
         biomes = BIOMES
 
+    climate = climate_grid(x, z, seed, biomes)
     beach_c, ocean_w, floor_base, floor_detail, ocean_curve, inland = _get_transition_params(biomes)
-
-    t_oc = np.clip((beach_c - climate) / ocean_w, 0.0, 1.0)
-    s_oc = apply_curve_grid(t_oc, ocean_curve)
+    non_inland = [b for b in biomes if not getattr(b, "inland", True)]
     floor = floor_base + floor_detail * detail
 
     if not inland:
@@ -172,7 +170,31 @@ def terrain_grid(x, z, seed, biomes=None):
 
     terrace = np.rint((detail - 0.5) * 4.0) * 2.0
     h_inland = base_h + offset + (lift - 8.0) * (scale - 1.0) + terrace * cliff_w + cliff_s
-    final_h = np.rint(h_inland + (floor - h_inland) * s_oc)
+
+    if len(non_inland) >= 2:
+        ocean_c = float(non_inland[0].ceiling)
+        shore_c = ocean_c + 0.008
+        shelf_span = max(0.02, beach_c - shore_c)
+        t_shelf = np.clip((beach_c - climate) / shelf_span, 0.0, 1.0)
+        s_shelf = apply_curve_grid(t_shelf, ocean_curve)
+        h_shelf = WATER_LEVEL + 0.4 + 1.6 * (1.0 - t_shelf) + (detail - 0.5) * 0.6
+        h_coastal = h_inland + (h_shelf - h_inland) * s_shelf
+
+        # Shallow water step from 64 down to ~59.5 across [ocean_c, shore_c]
+        t_shallows = np.clip((shore_c - climate) / 0.010, 0.0, 1.0)
+        s_shallows = apply_curve_grid(t_shallows, ocean_curve)
+        h_shallows = 59.2 + (detail - 0.5) * 0.8
+        h_nearshore = h_coastal + (h_shallows - h_coastal) * s_shallows
+
+        # Deep ocean floor drop below ocean_c
+        deep_w = max(0.06, ocean_w * 0.65)
+        t_oc = np.clip((ocean_c - climate) / deep_w, 0.0, 1.0)
+        s_oc = apply_curve_grid(t_oc, ocean_curve)
+        final_h = np.rint(h_nearshore + (floor - h_nearshore) * s_oc)
+    else:
+        t_oc = np.clip((beach_c - climate) / ocean_w, 0.0, 1.0)
+        s_oc = apply_curve_grid(t_oc, ocean_curve)
+        final_h = np.rint(h_inland + (floor - h_inland) * s_oc)
     return np.clip(final_h, 50, 122).astype(np.int16)
 
 
@@ -279,12 +301,12 @@ def _cached_terrain_height(x, z, seed, biomes_tuple):
     cover = 13.0 + broad * 16.0 + detail * detail * 7.0
     lift = round(cover) - 11.0
     base_h = STONE_BASE + max(4.0, min(32.0, lift))
-    climate = fbm(x * 0.006, z * 0.006, 2, seed + 90)
 
+    from server.biomes import climate_at
+
+    climate = climate_at(x, z, seed, biomes_tuple)
     beach_c, ocean_w, floor_base, floor_detail, ocean_curve, inland = _get_transition_params(biomes_tuple)
-
-    t_oc = min(1.0, max(0.0, (beach_c - climate) / ocean_w))
-    s_oc = apply_curve_scalar(t_oc, ocean_curve)
+    non_inland = [b for b in biomes_tuple if not getattr(b, "inland", True)]
     floor = floor_base + floor_detail * detail
 
     if not inland:
@@ -313,7 +335,29 @@ def _cached_terrain_height(x, z, seed, biomes_tuple):
 
     terrace = round((detail - 0.5) * 4.0) * 2.0
     h_inland = base_h + offset + (lift - 8.0) * (scale - 1.0) + terrace * cliff_w + cliff_s
-    final_h = round(h_inland + (floor - h_inland) * s_oc)
+
+    if len(non_inland) >= 2:
+        ocean_c = float(non_inland[0].ceiling)
+        shore_c = ocean_c + 0.008
+        shelf_span = max(0.02, beach_c - shore_c)
+        t_shelf = min(1.0, max(0.0, (beach_c - climate) / shelf_span))
+        s_shelf = apply_curve_scalar(t_shelf, ocean_curve)
+        h_shelf = WATER_LEVEL + 0.4 + 1.6 * (1.0 - t_shelf) + (detail - 0.5) * 0.6
+        h_coastal = h_inland + (h_shelf - h_inland) * s_shelf
+
+        t_shallows = min(1.0, max(0.0, (shore_c - climate) / 0.010))
+        s_shallows = apply_curve_scalar(t_shallows, ocean_curve)
+        h_shallows = 59.2 + (detail - 0.5) * 0.8
+        h_nearshore = h_coastal + (h_shallows - h_coastal) * s_shallows
+
+        deep_w = max(0.06, ocean_w * 0.65)
+        t_oc = min(1.0, max(0.0, (ocean_c - climate) / deep_w))
+        s_oc = apply_curve_scalar(t_oc, ocean_curve)
+        final_h = round(h_nearshore + (floor - h_nearshore) * s_oc)
+    else:
+        t_oc = min(1.0, max(0.0, (beach_c - climate) / ocean_w))
+        s_oc = apply_curve_scalar(t_oc, ocean_curve)
+        final_h = round(h_inland + (floor - h_inland) * s_oc)
     return int(max(50, min(122, final_h)))
 
 

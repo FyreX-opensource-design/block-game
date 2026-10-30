@@ -1,0 +1,12 @@
+{
+  "id": "mud_to_muddy_grass",
+  "from": "mud",
+  "to": "muddy_grass",
+  "sources": ["grass", "muddy_grass"],
+  "min_time": 120,
+  "max_time": 180,
+  "radius": 1,
+  "vertical_radius": 1,
+  "require_clear_above": true
+}
+

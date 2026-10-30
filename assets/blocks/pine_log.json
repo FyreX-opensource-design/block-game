@@ -1,0 +1,14 @@
+{
+  "id": "pine_log",
+  "lang": "block.pine_log",
+  "tab": ["building", "natural"],
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "axe",
+  "mining_level": 0,
+  "loot_table": "blocks/pine_log",
+  "properties": {
+    "rotation": "axis"
+  },
+  "textures": {"top": "pine_log_top", "side": "pine_log_side", "bottom": "pine_log_top"}
+}

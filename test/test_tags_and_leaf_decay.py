@@ -53,6 +53,18 @@ class TestTagsAndLeafDecay(unittest.TestCase):
         self.assertEqual(res_x[0], "planks")
         self.assertEqual(res_x[1], 4)
 
+        # Pine log crafts into pine planks
+        res_pine = craft_match(("pine_log", "", "", ""))
+        self.assertIsNotNone(res_pine)
+        self.assertEqual(res_pine[0], "pine_planks")
+        self.assertEqual(res_pine[1], 4)
+
+        # Pine planks match #planks recipes (e.g. stick)
+        res_stick = craft_match(("pine_planks", "", "pine_planks", ""))
+        self.assertIsNotNone(res_stick)
+        self.assertEqual(res_stick[0], "stick")
+        self.assertEqual(res_stick[1], 4)
+
     def test_player_placed_leaves_are_persistent(self):
         placed = placement_block("leaves", (0, 1, 0))
         self.assertEqual(placed, "leaves_persistent")
