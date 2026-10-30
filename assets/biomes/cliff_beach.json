@@ -1,0 +1,20 @@
+{
+  "id": "cliff_beach",
+  "surface": "stone",
+  "soil": "stone",
+  "soil_depth": 3,
+  "scale": 0.006,
+  "octaves": 2,
+  "seed_offset": 90,
+  "ceiling": 0.36,
+  "min_size": 32,
+  "inland": false,
+  "valid_spawn": false,
+  "variant_of": "beach",
+  "variant_noise": {
+    "coast_cliff": true
+  },
+  "tree_chance": 0.0,
+  "trees": [],
+  "grass_color": "#a7cf5b"
+}

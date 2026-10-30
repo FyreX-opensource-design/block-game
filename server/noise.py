@@ -7,6 +7,12 @@ from server.blocks import STONE_BASE, WATER_LEVEL
 
 MASK = 0xFFFFFFFF
 
+# Fallback coastal noise settings. Biomes can override these through their
+# `coast` and `variant_noise` asset fields.
+COAST_SCALE = 0.018
+COAST_SEED = 7331
+COAST_OFFSET = (7.3, -11.9)
+
 
 def hash2(x, y, seed=0):
     n = ((x * 374761393) + (y * 668265263) + (seed * 1442695041)) & MASK
@@ -98,6 +104,44 @@ def apply_curve_grid(w, curve="smoothstep"):
     return w * w * (3.0 - 2.0 * w)
 
 
+def _coast_noise_settings(coast):
+    noise = (coast or {}).get("noise", {})
+    return (
+        float(noise.get("scale", COAST_SCALE)),
+        int(noise.get("octaves", 3)),
+        int(noise.get("seed_offset", COAST_SEED)),
+        tuple(noise.get("offset", COAST_OFFSET)),
+    )
+
+
+def coast_noise_grid(x, z, seed, coast=None):
+    """Low-frequency noise used to vary the material and shape of coastlines."""
+    scale, octaves, seed_offset, offset = _coast_noise_settings(coast)
+    return fbm_grid(x * scale + offset[0], z * scale + offset[1], octaves, seed + seed_offset)
+
+
+def coast_noise(x, z, seed, coast=None):
+    scale, octaves, seed_offset, offset = _coast_noise_settings(coast)
+    return fbm(x * scale + offset[0], z * scale + offset[1], octaves, seed + seed_offset)
+
+
+def cliff_factor_grid(coast, cfg=None):
+    """Return 0 for a normal beach and 1 for a sheer coastal cliff."""
+    cfg = cfg or {}
+    threshold = float(cfg.get("threshold", 0.42))
+    blend = max(1e-9, float(cfg.get("blend", 0.10)))
+    t = np.clip((threshold - coast) / blend, 0.0, 1.0)
+    return apply_curve_grid(t, "smoothstep")
+
+
+def cliff_factor(coast, cfg=None):
+    cfg = cfg or {}
+    threshold = float(cfg.get("threshold", 0.42))
+    blend = max(1e-9, float(cfg.get("blend", 0.10)))
+    t = min(1.0, max(0.0, (threshold - coast) / blend))
+    return apply_curve_scalar(t, "smoothstep")
+
+
 def _get_transition_params(biomes):
     beach_c = 0.42
     ocean_w = 0.16
@@ -124,7 +168,18 @@ def _get_transition_params(biomes):
     if not inland_list:
         inland_list = [b for b in biomes if b.ceiling > beach_c]
 
-    return beach_c, ocean_w, floor_base, floor_detail, ocean_curve, inland_list
+    coast_cfg = {}
+    for biome in biomes:
+        if not getattr(biome, "inland", True) and getattr(biome, "coast", None):
+            coast_cfg = biome.coast
+            break
+    if not coast_cfg:
+        for biome in biomes:
+            if getattr(biome, "coast", None):
+                coast_cfg = biome.coast
+                break
+
+    return beach_c, ocean_w, floor_base, floor_detail, ocean_curve, inland_list, coast_cfg
 
 
 def terrain_grid(x, z, seed, biomes=None):
@@ -140,7 +195,7 @@ def terrain_grid(x, z, seed, biomes=None):
         biomes = BIOMES
 
     climate = climate_grid(x, z, seed, biomes)
-    beach_c, ocean_w, floor_base, floor_detail, ocean_curve, inland = _get_transition_params(biomes)
+    beach_c, ocean_w, floor_base, floor_detail, ocean_curve, inland, coast_cfg = _get_transition_params(biomes)
     non_inland = [b for b in biomes if not getattr(b, "inland", True)]
     floor = floor_base + floor_detail * detail
 
@@ -178,7 +233,17 @@ def terrain_grid(x, z, seed, biomes=None):
         t_shelf = np.clip((beach_c - climate) / shelf_span, 0.0, 1.0)
         s_shelf = apply_curve_grid(t_shelf, ocean_curve)
         h_shelf = WATER_LEVEL + 0.4 + 1.6 * (1.0 - t_shelf) + (detail - 0.5) * 0.6
-        h_coastal = h_inland + (h_shelf - h_inland) * s_shelf
+        cliff_cfg = coast_cfg.get("cliff") if coast_cfg else None
+        if cliff_cfg:
+            cliff_t = cliff_factor_grid(coast_noise_grid(x, z, seed, coast_cfg), cliff_cfg)
+            power = float(cliff_cfg.get("power", 4.0))
+            uplift = float(cliff_cfg.get("uplift", 7.0))
+            s_coast = s_shelf + (s_shelf**power - s_shelf) * cliff_t
+            cliff_lift = uplift * cliff_t * s_shelf
+        else:
+            s_coast = s_shelf
+            cliff_lift = 0.0
+        h_coastal = h_inland + (h_shelf - h_inland) * s_coast + cliff_lift
 
         # Shallow water step from 64 down to ~59.5 across [ocean_c, shore_c]
         t_shallows = np.clip((shore_c - climate) / 0.010, 0.0, 1.0)
@@ -305,7 +370,7 @@ def _cached_terrain_height(x, z, seed, biomes_tuple):
     from server.biomes import climate_at
 
     climate = climate_at(x, z, seed, biomes_tuple)
-    beach_c, ocean_w, floor_base, floor_detail, ocean_curve, inland = _get_transition_params(biomes_tuple)
+    beach_c, ocean_w, floor_base, floor_detail, ocean_curve, inland, coast_cfg = _get_transition_params(biomes_tuple)
     non_inland = [b for b in biomes_tuple if not getattr(b, "inland", True)]
     floor = floor_base + floor_detail * detail
 
@@ -343,7 +408,17 @@ def _cached_terrain_height(x, z, seed, biomes_tuple):
         t_shelf = min(1.0, max(0.0, (beach_c - climate) / shelf_span))
         s_shelf = apply_curve_scalar(t_shelf, ocean_curve)
         h_shelf = WATER_LEVEL + 0.4 + 1.6 * (1.0 - t_shelf) + (detail - 0.5) * 0.6
-        h_coastal = h_inland + (h_shelf - h_inland) * s_shelf
+        cliff_cfg = coast_cfg.get("cliff") if coast_cfg else None
+        if cliff_cfg:
+            cliff_t = cliff_factor(coast_noise(x, z, seed, coast_cfg), cliff_cfg)
+            power = float(cliff_cfg.get("power", 4.0))
+            uplift = float(cliff_cfg.get("uplift", 7.0))
+            s_coast = s_shelf + (s_shelf**power - s_shelf) * cliff_t
+            cliff_lift = uplift * cliff_t * s_shelf
+        else:
+            s_coast = s_shelf
+            cliff_lift = 0.0
+        h_coastal = h_inland + (h_shelf - h_inland) * s_coast + cliff_lift
 
         t_shallows = min(1.0, max(0.0, (shore_c - climate) / 0.010))
         s_shallows = apply_curve_scalar(t_shallows, ocean_curve)

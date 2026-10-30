@@ -47,6 +47,10 @@ class Biome:
         curve="smoothstep",
         min_size=0.0,
         valid_spawn=None,
+        variant_of=None,
+        variant_noise=None,
+        coast=None,
+        variants=(),
     ):
         self.id = biome_id
         self.name = str(name or biome_id.replace("_", " ").title())
@@ -68,6 +72,10 @@ class Biome:
         self.transition = dict(transition or {})
         self.min_size = float(min_size)
         self.valid_spawn = True if valid_spawn is None else bool(valid_spawn)
+        self.variant_of = variant_of
+        self.variant_noise = dict(variant_noise or {})
+        self.coast = dict(coast or {})
+        self.variants = tuple(variants)
 
         trans_blend = self.transition.get("blend")
         actual_blend = blend if blend is not None else trans_blend
@@ -103,6 +111,54 @@ class Biome:
 
     def get_color(self, tint_type="grass"):
         return self.colors.get(tint_type, self.grass_color)
+
+    def coast_noise_params(self):
+        noise = self.coast.get("noise", {})
+        return {
+            "scale": float(noise.get("scale", 0.018)),
+            "octaves": int(noise.get("octaves", 3)),
+            "seed_offset": int(noise.get("seed_offset", 7331)),
+            "offset": tuple(noise.get("offset", (7.3, -11.9))),
+        }
+
+    def _variant_value(self, x, z, seed):
+        cfg = self.variant_noise
+        scale = float(cfg.get("scale", 0.018))
+        octaves = int(cfg.get("octaves", 3))
+        seed_offset = int(cfg.get("seed_offset", 7331))
+        offset = cfg.get("offset", (7.3, -11.9))
+        ox, oz = float(offset[0]), float(offset[1])
+        return fbm(x * scale + ox, z * scale + oz, octaves, seed + seed_offset)
+
+    def matches(self, x, z, seed):
+        if not self.variant_noise:
+            return False
+        value = self._variant_value(x, z, seed)
+        threshold = float(self.variant_noise.get("threshold", 0.5))
+        if bool(self.variant_noise.get("above", True)):
+            return value >= threshold
+        return value <= threshold
+
+    def variant_mask_grid(self, x, z, seed):
+        cfg = self.variant_noise
+        if not cfg:
+            return np.zeros(np.broadcast(x, z).shape, dtype=bool)
+        scale = float(cfg.get("scale", 0.018))
+        octaves = int(cfg.get("octaves", 3))
+        seed_offset = int(cfg.get("seed_offset", 7331))
+        offset = cfg.get("offset", (7.3, -11.9))
+        ox, oz = float(offset[0]), float(offset[1])
+        value = fbm_grid(x * scale + ox, z * scale + oz, octaves, seed + seed_offset)
+        threshold = float(cfg.get("threshold", 0.5))
+        if bool(cfg.get("above", True)):
+            return value >= threshold
+        return value <= threshold
+
+    def variant_at(self, x, z, seed):
+        for variant in self.variants:
+            if variant.matches(x, z, seed):
+                return variant
+        return self
 
 
 def parse_color(val, default=(0.51, 0.72, 0.29)):
@@ -146,7 +202,52 @@ def load_biomes(folder=None, trees=None, decorations=None):
         biomes.append(biome)
     if not biomes:
         return ()
-    ordered = tuple(sorted(biomes, key=lambda biome: (biome.ceiling, biome.id)))
+    by_id = {biome.id: biome for biome in biomes}
+    base = [biome for biome in biomes if biome.variant_of is None]
+    variants = [biome for biome in biomes if biome.variant_of is not None]
+    if not base:
+        raise ValueError("at least one biome must not be a variant")
+    for variant in variants:
+        parent = by_id.get(variant.variant_of)
+        if parent is None:
+            raise ValueError(f"{variant.source}: unknown variant_of biome {variant.variant_of}")
+        if parent.variant_of is not None:
+            raise ValueError(f"{variant.source}: variant_of must point at a base biome")
+        if not variant.variant_noise:
+            raise ValueError(f"{variant.source}: variant biomes need variant_noise")
+        if variant.ceiling != parent.ceiling:
+            raise ValueError(f"{variant.source}: variant ceiling must match {parent.id}")
+        if (variant.scale, variant.octaves, variant.seed_offset) != (parent.scale, parent.octaves, parent.seed_offset):
+            raise ValueError(f"{variant.source}: variants must share their parent's climate noise")
+        if not variant.coast:
+            variant.coast = dict(parent.coast)
+        noise = dict(variant.variant_noise)
+        uses_cliff = bool(noise.pop("coast_cliff", False))
+        parent_noise = parent.coast.get("noise", {}) if parent.coast else {}
+        defaults = {
+            "scale": parent_noise.get("scale", 0.018),
+            "octaves": parent_noise.get("octaves", 3),
+            "seed_offset": parent_noise.get("seed_offset", 7331),
+            "offset": parent_noise.get("offset", (7.3, -11.9)),
+        }
+        for key, value in defaults.items():
+            noise.setdefault(key, value)
+        if uses_cliff:
+            cliff = parent.coast.get("cliff")
+            if not cliff:
+                raise ValueError(f"{variant.source}: coast_cliff requires {parent.id} to define coast.cliff")
+            # Match the boundary where the parent's smoothstep cliff factor
+            # crosses 0.5 so surface and terrain agree.
+            threshold = float(cliff.get("threshold", 0.42))
+            blend = float(cliff.get("blend", 0.10))
+            noise["threshold"] = threshold - 0.5 * blend
+            noise["above"] = False
+        variant.variant_noise = noise
+        parent.variants = parent.variants + (variant,)
+    for biome in base:
+        biome.variants = tuple(sorted(biome.variants, key=lambda item: item.id))
+
+    ordered = tuple(sorted(base, key=lambda biome: (biome.ceiling, biome.id)))
     first = ordered[0]
     for earlier, later in zip(ordered, ordered[1:]):
         if earlier.ceiling >= later.ceiling:
@@ -256,6 +357,20 @@ def biome_from_mapping(fields, source, trees, decorations=None):
     if raw_valid_spawn is not None and not isinstance(raw_valid_spawn, bool):
         raise ValueError(f"{source}: valid_spawn must be a boolean")
 
+    variant_of = fields.get("variant_of")
+    if variant_of is not None and (not isinstance(variant_of, str) or _ID.fullmatch(variant_of) is None):
+        raise ValueError(f"{source}: variant_of must be a biome id")
+
+    raw_variant_noise = fields.get("variant_noise")
+    if raw_variant_noise is not None and not isinstance(raw_variant_noise, dict):
+        raise ValueError(f"{source}: variant_noise must be an object")
+    variant_noise = dict(raw_variant_noise or {})
+
+    raw_coast = fields.get("coast")
+    if raw_coast is not None and not isinstance(raw_coast, dict):
+        raise ValueError(f"{source}: coast must be an object")
+    coast = dict(raw_coast or {})
+
     if blend is None and "blend" in trans:
         blend = _number(trans["blend"], "blend", source)
     if not cliff and "cliff" in trans:
@@ -303,6 +418,9 @@ def biome_from_mapping(fields, source, trees, decorations=None):
         curve=curve_val,
         min_size=min_size,
         valid_spawn=raw_valid_spawn,
+        variant_of=variant_of,
+        variant_noise=variant_noise,
+        coast=coast,
     )
 
 
@@ -442,7 +560,7 @@ def climate_at(x, z, seed, biomes):
 
 def biome_at(x, z, seed, biomes):
     sample = climate_at(x, z, seed, biomes)
-    return pick_biome(sample, biomes)
+    return pick_biome(sample, biomes).variant_at(x, z, seed)
 
 
 def pick_biome(sample, biomes):
@@ -450,6 +568,34 @@ def pick_biome(sample, biomes):
         if sample <= biome.ceiling:
             return biome
     return biomes[-1]
+
+
+def all_biomes(biomes):
+    result = []
+    for biome in biomes:
+        result.append(biome)
+        result.extend(biome.variants)
+    return tuple(result)
+
+
+def biome_index_grid(x, z, seed, biomes):
+    """Return a grid of indices into ``all_biomes(biomes)`` for each coordinate."""
+    biomes = tuple(biomes)
+    catalog = all_biomes(biomes)
+    index_by_id = {biome.id: index for index, biome in enumerate(catalog)}
+    climate = climate_grid(x, z, seed, biomes)
+    grid = np.full(climate.shape, index_by_id[biomes[-1].id], dtype=np.int16)
+    assigned = np.zeros(climate.shape, dtype=bool)
+    for biome in biomes:
+        mask = (climate <= biome.ceiling) & ~assigned
+        grid[mask] = index_by_id[biome.id]
+        assigned |= mask
+    for base in biomes:
+        base_index = index_by_id[base.id]
+        for variant in base.variants:
+            mask = (grid == base_index) & variant.variant_mask_grid(x, z, seed)
+            grid[mask] = index_by_id[variant.id]
+    return grid, catalog
 
 
 def _read_file(path):

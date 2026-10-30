@@ -1,0 +1,7 @@
+{
+  "id": "oak_sapling",
+  "block": "oak_sapling",
+  "trees": ["oak", "fancy_oak", "tall_oak"],
+  "min_time": 900,
+  "max_time": 1800
+}

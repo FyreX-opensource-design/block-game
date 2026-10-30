@@ -20,6 +20,11 @@ The world is procedurally generated using deterministic seed-based noise algorit
   - Climate noise (`climate_grid`) assigns biomes by climate bands (`ceiling` thresholds).
   - Biomes include: `ocean`, `beach`, `plains`, `forest`, `mountains`, `wooded_mountains`, `mountain_meadow`, `mountain_peaks`, and `mountain_cliffs`.
   - Surface layer (`surface`), subsurface layer (`soil`), and soil depth (`soil_depth`) are defined per biome.
+- **Coastal Variation**:
+  - Low-frequency coast noise varies the material and profile of shorelines.
+  - Sandy beaches transition into gravel shores on some stretches of coast.
+  - Other coastal stretches rise into steep stone cliffs that overlook the ocean.
+  - The variation is applied only to dry sand-beach columns; seabeds and inland terrain are unaffected.
 - **Underground Cave Systems**:
   - **Tunnels**: 3D dual-frequency worm/spaghetti noise carving continuous subterranean pathways (`assets/caves/tunnels.json`).
   - **Caverns**: Wide open underground chambers defined in Lua (`assets/caves/caverns.lua`).
@@ -118,6 +123,11 @@ Procedural tree generation with realistic lifecycle dynamics:
   - Natural leaves (`leaves`) require connection to log blocks within a Manhattan/BFS distance of 4.
   - When trunk logs are chopped down, disconnected leaves randomly schedule decay timers (0.3s to 2.5s).
   - Decaying leaves drop sticks and saplings according to [`assets/loot/blocks/leaves.json`](file:///home/nathan/block-game/assets/loot/blocks/leaves.json) and cascade decay checks to neighbors.
+- **Saplings**:
+  - Oak and pine leaves occasionally drop their matching sapling (`oak_sapling`, `pine_sapling`).
+  - Saplings can only be placed on soil blocks and are washed away by fluids like other plants.
+  - After 15–30 minutes of staying placed, a sapling grows into a randomly chosen tree from the list in its [`assets/saplings/`](file:///home/nathan/block-game/assets/saplings) file.
+  - Growth timers pause while the chunk is unloaded and are saved with the world, so reloading does not reset them.
 - **Player Leaf Persistence**:
   - Leaves placed by players convert to `leaves_persistent`, making them completely immune to decay.
 

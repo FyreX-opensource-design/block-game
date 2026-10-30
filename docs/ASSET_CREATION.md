@@ -48,6 +48,25 @@ Defines climate noise thresholds, terrain heights, surface/subsurface layers, tr
 - `height_scale` (float, optional): Multiplier on terrain elevation noise.
 - `cliff` (bool, optional): Enable cliff edge terrace effects.
 - `cliff_step` (float, optional): Height step per cliff terrace.
+- `variant_of` (string, optional): Turns this biome into a variant of another base biome. Variants share their parent's climate band and are selected by `variant_noise` instead. `ceiling`, `scale`, `octaves`, and `seed_offset` must match the parent.
+- `variant_noise` (object, optional, required for variants): Noise used to choose where the variant appears within its parent's band.
+  - `threshold` (float): Noise value at which the variant takes over (default `0.5`).
+  - `above` (bool): Select where noise is `>= threshold` (default `true`), or `<= threshold` when `false`.
+  - `scale` (float): Noise scale (defaults to the parent's `coast.noise.scale`, typically `0.018`).
+  - `octaves` (int): Noise octaves (default `3`).
+  - `seed_offset` (int): Offset added to the world seed (default `7331`).
+  - `offset` (array of two floats): X/Z noise offset (default `[7.3, -11.9]`).
+- `coast` (object, optional): Coastal shaping for non-inland biomes. Only biomes that define (or inherit) `coast` are treated as coastline.
+  - `noise` (object): Low-frequency coastline noise. Accepts `scale`, `octaves`, `seed_offset`, and `offset` (same defaults as `variant_noise`).
+  - `cliff` (object, optional): Rocky cliff headlands where the coast noise is below `threshold`.
+    - `threshold` (float): Coast noise value below which cliffs appear (default `0.42`).
+    - `blend` (float): Softness of the cliff transition (default `0.10`).
+    - `power` (float): Steepness of the coastal profile (default `4.0`).
+    - `uplift` (float): How far cliffs rise above the normal shelf (default `7.0`).
+    - `surface` (string): Surface block on cliff tops (default `"stone"`).
+    - `soil` (string): Subsurface block under cliff tops (default `"stone"`).
+
+Biome variants do not appear in the top-level biome list. They are resolved per coordinate alongside their parent, so a gravel beach can share the beach climate band while replacing its surface and soil.
 
 ### Example: JSON (`plains.json`)
 ```json
@@ -88,6 +107,46 @@ return {
   trees = { "oak", "fancy_oak", "tall_oak" },
   decorations = { "tall_grass", "fern", "dandelion", "rose" },
   grass_color = "#5da73b",
+}
+```
+
+### Example: Variant (`gravel_beach.json`)
+```json
+{
+  "id": "gravel_beach",
+  "surface": "gravel",
+  "soil": "gravel",
+  "soil_depth": 3,
+  "scale": 0.006,
+  "octaves": 2,
+  "seed_offset": 90,
+  "ceiling": 0.36,
+  "inland": false,
+  "valid_spawn": false,
+  "variant_of": "beach",
+  "variant_noise": {
+    "threshold": 0.60,
+    "above": true
+  },
+  "tree_chance": 0.0,
+  "trees": [],
+  "grass_color": "#a7cf5b"
+}
+```
+
+The matching base biome can also describe coastline shape, such as the cliffs in `beach.json`:
+
+```json
+"coast": {
+  "noise": { "scale": 0.018, "octaves": 3, "seed_offset": 7331, "offset": [7.3, -11.9] },
+  "cliff": {
+    "threshold": 0.42,
+    "blend": 0.10,
+    "power": 4.0,
+    "uplift": 7.0,
+    "surface": "stone",
+    "soil": "stone"
+  }
 }
 ```
 
@@ -296,6 +355,32 @@ Defines procedural tree types, trunk heights, canopies, and branching.
   "valid_blocks": ["#soil"]
 }
 ```
+
+### Saplings (`assets/saplings/`)
+Saplings are placeable plant blocks that grow into a tree after a random delay. Each
+sapling file lists the tree assets it may become:
+
+- `id` (string, required): Unique sapling identifier.
+- `block` (string): Block ID placed in the world (defaults to `id`).
+- `trees` (list, required): Tree IDs from `assets/trees/` to choose from when growing.
+- `min_time` / `max_time` (numbers): Growth delay in seconds (defaults to 900–1800,
+  i.e. 15–30 minutes).
+
+```json
+{
+  "id": "oak_sapling",
+  "block": "oak_sapling",
+  "trees": ["oak", "fancy_oak", "tall_oak"],
+  "min_time": 900,
+  "max_time": 1800
+}
+```
+
+Saplings are placed like other plants: they require a soil block below and are washed
+away by fluids. Leaf loot tables can drop their matching sapling with a `chance` entry.
+Growth timers only advance while the sapling's chunk is loaded, so leaving the area
+pauses growth instead of skipping it. Remaining timers are saved in the world folder
+and restored when the world is loaded again.
 
 ---
 

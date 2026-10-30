@@ -5,9 +5,9 @@ from pathlib import Path
 
 import numpy as np
 
-from server.biomes import BIOMES, biome_at, climate_at, climate_grid, load_biomes
-from server.blocks import AIR, CLAY, GRAVEL, GRASS, LOG, SALT_WATER, SAND, WATER, WATER_LEVEL
-from server.noise import fbm, terrain_height
+from server.biomes import BIOMES, all_biomes, biome_at, biome_index_grid, climate_at, climate_grid, load_biomes
+from server.blocks import AIR, CLAY, GRAVEL, GRASS, LOG, SALT_WATER, SAND, STONE, WATER, WATER_LEVEL
+from server.noise import cliff_factor, coast_noise, fbm, terrain_height
 from server.trees import DECORATORS, load_trees
 from server.world import World, tree_at
 
@@ -39,7 +39,7 @@ class BiomeTests(unittest.TestCase):
         self.assertGreater(forest_b.tree_chance, plains_b.tree_chance * 3)
         self.assertIn("oak", [tree.id for tree in DECORATORS])
         self.assertEqual(forest_b.trees[0].trunk, LOG)
-        counts = {b.id: 0 for b in BIOMES}
+        counts = {b.id: 0 for b in all_biomes(BIOMES)}
         for z in range(-240, 241, 12):
             for x in range(-240, 241, 12):
                 counts[biome_at(x, z, 1, BIOMES).id] += 1
@@ -131,7 +131,10 @@ class BiomeTests(unittest.TestCase):
                 if b.id == "ocean" and ocean_pt is None:
                     ocean_pt = (x, z)
                 elif b.id == "beach" and beach_pt is None:
-                    beach_pt = (x, z)
+                    beach = next(biome for biome in BIOMES if biome.id == "beach")
+                    cliff = cliff_factor(coast_noise(x, z, 1, beach.coast), beach.coast["cliff"])
+                    if cliff <= 0.5:
+                        beach_pt = (x, z)
                 if ocean_pt and beach_pt:
                     break
             if ocean_pt and beach_pt:
@@ -154,12 +157,123 @@ class BiomeTests(unittest.TestCase):
         h_beach = terrain_height(bx, bz, 1)
         self.assertEqual(world.get_block(bx, h_beach, bz), SAND)
 
-    def test_beach_boundary_has_no_cliff(self):
-        # Sample across the beach boundary in steps of 1 block
+    def test_beach_boundary_stays_smooth_away_from_cliffs(self):
+        # Sample across the beach boundary in steps of 1 block. Steep steps are
+        # allowed only on stretches that the coastal noise marks as cliffs.
+        beach = next(biome for biome in BIOMES if biome.id == "beach")
+        cliff_cfg = beach.coast["cliff"]
         for z in range(-60, 60, 15):
             row_heights = [terrain_height(x, z, 1) for x in range(-100, 100)]
-            steps = [abs(row_heights[i + 1] - row_heights[i]) for i in range(len(row_heights) - 1)]
-            self.assertLessEqual(max(steps), 3, "Transition should not exceed 3 blocks per meter")
+            for i in range(len(row_heights) - 1):
+                step = abs(row_heights[i + 1] - row_heights[i])
+                if step <= 3:
+                    continue
+                x = -100 + i
+                cliff = max(
+                    cliff_factor(coast_noise(x, z, 1, beach.coast), cliff_cfg),
+                    cliff_factor(coast_noise(x + 1, z, 1, beach.coast), cliff_cfg),
+                )
+                self.assertGreater(cliff, 0.5, f"Unexpected {step}-block step at {x},{z}")
+
+    def test_coastal_gravel_beaches_and_cliffs(self):
+        beach = next(biome for biome in BIOMES if biome.id == "beach")
+        gravel_beach = next((variant for variant in beach.variants if variant.id == "gravel_beach"), None)
+        cliff_beach = next((variant for variant in beach.variants if variant.id == "cliff_beach"), None)
+        self.assertIsNotNone(gravel_beach, "gravel_beach should be a beach variant asset")
+        self.assertIsNotNone(cliff_beach, "cliff_beach should be a beach variant asset")
+        self.assertEqual(gravel_beach.surface, GRAVEL)
+        self.assertEqual(gravel_beach.soil, GRAVEL)
+        self.assertEqual(cliff_beach.surface, STONE)
+        self.assertEqual(cliff_beach.soil, STONE)
+        self.assertIn("cliff", beach.coast)
+
+        world = World(seed=1, caves=[])
+        sand_pt = None
+        gravel_pt = None
+        cliff_pt = None
+        for z in range(-300, 301, 8):
+            for x in range(-300, 301, 8):
+                biome = biome_at(x, z, 1, BIOMES)
+                if biome.id not in ("beach", "gravel_beach", "cliff_beach"):
+                    continue
+                height = terrain_height(x, z, 1)
+                if height < WATER_LEVEL:
+                    continue
+                if biome.id == "cliff_beach" and height >= WATER_LEVEL + 2 and cliff_pt is None:
+                    for dz in range(-8, 9):
+                        for dx in range(-8, 9):
+                            if biome_at(x + dx, z + dz, 1, BIOMES).id != "ocean":
+                                continue
+                            if terrain_height(x + dx, z + dz, 1) < WATER_LEVEL:
+                                cliff_pt = (x, z)
+                                break
+                        if cliff_pt:
+                            break
+                elif biome.id == "gravel_beach" and gravel_pt is None:
+                    gravel_pt = (x, z)
+                elif biome.id == "beach" and sand_pt is None:
+                    sand_pt = (x, z)
+                if sand_pt and gravel_pt and cliff_pt:
+                    break
+            if sand_pt and gravel_pt and cliff_pt:
+                break
+
+        self.assertIsNotNone(sand_pt, "Expected some sandy beaches to remain")
+        self.assertIsNotNone(gravel_pt, "Expected some gravel beaches")
+        self.assertIsNotNone(cliff_pt, "Expected some coastal cliffs")
+
+        for (x, z), expected in ((sand_pt, SAND), (gravel_pt, GRAVEL), (cliff_pt, STONE)):
+            world.generate_column(x // 16, z // 16)
+            height = terrain_height(x, z, 1)
+            self.assertEqual(world.get_block(x, height, z), expected)
+
+        # A cliff should rise above the water and overlook nearby ocean water.
+        cx, cz = cliff_pt
+        cliff_height = terrain_height(cx, cz, 1)
+        self.assertGreaterEqual(cliff_height, WATER_LEVEL + 2)
+        self.assertEqual(world.get_block(cx, cliff_height - 1, cz), cliff_beach.soil)
+        nearby_ocean = False
+        for dz in range(-12, 13):
+            for dx in range(-12, 13):
+                x, z = cx + dx, cz + dz
+                if biome_at(x, z, 1, BIOMES).id != "ocean":
+                    continue
+                ocean_height = terrain_height(x, z, 1)
+                if ocean_height < WATER_LEVEL:
+                    world.generate_column(x // 16, z // 16)
+                    self.assertEqual(world.get_block(x, WATER_LEVEL, z), SALT_WATER)
+                    nearby_ocean = True
+                    break
+            if nearby_ocean:
+                break
+        self.assertTrue(nearby_ocean, "Coastal cliffs should overlook ocean water")
+
+    def test_variants_do_not_leak_into_other_biomes(self):
+        # Variants sit between base biomes in the generated catalog. Their
+        # indices must not shift other biomes onto the wrong surface/soil.
+        xs = np.arange(-150, 151, 10)
+        zs = np.arange(-150, 151, 10)
+        xx, zz = np.meshgrid(xs, zs)
+        grid, catalog = biome_index_grid(xx, zz, 1, BIOMES)
+        world = World(seed=1, caves=[])
+        checked = 0
+        for i in range(xx.shape[0]):
+            for j in range(xx.shape[1]):
+                x, z = int(xx[i, j]), int(zz[i, j])
+                expected = biome_at(x, z, 1, BIOMES)
+                self.assertEqual(catalog[grid[i, j]].id, expected.id)
+                if expected.surface != GRASS:
+                    continue
+                height = terrain_height(x, z, 1)
+                if height < WATER_LEVEL:
+                    continue
+                world.generate_column(x // 16, z // 16)
+                top = world.get_block(x, height, z)
+                if top not in (GRASS, GRAVEL, STONE):
+                    continue  # tree or decoration replaced the surface
+                self.assertEqual(top, GRASS, f"{expected.id} at {x},{z} should keep its grass surface")
+                checked += 1
+        self.assertGreater(checked, 0)
 
     def test_seabed_mixes_sand_gravel_clay(self):
         world = World(seed=1, caves=[])
@@ -197,7 +311,7 @@ class BiomeTests(unittest.TestCase):
         world = World(seed=1)
         sx, sz, sy = world.find_spawn()
         biome = biome_at(sx, sz, 1, BIOMES)
-        self.assertNotIn(biome.id, ("ocean", "beach"))
+        self.assertNotIn(biome.id, ("ocean", "beach", "gravel_beach", "cliff_beach"))
         self.assertGreater(sy, WATER_LEVEL)
 
     def test_biome_grass_colors_and_block_tinting(self):
@@ -350,7 +464,7 @@ class BiomeTests(unittest.TestCase):
         self.assertEqual(ocean.curve, "smoothstep")
 
         # Extraction helper
-        b_c, o_w, fl_b, fl_d, o_curv, inlands = _get_transition_params(BIOMES)
+        b_c, o_w, fl_b, fl_d, o_curv, inlands, coast_cfg = _get_transition_params(BIOMES)
         self.assertEqual(b_c, 0.42)
         self.assertEqual(o_w, 0.16)
         self.assertEqual(fl_b, 50.0)
@@ -359,6 +473,7 @@ class BiomeTests(unittest.TestCase):
         self.assertNotIn(ocean, inlands)
         self.assertNotIn(beach, inlands)
         self.assertEqual(inlands[0].id, "lowland_plains")
+        self.assertIn("cliff", coast_cfg)
 
         # Test curve functions (linear, smoothstep, smootherstep, cosine)
         for curve in ("linear", "smoothstep", "smootherstep", "cosine"):
@@ -430,7 +545,7 @@ class BiomeTests(unittest.TestCase):
             for x in range(-300, 301):
                 b = biome_at(x, z, 1, BIOMES).id
                 h = terrain_height(x, z, 1, BIOMES)
-                if b == "beach" and h >= WATER_LEVEL:
+                if b in ("beach", "gravel_beach", "cliff_beach") and h >= WATER_LEVEL:
                     dry_len += 1
                 else:
                     if dry_len > 0:

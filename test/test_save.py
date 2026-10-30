@@ -1,14 +1,19 @@
 import os
+import struct
 import tempfile
 import unittest
+import zlib
 from pathlib import Path
 from unittest import mock
 
+import numpy as np
+
+import server.storage as storage
 from client.menu import MenuState
-from server.blocks import AIR, STONE
+from server.blocks import AIR, BLOCKS, STONE, block_index
 from server.noise import terrain_height
-from server.storage import WorldCatalog, default_saves_dir
-from server.world import World
+from server.storage import ChunkStore, WorldCatalog, default_saves_dir
+from server.world import Chunk, World
 
 
 class SaveTests(unittest.TestCase):
@@ -58,6 +63,72 @@ class SaveTests(unittest.TestCase):
             again = World(seed=info.seed, store=store)
             again.load_chunk(0, 0, 0)
             self.assertNotEqual(again.get_block(1, 0, 1), AIR)
+
+    def test_chunk_files_store_block_ids_instead_of_global_indices(self):
+        with tempfile.TemporaryDirectory() as folder:
+            store = ChunkStore(Path(folder) / "chunks")
+            chunk = Chunk(0, 5, 0)
+            chunk.data.fill(0)
+            chunk.data[1, 2, 3] = block_index(STONE)
+            store.write_chunk(chunk)
+
+            blob = store.path_for(0, 5, 0).read_bytes()
+            self.assertTrue(blob.startswith(b"BG03"))
+            self.assertIn(b"stone", blob)
+
+            moved_index = 40000
+            real_index = storage.block_index
+
+            def shifted_index(block_id):
+                return moved_index if block_id == STONE else real_index(block_id)
+
+            with mock.patch("server.storage.block_index", side_effect=shifted_index):
+                restored = store.read_chunk(0, 5, 0)
+
+            self.assertEqual(int(restored[1, 2, 3]), moved_index)
+
+    def test_chunk_writes_use_block_ids_when_the_registry_moves(self):
+        with tempfile.TemporaryDirectory() as folder:
+            store = ChunkStore(Path(folder) / "chunks")
+            chunk = Chunk(0, 5, 0)
+            chunk.data.fill(0)
+            moved_index = 40000
+            chunk.data[4, 5, 6] = moved_index
+            real_from_index = storage.block_from_index
+
+            def shifted_from_index(index):
+                if int(index) == moved_index:
+                    return BLOCKS[STONE]
+                return real_from_index(index)
+
+            with mock.patch("server.storage.block_from_index", side_effect=shifted_from_index):
+                store.write_chunk(chunk)
+
+            restored = store.read_chunk(0, 5, 0)
+            self.assertEqual(int(restored[4, 5, 6]), block_index(STONE))
+
+    def test_legacy_bg02_chunks_still_load(self):
+        with tempfile.TemporaryDirectory() as folder:
+            store = ChunkStore(Path(folder) / "chunks")
+            chunk = Chunk(0, 5, 0)
+            chunk.data.fill(0)
+            # Oak saplings were inserted before pine logs, so BG02 stored this
+            # block one index earlier than the current registry does.
+            old_index = block_index("pine_log") - 1
+            chunk.data[7, 8, 9] = old_index
+            raw = np.ascontiguousarray(chunk.data, dtype=np.uint16).tobytes()
+            header = struct.pack("<iiiI", 0, 5, 0, len(raw))
+            store.path_for(0, 5, 0).write_bytes(b"BG02" + header + zlib.compress(raw))
+
+            restored = store.read_chunk(0, 5, 0)
+
+            self.assertEqual(int(restored[7, 8, 9]), block_index("pine_log"))
+
+    def test_legacy_bg02_migration_keeps_reserved_index_hole(self):
+        lookup = storage._legacy_lookup()
+
+        self.assertEqual(int(lookup[99]), 0)
+        self.assertEqual(int(lookup[98]), block_index("planks_slab"))
 
     def test_world_list_create_and_delete(self):
         with tempfile.TemporaryDirectory() as folder:

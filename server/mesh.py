@@ -67,19 +67,18 @@ class ChunkMesh:
 def _build_grass_grid(world, cx, cz):
     if world is None or not getattr(world, "biomes", None):
         return np.full((CHUNK_SIZE, CHUNK_SIZE, 3), (0.51, 0.72, 0.29), dtype=np.float32)
-    from server.biomes import climate_grid
+    from server.biomes import biome_index_grid
     x0 = cx * CHUNK_SIZE
     z0 = cz * CHUNK_SIZE
     xs = np.arange(x0 - 1, x0 + CHUNK_SIZE + 1)
     zs = np.arange(z0 - 1, z0 + CHUNK_SIZE + 1)
     xx, zz = np.meshgrid(xs, zs)
-    climate = climate_grid(xx, zz, getattr(world, "seed", 0), world.biomes)
+    biome_indices, catalog = biome_index_grid(xx, zz, getattr(world, "seed", 0), world.biomes)
 
     raw = np.zeros((CHUNK_SIZE + 2, CHUNK_SIZE + 2, 3), dtype=np.float32)
-    last_biome = world.biomes[-1]
-    raw[:] = getattr(last_biome, "grass_color", (0.51, 0.72, 0.29))
-    for biome in reversed(world.biomes):
-        raw[climate <= biome.ceiling] = getattr(biome, "grass_color", (0.51, 0.72, 0.29))
+    raw[:] = getattr(catalog[-1], "grass_color", (0.51, 0.72, 0.29))
+    for index, biome in enumerate(catalog):
+        raw[biome_indices == index] = getattr(biome, "grass_color", (0.51, 0.72, 0.29))
 
     smoothed = (
         raw[:-2, :-2] + raw[:-2, 1:-1] + raw[:-2, 2:] +

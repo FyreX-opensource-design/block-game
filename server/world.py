@@ -2,7 +2,7 @@ import math
 
 import numpy as np
 
-from server.biomes import BIOMES, biome_at, climate_grid
+from server.biomes import BIOMES, biome_at, biome_index_grid
 from server.blocks import (
     AIR,
     BLOCKS,
@@ -25,7 +25,13 @@ from server.blocks import (
 )
 from server.caves import load_caves
 from server.ores import load_ores
-from server.noise import fbm3_grid, fbm_grid, hash2, terrain_grid, terrain_height
+from server.noise import (
+    fbm3_grid,
+    fbm_grid,
+    hash2,
+    terrain_grid,
+    terrain_height,
+)
 
 TREE_MARGIN = 4
 
@@ -121,6 +127,159 @@ def _tree_site(x, z, height, seed, biomes, height_at):
                 return None
     choice = int(hash2(x + 3, z + 5, seed) * len(biome.trees))
     return biome.trees[min(choice, len(biome.trees) - 1)]
+
+
+def tree_blocks(tree, x, ground, z, seed):
+    """Return the blocks of ``tree`` rooted at (x, ground, z) as world coordinates.
+
+    Each entry is ``(x, y, z, block_id, replace)``. ``replace`` is true for trunk
+    blocks (which may replace leaves or air), and false for leaves (air only).
+    """
+    extra = tree.trunk_extra if hash2(x + 19, z - 7, seed) > tree.extra_threshold else 0
+    trunk = max(1, tree.trunk_min + extra)
+    blocks = []
+
+    def set_air(bx, by, bz, block_id):
+        blocks.append((bx, by, bz, block_id, False))
+
+    def set_trunk(bx, by, bz, block_id):
+        blocks.append((bx, by, bz, block_id, True))
+
+    shape = getattr(tree, "shape", "blob").lower()
+
+    if shape in ("conifer", "pine", "spruce", "cone"):
+        # Conifer / Pine shape: tall trunk with tiered tapering foliage
+        for i in range(1, trunk + 1):
+            set_trunk(x, ground + i, z, tree.trunk)
+        leaf_start = ground + max(2, trunk - tree.leaf_down)
+        # Tip block on top of trunk
+        set_air(x, ground + trunk + 1, z, tree.leaves)
+        for y in range(leaf_start, ground + trunk + 1):
+            dy_from_top = (ground + trunk) - y
+            if dy_from_top == 0:
+                cur_r = 1
+            elif dy_from_top % 2 == 1:
+                cur_r = min(tree.radius, 1)
+            else:
+                cur_r = min(tree.radius, 2 + (dy_from_top // 4))
+            for dz in range(-cur_r, cur_r + 1):
+                for dx in range(-cur_r, cur_r + 1):
+                    if dx == 0 and dz == 0:
+                        continue
+                    if cur_r > 1 and abs(dx) == cur_r and abs(dz) == cur_r:
+                        continue
+                    set_air(x + dx, y, z + dz, tree.leaves)
+
+    elif shape in ("tall", "column", "birch"):
+        # Tall slender tree with compact cylindrical canopy
+        for i in range(1, trunk + 1):
+            set_trunk(x, ground + i, z, tree.trunk)
+        top = ground + trunk
+        for dy in range(-tree.leaf_down, tree.leaf_up + 1):
+            cur_r = tree.radius
+            for dz in range(-cur_r, cur_r + 1):
+                for dx in range(-cur_r, cur_r + 1):
+                    if dx == 0 and dz == 0 and dy <= 0:
+                        continue
+                    if abs(dx) == cur_r and abs(dz) == cur_r and (dy == -tree.leaf_down or dy == tree.leaf_up):
+                        continue
+                    set_air(x + dx, top + dy, z + dz, tree.leaves)
+
+    elif shape in ("shrub", "bush"):
+        # Low bush resting on ground
+        set_trunk(x, ground + 1, z, tree.trunk)
+        for dy in range(0, tree.leaf_up + 1):
+            cur_r = tree.radius if dy == 0 else max(0, tree.radius - 1)
+            for dz in range(-cur_r, cur_r + 1):
+                for dx in range(-cur_r, cur_r + 1):
+                    if dx == 0 and dz == 0 and dy == 0:
+                        continue
+                    if cur_r > 1 and abs(dx) == cur_r and abs(dz) == cur_r:
+                        continue
+                    set_air(x + dx, ground + 1 + dy, z + dz, tree.leaves)
+
+    elif shape in ("branching", "fancy", "large_oak"):
+        # Majestic branching tree with angled branches and leafy clusters
+        from server.blocks import rotation_variant
+
+        for i in range(1, trunk + 1):
+            set_trunk(x, ground + i, z, tree.trunk)
+        top = ground + trunk
+        branch_dirs = ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, -1), (1, -1), (-1, 1))
+        branch_cnt = min(getattr(tree, "branch_count", 3), len(branch_dirs))
+        for b_idx in range(branch_cnt):
+            dir_idx = int(hash2(x + b_idx * 7, z - b_idx * 13, seed) * len(branch_dirs))
+            bdx, bdz = branch_dirs[dir_idx]
+            if abs(bdx) > abs(bdz):
+                branch_axis = "x"
+            elif abs(bdz) > abs(bdx):
+                branch_axis = "z"
+            else:
+                branch_axis = "x" if (bdx * bdz > 0) else "z"
+            branch_log = rotation_variant(tree.trunk, branch_axis)
+            blen = getattr(tree, "branch_length", 2)
+            by = ground + max(2, trunk - 1)
+            bx, bz = x, z
+            for step in range(1, blen + 1):
+                bx += bdx
+                bz += bdz
+                by += (1 if step == blen else 0)
+                set_trunk(bx, by, bz, branch_log)
+            # Crown around branch tip
+            for c_dy in range(-1, 2):
+                for c_dz in range(-1, 2):
+                    for c_dx in range(-1, 2):
+                        if abs(c_dx) == 1 and abs(c_dz) == 1 and abs(c_dy) == 1:
+                            continue
+                        set_air(bx + c_dx, by + c_dy, bz + c_dz, tree.leaves)
+        # Central crown
+        for dy in range(-1, tree.leaf_up + 1):
+            for dz in range(-tree.radius, tree.radius + 1):
+                for dx in range(-tree.radius, tree.radius + 1):
+                    if dx == 0 and dz == 0 and dy <= 0:
+                        continue
+                    if abs(dx) == tree.radius and abs(dz) == tree.radius:
+                        continue
+                    set_air(x + dx, top + dy, z + dz, tree.leaves)
+
+    elif shape in ("canopy", "flat", "acacia"):
+        # Umbrella canopy tree
+        for i in range(1, trunk + 1):
+            set_trunk(x, ground + i, z, tree.trunk)
+        top = ground + trunk
+        # Top fork
+        set_trunk(x + 1, top, z, tree.trunk)
+        set_trunk(x - 1, top, z, tree.trunk)
+        for dy in (0, 1):
+            cur_r = tree.radius if dy == 0 else max(1, tree.radius - 1)
+            for dz in range(-cur_r, cur_r + 1):
+                for dx in range(-cur_r, cur_r + 1):
+                    if cur_r > 1 and abs(dx) == cur_r and abs(dz) == cur_r:
+                        continue
+                    set_air(x + dx, top + dy, z + dz, tree.leaves)
+
+    else:
+        # Default "blob" / standard oak shape
+        for i in range(1, trunk + 1):
+            set_trunk(x, ground + i, z, tree.trunk)
+        top = ground + trunk
+        for dy in range(-tree.leaf_down, tree.leaf_up + 1):
+            for dz in range(-tree.radius, tree.radius + 1):
+                for dx in range(-tree.radius, tree.radius + 1):
+                    if dx == 0 and dz == 0 and dy <= 0:
+                        continue
+                    manhattan = abs(dx) + abs(dz) + abs(dy)
+                    if dy == tree.leaf_up and (abs(dx) > tree.top_radius or abs(dz) > tree.top_radius):
+                        continue
+                    if tree.skip_corners and abs(dx) == tree.radius and abs(dz) == tree.radius:
+                        continue
+                    if manhattan > tree.max_manhattan:
+                        continue
+                    if manhattan > tree.thin_above and hash2(x + dx + 3, z + dz + dy * 9, seed) > tree.thin_threshold:
+                        continue
+                    set_air(x + dx, top + dy, z + dz, tree.leaves)
+
+    return blocks
 
 
 def _limit_vein_size(mask, noise, max_size):
@@ -221,6 +380,9 @@ class World:
         from server.transformations import TransformationSystem
 
         self.transformations = TransformationSystem(self)
+        from server.saplings import SaplingGrowthSystem
+
+        self.saplings = SaplingGrowthSystem(self)
         self._singleplayer_player = None
 
     def advance_time(self, dt):
@@ -309,6 +471,11 @@ class World:
     def update_transformations(self, dt):
         if getattr(self, "transformations", None) is not None:
             return self.transformations.update(dt)
+        return []
+
+    def update_saplings(self, dt):
+        if getattr(self, "saplings", None) is not None:
+            return self.saplings.update(dt)
         return []
 
     def spawn_item(self, item, count=1, pos=None, vel=None, despawn_timer=300.0, pickup_delay=0.0):
@@ -667,6 +834,8 @@ class World:
                 self.lighting.on_block_changed(x, y, z, was_emitter=was_emitter)
         if getattr(self, "on_block_set", None) is not None:
             self.on_block_set(x, y, z, block_id if block_id not in ("", None) else AIR)
+        if getattr(self, "saplings", None) is not None:
+            self.saplings.on_block_set(x, y, z, block_id if block_id not in ("", None) else AIR)
         self.notify_neighbors_falling(x, y, z)
         self.check_plant_support(x, y + 1, z)
         for tx, ty, tz in ((x, y + 1, z), (x + 1, y, z), (x - 1, y, z), (x, y, z + 1), (x, y, z - 1)):
@@ -846,13 +1015,14 @@ class World:
         self._note_evicted(chunk.cx, chunk.cy, chunk.cz)
 
     def flush(self):
-        if self.store is None:
-            return
-        for key in list(self.modified):
-            chunk = self.chunks.get(key)
-            if chunk is not None:
-                self.store.write_chunk(chunk)
-            self.modified.discard(key)
+        if self.store is not None:
+            for key in list(self.modified):
+                chunk = self.chunks.get(key)
+                if chunk is not None:
+                    self.store.write_chunk(chunk)
+                self.modified.discard(key)
+        if getattr(self, "saplings", None) is not None:
+            self.saplings.save()
 
     def load_chunk(self, cx, cy, cz):
         if cy < 0 or cy >= SECTION_COUNT:
@@ -890,18 +1060,15 @@ class World:
         levels = np.arange(y0, y0 + CHUNK_SIZE, dtype=np.int16).reshape(CHUNK_SIZE, 1, 1)
         surface = heights[margin : margin + CHUNK_SIZE, margin : margin + CHUNK_SIZE]
         tops = surface.reshape(1, CHUNK_SIZE, CHUNK_SIZE)
-        climate = climate_grid(xx, zz, self.seed, self.biomes)
-        chosen = np.full(climate.shape, len(self.biomes) - 1, dtype=np.int16)
-        for index, biome in enumerate(self.biomes):
-            chosen[(climate <= biome.ceiling) & (chosen == len(self.biomes) - 1)] = index
-        here = chosen[margin : margin + CHUNK_SIZE, margin : margin + CHUNK_SIZE]
-        depth = np.array([biome.soil_depth for biome in self.biomes], dtype=np.int16)[here]
+        biome_indices, catalog = biome_index_grid(xx, zz, self.seed, self.biomes)
+        here = biome_indices[margin : margin + CHUNK_SIZE, margin : margin + CHUNK_SIZE]
+        depth = np.array([biome.soil_depth for biome in catalog], dtype=np.int16)[here]
         filled = levels <= tops
         stone_mask = filled & ((levels == 0) | (levels < tops - depth.reshape(1, CHUNK_SIZE, CHUNK_SIZE)))
         top_mask = filled & (levels == tops) & (levels != 0)
         cover_mask = filled & ~stone_mask & ~top_mask
         data[stone_mask] = stone
-        for index, biome in enumerate(self.biomes):
+        for index, biome in enumerate(catalog):
             columns = here == index
             if not np.any(columns):
                 continue
@@ -1145,6 +1312,8 @@ class World:
             if bch is not None and getattr(bch, "light_valid", False):
                 bch.light_valid = False
                 self.mark_dirty(*b_key)
+        if getattr(self, "saplings", None) is not None:
+            self.saplings.scan_chunk(key)
 
     def _note_evicted(self, cx, cy, cz):
         remaining = [key[1] for key in self.chunks if key[0] == cx and key[2] == cz]
@@ -1191,159 +1360,48 @@ class World:
             if not is_valid and under_id not in ("grass", "dirt", "muddy_grass", "mud"):
                 return
 
-        extra = tree.trunk_extra if hash2(wx + 19, wz - 7, self.seed) > tree.extra_threshold else 0
-        trunk = max(1, tree.trunk_min + extra)
-
-        def set_air(x, y, z, block_id):
+        x0 = wx - lx
+        z0 = wz - lz
+        leaves_index = block_index(tree.leaves)
+        for bx, by, bz, block_id, replace in tree_blocks(tree, wx, ground, wz, self.seed):
+            x = bx - x0
+            z = bz - z0
             if x < 0 or z < 0 or x >= CHUNK_SIZE or z >= CHUNK_SIZE:
+                continue
+            if by <= 0 or by < y0 or by >= y0 + CHUNK_SIZE or by >= WORLD_HEIGHT:
+                continue
+            if replace:
+                cur = int(data[by - y0, z, x])
+                if cur == 0 or cur == leaves_index:
+                    data[by - y0, z, x] = block_index(block_id)
+            elif data[by - y0, z, x] == 0:
+                data[by - y0, z, x] = block_index(block_id)
+
+    def grow_tree(self, x, ground, z, tree):
+        """Grow ``tree`` on top of the block at (x, ground, z), returning changed blocks."""
+        changed = []
+        leaves_id = tree.leaves
+        if self.get_block(x, ground + 1, z) != AIR:
+            self.set_block(x, ground + 1, z, AIR)
+
+        def place(bx, by, bz, block_id, replace):
+            if by <= 0 or by >= WORLD_HEIGHT:
                 return
-            if y <= 0 or y < y0 or y >= y0 + CHUNK_SIZE or y >= WORLD_HEIGHT:
+            key = self.chunk_key(bx, by, bz)
+            if key not in self.chunks and self.load_chunk(*key) is None:
                 return
-            if data[y - y0, z, x] == 0:
-                data[y - y0, z, x] = block_index(block_id)
-
-        def set_trunk(x, y, z, block_id):
-            if x < 0 or z < 0 or x >= CHUNK_SIZE or z >= CHUNK_SIZE:
+            current = self.get_block(bx, by, bz)
+            if replace:
+                if current not in (AIR, leaves_id):
+                    return
+            elif current != AIR:
                 return
-            if y <= 0 or y < y0 or y >= y0 + CHUNK_SIZE or y >= WORLD_HEIGHT:
-                return
-            cur = int(data[y - y0, z, x])
-            if cur == 0 or cur == block_index(tree.leaves):
-                data[y - y0, z, x] = block_index(block_id)
+            if self.set_block(bx, by, bz, block_id):
+                changed.append((bx, by, bz, block_id))
 
-        shape = getattr(tree, "shape", "blob").lower()
-
-        if shape in ("conifer", "pine", "spruce", "cone"):
-            # Conifer / Pine shape: tall trunk with tiered tapering foliage
-            for i in range(1, trunk + 1):
-                set_trunk(lx, ground + i, lz, tree.trunk)
-            leaf_start = ground + max(2, trunk - tree.leaf_down)
-            # Tip block on top of trunk
-            set_air(lx, ground + trunk + 1, lz, tree.leaves)
-            for y in range(leaf_start, ground + trunk + 1):
-                dy_from_top = (ground + trunk) - y
-                if dy_from_top == 0:
-                    cur_r = 1
-                elif dy_from_top % 2 == 1:
-                    cur_r = min(tree.radius, 1)
-                else:
-                    cur_r = min(tree.radius, 2 + (dy_from_top // 4))
-                for dz in range(-cur_r, cur_r + 1):
-                    for dx in range(-cur_r, cur_r + 1):
-                        if dx == 0 and dz == 0:
-                            continue
-                        if cur_r > 1 and abs(dx) == cur_r and abs(dz) == cur_r:
-                            continue
-                        set_air(lx + dx, y, lz + dz, tree.leaves)
-
-        elif shape in ("tall", "column", "birch"):
-            # Tall slender tree with compact cylindrical canopy
-            for i in range(1, trunk + 1):
-                set_trunk(lx, ground + i, lz, tree.trunk)
-            top = ground + trunk
-            for dy in range(-tree.leaf_down, tree.leaf_up + 1):
-                cur_r = tree.radius
-                for dz in range(-cur_r, cur_r + 1):
-                    for dx in range(-cur_r, cur_r + 1):
-                        if dx == 0 and dz == 0 and dy <= 0:
-                            continue
-                        if abs(dx) == cur_r and abs(dz) == cur_r and (dy == -tree.leaf_down or dy == tree.leaf_up):
-                            continue
-                        set_air(lx + dx, top + dy, lz + dz, tree.leaves)
-
-        elif shape in ("shrub", "bush"):
-            # Low bush resting on ground
-            set_trunk(lx, ground + 1, lz, tree.trunk)
-            for dy in range(0, tree.leaf_up + 1):
-                cur_r = tree.radius if dy == 0 else max(0, tree.radius - 1)
-                for dz in range(-cur_r, cur_r + 1):
-                    for dx in range(-cur_r, cur_r + 1):
-                        if dx == 0 and dz == 0 and dy == 0:
-                            continue
-                        if cur_r > 1 and abs(dx) == cur_r and abs(dz) == cur_r:
-                            continue
-                        set_air(lx + dx, ground + 1 + dy, lz + dz, tree.leaves)
-
-        elif shape in ("branching", "fancy", "large_oak"):
-            # Majestic branching tree with angled branches and leafy clusters
-            from server.blocks import rotation_variant
-
-            for i in range(1, trunk + 1):
-                set_trunk(lx, ground + i, lz, tree.trunk)
-            top = ground + trunk
-            branch_dirs = ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, -1), (1, -1), (-1, 1))
-            branch_cnt = min(getattr(tree, "branch_count", 3), len(branch_dirs))
-            for b_idx in range(branch_cnt):
-                dir_idx = int(hash2(wx + b_idx * 7, wz - b_idx * 13, self.seed) * len(branch_dirs))
-                bdx, bdz = branch_dirs[dir_idx]
-                if abs(bdx) > abs(bdz):
-                    branch_axis = "x"
-                elif abs(bdz) > abs(bdx):
-                    branch_axis = "z"
-                else:
-                    branch_axis = "x" if (bdx * bdz > 0) else "z"
-                branch_log = rotation_variant(tree.trunk, branch_axis)
-                blen = getattr(tree, "branch_length", 2)
-                by = ground + max(2, trunk - 1)
-                bx, bz = lx, lz
-                for step in range(1, blen + 1):
-                    bx += bdx
-                    bz += bdz
-                    by += (1 if step == blen else 0)
-                    set_trunk(bx, by, bz, branch_log)
-                # Crown around branch tip
-                for c_dy in range(-1, 2):
-                    for c_dz in range(-1, 2):
-                        for c_dx in range(-1, 2):
-                            if abs(c_dx) == 1 and abs(c_dz) == 1 and abs(c_dy) == 1:
-                                continue
-                            set_air(bx + c_dx, by + c_dy, bz + c_dz, tree.leaves)
-            # Central crown
-            for dy in range(-1, tree.leaf_up + 1):
-                for dz in range(-tree.radius, tree.radius + 1):
-                    for dx in range(-tree.radius, tree.radius + 1):
-                        if dx == 0 and dz == 0 and dy <= 0:
-                            continue
-                        if abs(dx) == tree.radius and abs(dz) == tree.radius:
-                            continue
-                        set_air(lx + dx, top + dy, lz + dz, tree.leaves)
-
-        elif shape in ("canopy", "flat", "acacia"):
-            # Umbrella canopy tree
-            for i in range(1, trunk + 1):
-                set_trunk(lx, ground + i, lz, tree.trunk)
-            top = ground + trunk
-            # Top fork
-            set_trunk(lx + 1, top, lz, tree.trunk)
-            set_trunk(lx - 1, top, lz, tree.trunk)
-            for dy in (0, 1):
-                cur_r = tree.radius if dy == 0 else max(1, tree.radius - 1)
-                for dz in range(-cur_r, cur_r + 1):
-                    for dx in range(-cur_r, cur_r + 1):
-                        if cur_r > 1 and abs(dx) == cur_r and abs(dz) == cur_r:
-                            continue
-                        set_air(lx + dx, top + dy, lz + dz, tree.leaves)
-
-        else:
-            # Default "blob" / standard oak shape
-            for i in range(1, trunk + 1):
-                set_trunk(lx, ground + i, lz, tree.trunk)
-            top = ground + trunk
-            for dy in range(-tree.leaf_down, tree.leaf_up + 1):
-                for dz in range(-tree.radius, tree.radius + 1):
-                    for dx in range(-tree.radius, tree.radius + 1):
-                        if dx == 0 and dz == 0 and dy <= 0:
-                            continue
-                        manhattan = abs(dx) + abs(dz) + abs(dy)
-                        if dy == tree.leaf_up and (abs(dx) > tree.top_radius or abs(dz) > tree.top_radius):
-                            continue
-                        if tree.skip_corners and abs(dx) == tree.radius and abs(dz) == tree.radius:
-                            continue
-                        if manhattan > tree.max_manhattan:
-                            continue
-                        if manhattan > tree.thin_above and hash2(wx + dx + 3, wz + dz + dy * 9, self.seed) > tree.thin_threshold:
-                            continue
-                        set_air(lx + dx, top + dy, lz + dz, tree.leaves)
+        for bx, by, bz, block_id, replace in tree_blocks(tree, x, ground, z, self.seed):
+            place(bx, by, bz, block_id, replace)
+        return changed
 
     def _place_decorations(self, data, x0, y0, z0, sample):
         for lz in range(CHUNK_SIZE):

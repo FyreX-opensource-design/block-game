@@ -266,6 +266,7 @@ class Game(pyglet.window.Window):
                 self.world.update_fluids(min(dt, 0.05))
                 self.world.update_leaves(min(dt, 0.05))
                 self.world.update_transformations(min(dt, 0.05))
+                self.world.update_saplings(min(dt, 0.05))
                 self.world.update_furnaces(min(dt, 0.05))
             if self.player is not None and self.mode == "play":
                 px = self.player.pos[0]

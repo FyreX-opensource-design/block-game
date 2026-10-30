@@ -1,0 +1,16 @@
+{
+  "id": "oak_sapling",
+  "lang": "block.oak_sapling",
+  "tab": "natural",
+  "model": "cross",
+  "render": "cutout",
+  "solid": false,
+  "hardness": 0.0,
+  "tool": "none",
+  "mining_level": 0,
+  "loot_table": "blocks/oak_sapling",
+  "fluid_breakable": true,
+  "plant": true,
+  "requires_soil": true,
+  "textures": {"cross": "oak_sapling"}
+}

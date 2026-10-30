@@ -1,0 +1,21 @@
+{
+  "id": "gravel_beach",
+  "surface": "gravel",
+  "soil": "gravel",
+  "soil_depth": 3,
+  "scale": 0.006,
+  "octaves": 2,
+  "seed_offset": 90,
+  "ceiling": 0.36,
+  "min_size": 32,
+  "inland": false,
+  "valid_spawn": false,
+  "variant_of": "beach",
+  "variant_noise": {
+    "threshold": 0.60,
+    "above": true
+  },
+  "tree_chance": 0.0,
+  "trees": [],
+  "grass_color": "#a7cf5b"
+}

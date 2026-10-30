@@ -9,6 +9,12 @@
           "name": "stick",
           "count": 1,
           "chance": 0.2
+        },
+        {
+          "type": "item",
+          "name": "pine_sapling",
+          "count": 1,
+          "chance": 0.05
         }
       ]
     }

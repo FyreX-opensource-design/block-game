@@ -15,6 +15,20 @@
     "width": 0.16,
     "curve": "smoothstep"
   },
+  "coast": {
+    "noise": {
+      "scale": 0.018,
+      "octaves": 3,
+      "seed_offset": 7331,
+      "offset": [7.3, -11.9]
+    },
+    "cliff": {
+      "threshold": 0.42,
+      "blend": 0.10,
+      "power": 4.0,
+      "uplift": 7.0
+    }
+  },
   "tree_chance": 0.0,
   "trees": [],
   "grass_color": "#a7cf5b"
