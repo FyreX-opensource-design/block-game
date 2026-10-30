@@ -630,5 +630,139 @@ class TestFluidFlowPushing(unittest.TestCase):
         self.assertLess(pig.vel[1], -0.2)
 
 
+class TestFluidDefinitionsAndInteractions(unittest.TestCase):
+    def setUp(self):
+        self.world = World(seed=1)
+        self.cx, self.cy, self.cz = 0, 5, 0
+        self.world.load_chunk(self.cx, self.cy, self.cz)
+        self.world.chunks[(self.cx, self.cy, self.cz)].data.fill(0)
+
+    def test_fluid_asset_definitions_loaded(self):
+        from server.fluid import FLUIDS, FluidDefinition
+
+        self.assertIn("water", FLUIDS)
+        self.assertIn("salt_water", FLUIDS)
+        self.assertIn("brackish_water", FLUIDS)
+        for fid in ("water", "salt_water", "brackish_water"):
+            fdef = FLUIDS[fid]
+            self.assertIsInstance(fdef, FluidDefinition)
+            self.assertEqual(fdef.flow_distance, 7)
+            self.assertEqual(fdef.speed, 1.0)
+
+    def test_custom_flow_distance_and_speed(self):
+        from server.fluid import FLUIDS, FluidDefinition
+
+        orig = FLUIDS["salt_water"]
+        try:
+            # Set salt_water flow_distance=3 and speed=0.5 (tick_interval = 0.30s)
+            FLUIDS["salt_water"] = FluidDefinition("salt_water", block="salt_water", flow_distance=3, speed=0.5)
+            for x in range(1, 10):
+                self.world.set_block(x, 80, 5, STONE)
+                self.world.set_block(x, 81, 4, STONE)
+                self.world.set_block(x, 81, 6, STONE)
+            self.world.set_block(0, 81, 5, STONE)
+            self.world.set_block(9, 81, 5, STONE)
+
+            self.world.set_block(1, 81, 5, "salt_water")
+            # At dt=0.16 (< 0.30 interval for speed=0.5), salt_water has not ticked yet
+            self.world.update_fluids(0.16)
+            self.assertEqual(self.world.get_block(2, 81, 5), AIR)
+
+            # Another dt=0.16 reaches 0.32 >= 0.30, so salt_water spreads 1 step to level 3
+            self.world.update_fluids(0.16)
+            self.assertEqual(self.world.get_block(2, 81, 5), "salt_water_3")
+
+            # Tick further until stabilized
+            for _ in range(15):
+                self.world.update_fluids(0.35)
+
+            self.assertEqual(self.world.get_block(1, 81, 5), "salt_water")
+            self.assertEqual(self.world.get_block(2, 81, 5), "salt_water_3")
+            self.assertEqual(self.world.get_block(3, 81, 5), "salt_water_2")
+            self.assertEqual(self.world.get_block(4, 81, 5), "salt_water_1")
+            self.assertEqual(self.world.get_block(5, 81, 5), AIR)
+        finally:
+            FLUIDS["salt_water"] = orig
+
+    def test_both_flowing_water_and_salt_water_do_not_create_brackish_source(self):
+        # Build a trench from x=1 to x=7 at y=81, z=5
+        for x in range(1, 8):
+            self.world.set_block(x, 80, 5, STONE)
+            self.world.set_block(x, 81, 4, STONE)
+            self.world.set_block(x, 81, 6, STONE)
+        self.world.set_block(0, 81, 5, STONE)
+        self.world.set_block(8, 81, 5, STONE)
+
+        # Fresh water at x=1, salt water at x=7: their flowing streams meet in the middle (x=4)
+        self.world.set_block(1, 81, 5, "water")
+        self.world.set_block(7, 81, 5, "salt_water")
+
+        for _ in range(15):
+            self.world.update_fluids(0.2)
+
+        trench_blocks = [self.world.get_block(x, 81, 5) for x in range(1, 8)]
+        # Neither stream reached the other's source block, so NO brackish_water source is created
+        self.assertNotIn("brackish_water", trench_blocks)
+        self.assertEqual(self.world.get_block(1, 81, 5), "water")
+        self.assertEqual(self.world.get_block(7, 81, 5), "salt_water")
+
+    def test_flowing_fluids_meet_with_custom_flow_result_recipe(self):
+        from server.recipes import FLUID_MEET, RECIPES, Recipe
+        import server.recipes as recipes_mod
+
+        custom_recipe = Recipe(
+            "custom_flow_meet",
+            False,
+            (),
+            (),
+            "stone",
+            1,
+            FLUID_MEET,
+            fluids=("water", "brackish_water"),
+            source_result="dirt",
+        )
+        orig_recipes = recipes_mod.RECIPES
+        try:
+            recipes_mod.RECIPES = orig_recipes + (custom_recipe,)
+            for x in range(1, 6):
+                self.world.set_block(x, 80, 5, STONE)
+                self.world.set_block(x, 81, 4, STONE)
+                self.world.set_block(x, 81, 6, STONE)
+            self.world.set_block(0, 81, 5, STONE)
+            self.world.set_block(6, 81, 5, STONE)
+
+            # Place water at x=1 and brackish_water at x=5 so flowing streams meet at x=3
+            self.world.set_block(1, 81, 5, "water")
+            self.world.set_block(5, 81, 5, "brackish_water")
+            for _ in range(5):
+                self.world.update_fluids(0.2)
+
+            trench_blocks = [self.world.get_block(x, 81, 5) for x in range(1, 6)]
+            self.assertIn("stone", trench_blocks)
+        finally:
+            recipes_mod.RECIPES = orig_recipes
+
+    def test_flowing_fluid_hitting_source_converts_source_block(self):
+        # Build a short trench from x=1 to x=3 at y=81, z=5
+        for x in range(1, 4):
+            self.world.set_block(x, 80, 5, STONE)
+            self.world.set_block(x, 81, 4, STONE)
+            self.world.set_block(x, 81, 6, STONE)
+        self.world.set_block(0, 81, 5, STONE)
+        self.world.set_block(4, 81, 5, STONE)
+
+        # Fresh water at x=1 flows into x=2, and salt_water source is at x=3
+        self.world.set_block(1, 81, 5, "water")
+        self.world.update_fluids(0.2)
+        self.assertEqual(self.world.get_block(2, 81, 5), "water_7")
+
+        # Now place salt_water source at x=3 next to flowing water_7 at x=2
+        self.world.set_block(3, 81, 5, "salt_water")
+        self.world.update_fluids(0.2)
+
+        # The salt_water source block at x=3 turns into brackish_water!
+        self.assertEqual(self.world.get_block(3, 81, 5), "brackish_water")
+
+
 if __name__ == "__main__":
     unittest.main()

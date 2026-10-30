@@ -1,0 +1,21 @@
+{
+  "id": "blue_torch",
+  "lang": "block.blue_torch",
+  "tab": ["building", "tools"],
+  "model": "torch",
+  "render": "cutout",
+  "solid": false,
+  "hardness": 0.0,
+  "tool": "none",
+  "mining_level": 0,
+  "fluid_breakable": true,
+  "light": {"r": 3, "g": 8, "b": 15, "uv": 4, "ir": 2},
+  "properties": {
+    "torch": true,
+    "tags": ["torches"]
+  },
+  "textures": {
+    "torch": "blue_torch"
+  }
+}
+

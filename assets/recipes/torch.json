@@ -1,0 +1,17 @@
+{
+  "id": "torch",
+  "type": "crafting_shaped",
+  "pattern": [
+    "C",
+    "S"
+  ],
+  "key": {
+    "C": "coal",
+    "S": "stick"
+  },
+  "result": {
+    "item": "torch",
+    "count": 4
+  }
+}
+

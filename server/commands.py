@@ -119,6 +119,18 @@ class CommandHandler:
             "Spawn a mob entity (e.g. /spawn pig).",
             usage="/spawn <mob_type> [x y z]",
         )
+        self.register(
+            "setworldspawn",
+            self._cmd_setworldspawn,
+            "Set the world spawn point to your current position or specified coordinates.",
+            usage="/setworldspawn [x [y] z]",
+        )
+        self.register(
+            "worldspawn",
+            self._cmd_worldspawn,
+            "Query or set the world spawn point.",
+            usage="/worldspawn [query | set [x [y] z]]",
+        )
 
     def _cmd_help(self, ctx, args):
         if args:
@@ -361,5 +373,60 @@ class CommandHandler:
                 }
             )
         ctx.reply(f"Spawned {mob_type} at {x:.1f}, {y:.1f}, {z:.1f} (id: {mob.id})")
+
+    def _cmd_setworldspawn(self, ctx, args):
+        world = ctx.world or (ctx.server.world if ctx.server else None)
+        if world is None:
+            ctx.error("World not available.")
+            return
+
+        if not args:
+            if ctx.player is not None and getattr(ctx.player, "pos", None) is not None:
+                x, y, z = float(ctx.player.pos[0]), float(ctx.player.pos[1]), float(ctx.player.pos[2])
+                sp = world.set_spawn_point(x, y, z)
+            else:
+                ctx.error("Usage: /setworldspawn <x> [y] <z>")
+                return
+        elif len(args) == 2:
+            try:
+                x, z = float(args[0]), float(args[1])
+            except ValueError:
+                ctx.error("Coordinates must be numbers.")
+                return
+            sp = world.set_spawn_point(x, None, z)
+        elif len(args) >= 3:
+            try:
+                x, y, z = float(args[0]), float(args[1]), float(args[2])
+            except ValueError:
+                ctx.error("Coordinates must be numbers.")
+                return
+            sp = world.set_spawn_point(x, y, z)
+        else:
+            ctx.error("Usage: /setworldspawn [x [y] z]")
+            return
+
+        app = getattr(ctx, "app", None)
+        if app is not None and getattr(app, "_persist_world", None):
+            app._persist_world()
+        server = getattr(ctx, "server", None)
+        if server is not None and getattr(server, "world_info", None) is not None and getattr(server, "catalog", None) is not None:
+            server.world_info.spawn = list(sp)
+            server.catalog.write(server.world_info)
+
+        ctx.reply(f"Set world spawn point to ({sp[0]:.1f}, {sp[1]:.1f}, {sp[2]:.1f})")
+
+    def _cmd_worldspawn(self, ctx, args):
+        world = ctx.world or (ctx.server.world if ctx.server else None)
+        if world is None:
+            ctx.error("World not available.")
+            return
+        if not args or args[0].lower() in ("query", "get"):
+            sp = world.get_spawn_point()
+            ctx.reply(f"World spawn point is ({sp[0]:.1f}, {sp[1]:.1f}, {sp[2]:.1f})")
+            return
+        if args[0].lower() == "set":
+            self._cmd_setworldspawn(ctx, args[1:])
+            return
+        self._cmd_setworldspawn(ctx, args)
 
 

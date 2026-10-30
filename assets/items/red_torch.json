@@ -1,0 +1,17 @@
+{
+  "id": "red_torch",
+  "lang": "block.red_torch",
+  "tab": ["building", "tools"],
+  "model": "flat",
+  "block": "red_torch",
+  "texture": "red_torch",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 1,
+  "food": 0
+}
+

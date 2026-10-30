@@ -225,20 +225,32 @@ class LightingTests(unittest.TestCase):
 
     def test_ocean_vertical_skylight_propagation(self):
         world = World(seed=7)
+        # Find an ocean column in seed 7
+        ox, oz = -5, -5
+        for z in range(-120, 120, 8):
+            for x in range(-120, 120, 8):
+                if world.column_top(x, z) <= 60:
+                    ox, oz = x, z
+                    break
+            else:
+                continue
+            break
+
+        cx, cz = ox // 16, oz // 16
         for cy in range(8):
-            world.load_chunk(-1, cy, -1)
+            world.load_chunk(cx, cy, cz)
 
         # Query from bottom up
         for cy in range(4):
-            world.lighting.ensure_chunk_lit(world.chunks[(-1, cy, -1)])
+            world.lighting.ensure_chunk_lit(world.chunks[(cx, cy, cz)])
 
         # Water in chunk cy=3 at y=63 and y=62 must receive attenuated sunlight, not 0
-        self.assertGreater(world.get_skylight(-5, 64, -5), 0)
-        self.assertGreater(world.get_skylight(-5, 63, -5), 0)
-        self.assertGreater(world.get_skylight(-5, 62, -5), 0)
+        self.assertGreater(world.get_skylight(ox, 64, oz), 0)
+        self.assertGreater(world.get_skylight(ox, 63, oz), 0)
+        self.assertGreater(world.get_skylight(ox, 62, oz), 0)
         # Smooth attenuation: 64 >= 63 >= 62
-        self.assertGreaterEqual(world.get_skylight(-5, 64, -5), world.get_skylight(-5, 63, -5))
-        self.assertGreaterEqual(world.get_skylight(-5, 63, -5), world.get_skylight(-5, 62, -5))
+        self.assertGreaterEqual(world.get_skylight(ox, 64, oz), world.get_skylight(ox, 63, oz))
+        self.assertGreaterEqual(world.get_skylight(ox, 63, oz), world.get_skylight(ox, 62, oz))
 
     def test_ocean_and_cave_lighting_no_recursion(self):
         """Ensure lighting propagation across wide ocean / cave areas does not exceed recursion limits."""
@@ -336,6 +348,110 @@ class LightingTests(unittest.TestCase):
         self.assertTrue(world.chunks[(cx0, 3, cz0)].light_valid)
         self.assertTrue(world.chunks[(cx0, 4, cz0)].light_valid)
         self.assertGreater(m4_revert.lights[:, 0].max(), 0.0)
+
+    def test_torch_placement_and_colored_light_emission(self):
+        from server.blocks import BLOCKS, can_place_block, placement_block
+
+        world = World()
+        chunk = Chunk(0, 0, 0)
+        world.chunks[(0, 0, 0)] = chunk
+
+        # 1. Default torch emits warm yellow/orange light + IR
+        self.assertEqual(BLOCKS["torch"].emission, (14, 11, 4, 0, 10))
+        self.assertEqual(BLOCKS["red_torch"].emission, (14, 3, 3, 0, 8))
+        self.assertEqual(BLOCKS["green_torch"].emission, (3, 14, 4, 0, 4))
+        self.assertEqual(BLOCKS["blue_torch"].emission, (3, 8, 15, 4, 2))
+        self.assertEqual(BLOCKS["purple_torch"].emission, (11, 3, 14, 12, 3))
+
+        # 2. Place full block at (5, 5, 5), bottom slab at (8, 5, 5), top slab at (11, 5, 5)
+        world.set_block(5, 5, 5, "stone")
+        world.set_block(8, 5, 5, "stone_slab")
+        world.set_block(11, 5, 5, "stone_slab_top")
+
+        # Torch on top of full block -> allowed
+        hit_top_full = {"x": 5, "y": 5, "z": 5, "nx": 0, "ny": 1, "nz": 0}
+        b_top = placement_block("torch", (0, 1, 0))
+        self.assertEqual(b_top, "torch")
+        self.assertTrue(can_place_block(world, 5, 6, 5, b_top, hit=hit_top_full))
+        world.set_block(5, 6, 5, b_top)
+        self.assertEqual(world.get_blocklight(5, 6, 5), (14, 11, 4, 0, 10))
+
+        # Torch on top of bottom slab -> NOT allowed (gap underneath)
+        hit_top_bslab = {"x": 8, "y": 5, "z": 5, "nx": 0, "ny": 1, "nz": 0}
+        self.assertFalse(can_place_block(world, 8, 6, 5, "torch", hit=hit_top_bslab))
+
+        # Torch on top of top slab -> allowed (top face is at y=1.0)
+        hit_top_tslab = {"x": 11, "y": 5, "z": 5, "nx": 0, "ny": 1, "nz": 0}
+        self.assertTrue(can_place_block(world, 11, 6, 5, "torch", hit=hit_top_tslab))
+
+        # Torch on side (+X) of full block -> allowed (torch_wall_east)
+        # Remove the top torch first so we measure only red_torch's emission
+        world.set_block(5, 6, 5, AIR)
+        hit_side_full = {"x": 5, "y": 5, "z": 5, "nx": 1, "ny": 0, "nz": 0}
+        b_east = placement_block("red_torch", (1, 0, 0))
+        self.assertEqual(b_east, "red_torch_wall_east")
+        self.assertTrue(can_place_block(world, 6, 5, 5, b_east, hit=hit_side_full))
+        world.set_block(6, 5, 5, b_east)
+        self.assertEqual(world.get_blocklight(6, 5, 5), (14, 3, 3, 0, 8))
+
+        # Put top torch back at (5, 6, 5)
+        world.set_block(5, 6, 5, b_top)
+
+        # Torch on side (+Z) of bottom slab -> allowed (blue_torch_wall_south)
+        world.set_block(5, 6, 5, AIR)
+        world.set_block(6, 5, 5, AIR)
+        hit_side_bslab = {"x": 8, "y": 5, "z": 5, "nx": 0, "ny": 0, "nz": 1}
+        b_south = placement_block("blue_torch", (0, 0, 1))
+        self.assertEqual(b_south, "blue_torch_wall_south")
+        self.assertTrue(can_place_block(world, 8, 5, 6, b_south, hit=hit_side_bslab))
+        world.set_block(8, 5, 6, b_south)
+        self.assertEqual(world.get_blocklight(8, 5, 6), (3, 8, 15, 4, 2))
+
+        # Re-place torches on (5, 5, 5) to test pop-off when (5, 5, 5) is broken
+        world.set_block(5, 6, 5, b_top)
+        world.set_block(6, 5, 5, b_east)
+
+        # Torch on side (+Z) of top slab -> NOT allowed
+        hit_side_tslab = {"x": 11, "y": 5, "z": 5, "nx": 0, "ny": 0, "nz": 1}
+        self.assertFalse(can_place_block(world, 11, 5, 6, b_south, hit=hit_side_tslab))
+
+        # Torch on underside (ny == -1) -> NOT allowed
+        hit_under = {"x": 5, "y": 5, "z": 5, "nx": 0, "ny": -1, "nz": 0}
+        self.assertFalse(can_place_block(world, 5, 4, 5, "torch", hit=hit_under))
+
+        # Breaking supporting block pops off attached torches and spawns item drops
+        world.set_block(5, 5, 5, AIR)
+        self.assertEqual(world.get_block(5, 6, 5), AIR)
+        self.assertEqual(world.get_block(6, 5, 5), AIR)
+        dropped_items = [e.item for e in world.entities]
+        self.assertIn("torch", dropped_items)
+        self.assertIn("red_torch", dropped_items)
+
+    def test_breaking_torch_near_chunk_boundary_clears_light_completely(self):
+        world = World()
+        for dx in (0, 1):
+            for dz in (0, 1):
+                world.chunks[(dx, 0, dz)] = Chunk(dx, 0, dz)
+
+        # Place stone at (15, 4, 15) right on the corner of chunk (0, 0, 0)
+        world.set_block(15, 4, 15, "stone")
+        # Place torch on top at (15, 5, 15)
+        world.set_block(15, 5, 15, "torch")
+
+        # Light spills into neighboring chunks (1, 0, 0), (0, 0, 1), and diagonal (1, 0, 1)
+        self.assertGreater(world.get_blocklight(15, 5, 15)[0], 0)
+        self.assertGreater(world.get_blocklight(16, 5, 15)[0], 0)
+        self.assertGreater(world.get_blocklight(15, 5, 16)[0], 0)
+        self.assertGreater(world.get_blocklight(16, 5, 16)[0], 0)
+
+        # Break the torch at (15, 5, 15)
+        world.set_block(15, 5, 15, AIR)
+
+        # All blocklight in all 4 chunks must be completely cleared to 0 (no ghost light echoing back)
+        self.assertEqual(world.get_blocklight(15, 5, 15), (0, 0, 0, 0, 0))
+        self.assertEqual(world.get_blocklight(16, 5, 15), (0, 0, 0, 0, 0))
+        self.assertEqual(world.get_blocklight(15, 5, 16), (0, 0, 0, 0, 0))
+        self.assertEqual(world.get_blocklight(16, 5, 16), (0, 0, 0, 0, 0))
 
 
 if __name__ == "__main__":

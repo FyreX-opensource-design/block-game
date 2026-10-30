@@ -1,0 +1,6 @@
+{
+  "id": "water_meets_salt_water",
+  "type": "fluid_meet",
+  "fluids": ["water", "salt_water"],
+  "source_result": "brackish_water"
+}

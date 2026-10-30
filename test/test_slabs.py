@@ -528,6 +528,342 @@ class TestSlabs(unittest.TestCase):
         self.assertAlmostEqual(uv_diff_water, 0.0, places=4)
         self.assertGreater(uv_diff_cobble, 0.05)
 
+    def test_offset_full_blocks_on_slabs_and_capping_slab(self):
+        from client.app import Game
+        from server.stacks import make_stack
+
+        class MockGame:
+            def __init__(self, world, held_item):
+                self.world = world
+                self.player = Player(self.world)
+                self.player.pos = [10.5, 80.0, 10.5]
+                self.gamemode = "survival"
+                self.network_client = None
+                self.hotbar = [make_stack(held_item, 10)]
+                self.selected = 0
+                self.target = None
+
+            def _upload_block_change(self, x, y, z):
+                pass
+
+        MockGame._place_block = Game._place_block
+        MockGame._aim = lambda self: None
+
+        # 1. Place bottom slab at (4, 80, 4) -> occupies [80.0, 80.5]
+        self.world.set_block(4, 80, 4, "stone_slab")
+
+        # 2. Place full block "planks" on top of the bottom slab at (4, 80, 4)
+        game = MockGame(self.world, "planks")
+        game.target = self.world.raycast(4.5, 82.0, 4.5, 0, -1, 0, max_dist=5.0)
+        self.assertEqual((game.target["x"], game.target["y"], game.target["z"]), (4, 80, 4))
+        game._place_block()
+
+        # Should place "planks_offset" at (4, 81, 4), occupying [80.5, 81.5]
+        self.assertEqual(self.world.get_block(4, 81, 4), "planks_offset")
+        self.assertEqual(self.world.get_collision_boxes(4, 81, 4), [(4.0, 80.5, 4.0, 5.0, 81.5, 5.0)])
+
+        # 3. Place another full block "cobble" on top of the offset planks at (4, 81, 4)
+        game.hotbar = [make_stack("cobble", 10)]
+        game.target = self.world.raycast(4.5, 83.0, 4.5, 0, -1, 0, max_dist=5.0)
+        self.assertEqual((game.target["x"], game.target["y"], game.target["z"]), (4, 81, 4))
+        self.assertEqual(game.target["box"], (4.0, 80.5, 4.0, 5.0, 81.5, 5.0))
+        game._place_block()
+
+        # Should place "cobble_offset" at (4, 82, 4), occupying [81.5, 82.5]
+        self.assertEqual(self.world.get_block(4, 82, 4), "cobble_offset")
+        self.assertEqual(self.world.get_collision_boxes(4, 82, 4), [(4.0, 81.5, 4.0, 5.0, 82.5, 5.0)])
+
+        # 4. Place a slab "stone_slab" on top of the offset cobble at (4, 82, 4)
+        game.hotbar = [make_stack("stone_slab", 10)]
+        game.target = self.world.raycast(4.5, 84.0, 4.5, 0, -1, 0, max_dist=5.0)
+        self.assertEqual((game.target["x"], game.target["y"], game.target["z"]), (4, 82, 4))
+        game._place_block()
+
+        # Should cap (4, 82, 4) into "cobble_offset_stone_slab", occupying [81.5, 83.0]
+        self.assertEqual(self.world.get_block(4, 82, 4), "cobble_offset_stone_slab")
+        self.assertEqual(self.world.get_collision_boxes(4, 82, 4), [(4.0, 81.5, 4.0, 5.0, 83.0, 5.0)])
+
+        # 5. Place another full block "dirt" on top of the capped offset block at (4, 82, 4)
+        game.hotbar = [make_stack("dirt", 10)]
+        game.target = self.world.raycast(4.5, 85.0, 4.5, 0, -1, 0, max_dist=5.0)
+        self.assertEqual((game.target["x"], game.target["y"], game.target["z"]), (4, 82, 4))
+        game._place_block()
+
+        # Since the offset stack was capped by a slab, the new full block is normal grid-aligned "dirt" at (4, 83, 4)!
+        self.assertEqual(self.world.get_block(4, 83, 4), "dirt")
+        self.assertEqual(self.world.get_collision_boxes(4, 83, 4), [(4.0, 83.0, 4.0, 5.0, 84.0, 5.0)])
+
+    def test_breaking_capped_offset_block_parts(self):
+        from client.app import Game
+        from server.stacks import make_stack
+
+        class MockGame:
+            def __init__(self, world):
+                self.world = world
+                self.gamemode = "survival"
+                self.network_client = None
+                self.hotbar = [make_stack("wood_pickaxe", 1)]
+                self.selected = 0
+                self.target = None
+
+            def _upload_block_change(self, x, y, z):
+                pass
+
+        MockGame._break_block = Game._break_block
+        MockGame._aim = lambda self: None
+
+        game = MockGame(self.world)
+
+        # 1. Break top slab cap of capped offset block -> leaves uncapped offset block
+        self.world.set_block(5, 81, 5, "planks_offset_stone_slab")
+        hit_top = self.world.raycast(5.5, 81.75, 8.0, 0, 0, -1, max_dist=5.0)
+        self.assertIsNotNone(hit_top)
+        self.assertEqual(hit_top["slab_half"], "top")
+        self.assertEqual(hit_top["box"], (5.0, 81.5, 5.0, 6.0, 82.0, 6.0))
+        game.target = hit_top
+        game._break_block()
+        self.assertEqual(self.world.get_block(5, 81, 5), "planks_offset")
+
+        # 2. Break offset block part of capped offset block -> leaves top slab
+        self.world.set_block(6, 81, 6, "planks_offset_stone_slab")
+        hit_off = self.world.raycast(6.5, 81.0, 9.0, 0, 0, -1, max_dist=5.0)
+        self.assertIsNotNone(hit_off)
+        self.assertEqual(hit_off["slab_half"], "offset")
+        self.assertEqual(hit_off["box"], (6.0, 80.5, 6.0, 7.0, 81.5, 7.0))
+        game.target = hit_off
+        game._break_block()
+        self.assertEqual(self.world.get_block(6, 81, 6), "stone_slab_top")
+
+    def test_cannot_place_offset_block_into_torch_half_block_lower(self):
+        from client.app import Game
+        from server.blocks import can_place_block
+        from server.stacks import make_stack
+
+        class MockGame:
+            def __init__(self, world, held_item):
+                self.world = world
+                self.player = Player(self.world)
+                self.player.pos = [0.0, 90.0, 0.0]
+                self.gamemode = "survival"
+                self.network_client = None
+                self.hotbar = [make_stack(held_item, 10)]
+                self.selected = 0
+                self.target = None
+
+            def _upload_block_change(self, x, y, z):
+                pass
+
+        MockGame._place_block = Game._place_block
+        MockGame._aim = lambda self: None
+
+        # Place a bottom slab at (4, 80, 4) and an offset block on top at (4, 81, 4) ([80.5, 81.5])
+        self.world.set_block(4, 80, 4, "stone_slab")
+        self.world.set_block(4, 81, 4, "planks_offset")
+
+        # Place a floor block at (5, 79, 4) and a torch at (5, 80, 4) (half a block lower than planks_offset at y=81)
+        self.world.set_block(5, 79, 4, STONE)
+        self.world.set_block(5, 80, 4, "torch")
+
+        # Aim at the +x side of the offset block at (4, 81, 4)
+        hit_side = self.world.raycast(7.0, 81.0, 4.5, -1, 0, 0, max_dist=5.0)
+        self.assertIsNotNone(hit_side)
+        self.assertEqual((hit_side["x"], hit_side["y"], hit_side["z"]), (4, 81, 4))
+        self.assertEqual((hit_side["nx"], hit_side["ny"], hit_side["nz"]), (1, 0, 0))
+        self.assertEqual(hit_side["slab_half"], "offset")
+
+        # Attempting to place planks against the side of (4, 81, 4) into (5, 81, 4) must be blocked by the torch at (5, 80, 4)
+        game = MockGame(self.world, "planks")
+        game.target = hit_side
+        game._place_block()
+        self.assertEqual(self.world.get_block(5, 81, 4), AIR)
+        self.assertEqual(self.world.get_block(5, 80, 4), "torch")
+
+        # Also cannot place a torch at (3, 80, 4) underneath an existing offset block at (3, 81, 4)
+        self.world.set_block(3, 79, 4, STONE)
+        self.world.set_block(3, 81, 4, "planks_offset")
+        self.assertFalse(can_place_block(self.world, 3, 80, 4, "torch"))
+
+    def test_place_slab_on_bottom_and_top_half_of_offset_block(self):
+        from client.app import Game
+        from server.stacks import make_stack
+
+        class MockGame:
+            def __init__(self, world, held_item):
+                self.world = world
+                self.player = Player(self.world)
+                self.player.pos = [0.0, 90.0, 0.0]
+                self.gamemode = "survival"
+                self.network_client = None
+                self.hotbar = [make_stack(held_item, 10)]
+                self.selected = 0
+                self.target = None
+
+            def _upload_block_change(self, x, y, z):
+                pass
+
+        MockGame._place_block = Game._place_block
+        MockGame._aim = lambda self: None
+
+        # Offset block at (4, 81, 4) occupies y in [80.5, 81.5]
+        self.world.set_block(4, 80, 4, "stone_slab")
+        self.world.set_block(4, 81, 4, "planks_offset")
+
+        game = MockGame(self.world, "stone_slab")
+
+        # 1. Aim at the bottom half [80.5, 81.0) of the offset block at (4, 81, 4) from +x side (hy = 80.75)
+        hit_bottom = self.world.raycast(7.0, 80.75, 4.5, -1, 0, 0, max_dist=5.0)
+        self.assertIsNotNone(hit_bottom)
+        self.assertEqual((hit_bottom["x"], hit_bottom["y"], hit_bottom["z"]), (4, 81, 4))
+        self.assertLess(hit_bottom["local_y"], 0.0)
+        game.target = hit_bottom
+        game._place_block()
+
+        # Should place a top slab at (5, 80, 4) occupying [80.5, 81.0], matching the bottom half of the offset block!
+        self.assertEqual(self.world.get_block(5, 80, 4), "stone_slab_top")
+        self.assertEqual(self.world.get_block(5, 81, 4), AIR)
+
+        # 2. Aim at the top half [81.0, 81.5) of the offset block at (4, 81, 4) from +x side (hy = 81.25)
+        hit_top = self.world.raycast(7.0, 81.25, 4.5, -1, 0, 0, max_dist=5.0)
+        self.assertIsNotNone(hit_top)
+        self.assertEqual((hit_top["x"], hit_top["y"], hit_top["z"]), (4, 81, 4))
+        self.assertGreaterEqual(hit_top["local_y"], 0.0)
+        game.target = hit_top
+        game._place_block()
+
+        # Should place a bottom slab at (5, 81, 4) occupying [81.0, 81.5], matching the top half of the offset block!
+        self.assertEqual(self.world.get_block(5, 81, 4), "stone_slab")
+
+    def test_torch_on_top_of_bottom_slab_at_half_height(self):
+        from client.app import Game
+        from server.stacks import make_stack
+
+        class MockGame:
+            def __init__(self, world, held_item):
+                self.world = world
+                self.player = Player(self.world)
+                self.player.pos = [0.0, 90.0, 0.0]
+                self.gamemode = "survival"
+                self.network_client = None
+                self.hotbar = [make_stack(held_item, 10)]
+                self.selected = 0
+                self.target = None
+
+            def _upload_block_change(self, x, y, z):
+                pass
+
+        MockGame._place_block = Game._place_block
+        MockGame._break_block = Game._break_block
+        MockGame._aim = lambda self: None
+
+        # Place bottom slab at (4, 80, 4)
+        self.world.set_block(4, 80, 4, "stone_slab")
+
+        # 1. Place a torch on top of the bottom slab at (4, 80, 4)
+        game = MockGame(self.world, "torch")
+        hit_slab = self.world.raycast(4.5, 82.0, 4.5, 0, -1, 0, max_dist=5.0)
+        self.assertIsNotNone(hit_slab)
+        self.assertEqual((hit_slab["x"], hit_slab["y"], hit_slab["z"]), (4, 80, 4))
+        self.assertEqual(hit_slab["ny"], 1)
+        game.target = hit_slab
+        game._place_block()
+
+        # Should place "torch_offset" at (4, 81, 4), resting on y=80.5 and emitting light
+        self.assertEqual(self.world.get_block(4, 81, 4), "torch_offset")
+        self.assertEqual(self.world.get_blocklight(4, 81, 4), (14, 11, 4, 0, 10))
+
+        # 2. Raycasting horizontally at y=80.75 (inside voxel y=80 above the bottom slab) hits the offset torch at (4, 81, 4)
+        hit_torch = self.world.raycast(6.0, 80.75, 4.5, -1, 0, 0, max_dist=5.0)
+        self.assertIsNotNone(hit_torch)
+        self.assertEqual((hit_torch["x"], hit_torch["y"], hit_torch["z"]), (4, 81, 4))
+        self.assertAlmostEqual(hit_torch["box"][1], 80.5)
+
+        # 3. Cannot combine the bottom slab at (4, 80, 4) into a double slab while torch_offset is on top
+        slab_game = MockGame(self.world, "stone_slab")
+        slab_game.target = hit_slab
+        slab_game._place_block()
+        self.assertEqual(self.world.get_block(4, 80, 4), "stone_slab")
+
+        # 4. Place a top-half slab above the offset torch at (4, 81, 4) by clicking the upper half of adjacent planks at (3, 81, 4)
+        self.world.set_block(3, 81, 4, "planks")
+        hit_adj_upper = self.world.raycast(6.0, 81.75, 4.5, -1, 0, 0, max_dist=5.0)
+        self.assertIsNotNone(hit_adj_upper)
+        self.assertEqual((hit_adj_upper["x"], hit_adj_upper["y"], hit_adj_upper["z"]), (3, 81, 4))
+        self.assertGreaterEqual(hit_adj_upper["local_y"], 0.5)
+        slab_game.target = hit_adj_upper
+        slab_game._place_block()
+
+        # (4, 81, 4) becomes "torch_offset_stone_slab", keeping torch light and top-slab collision box
+        self.assertEqual(self.world.get_block(4, 81, 4), "torch_offset_stone_slab")
+        self.assertEqual(self.world.get_blocklight(4, 81, 4), (14, 11, 4, 0, 10))
+        self.assertEqual(self.world.get_collision_boxes(4, 81, 4), [(4.0, 81.5, 4.0, 5.0, 82.0, 5.0)])
+
+        # 5. Aiming at the top slab part of "torch_offset_stone_slab" and breaking it leaves "torch_offset"
+        hit_top_part = self.world.raycast(6.0, 81.75, 4.5, -1, 0, 0, max_dist=5.0)
+        self.assertIsNotNone(hit_top_part)
+        self.assertEqual((hit_top_part["x"], hit_top_part["y"], hit_top_part["z"]), (4, 81, 4))
+        self.assertEqual(hit_top_part["slab_half"], "top")
+        slab_game.target = hit_top_part
+        slab_game._break_block()
+        self.assertEqual(self.world.get_block(4, 81, 4), "torch_offset")
+
+        # 6. Breaking the supporting bottom slab at (4, 80, 4) pops off torch_offset and drops "torch"
+        self.world.set_block(4, 80, 4, AIR)
+        self.assertEqual(self.world.get_block(4, 81, 4), AIR)
+        dropped_items = [e.item for e in self.world.entities]
+        self.assertIn("torch", dropped_items)
+
+        # 7. Offset full block at (4, 81, 4) with an offset torch on top at (4, 82, 4) can have an offset full block placed above it at (4, 83, 4)
+        self.world.set_block(4, 80, 4, "stone_slab")
+        self.world.set_block(4, 81, 4, "planks_offset")
+        self.world.set_block(4, 82, 4, "purple_torch_offset")
+        self.world.set_block(3, 83, 4, "planks_offset")
+
+        planks_game = MockGame(self.world, "planks")
+        hit_side_offset = self.world.raycast(6.0, 83.0, 4.5, -1, 0, 0, max_dist=5.0)
+        self.assertIsNotNone(hit_side_offset)
+        self.assertEqual((hit_side_offset["x"], hit_side_offset["y"], hit_side_offset["z"]), (3, 83, 4))
+        planks_game.target = hit_side_offset
+        planks_game._place_block()
+
+        self.assertEqual(self.world.get_block(4, 83, 4), "planks_offset")
+        self.assertEqual(self.world.get_block(4, 82, 4), "purple_torch_offset")
+
+    def test_cutout_offset_block_does_not_cull_slab_or_adjacent_offset_faces(self):
+        from server.mesh import build_chunk_mesh
+
+        # Place two bottom slabs at (4, 80, 4) and (5, 80, 4)
+        self.world.set_block(4, 80, 4, "stone_slab")
+        self.world.set_block(5, 80, 4, "stone_slab")
+
+        # Place cutout offset block (leaves_offset) on (4, 80, 4) and opaque offset block (planks_offset) on (5, 80, 4)
+        self.world.set_block(4, 81, 4, "leaves_offset")
+        self.world.set_block(5, 81, 4, "planks_offset")
+
+        mesh = build_chunk_mesh(self.world, 0, 5, 0)
+        self.assertIsNotNone(mesh)
+        verts = mesh.vertices.reshape(-1, 9)
+
+        # 1. Top face of stone_slab at (4, 80, 4) (y = 0.5 in chunk cy=5, x in [4, 5], z in [4, 5], normal = (0, 1, 0)) must NOT be culled by leaves_offset
+        slab_top_verts = verts[
+            (verts[:, 0] >= 4.0)
+            & (verts[:, 0] <= 5.0)
+            & (verts[:, 1] == 0.5)
+            & (verts[:, 2] >= 4.0)
+            & (verts[:, 2] <= 5.0)
+            & (verts[:, 4] == 1.0)
+        ]
+        self.assertEqual(len(slab_top_verts), 4)
+
+        # 2. West face (-X, normal = (-1, 0, 0) at x = 5.0) of planks_offset at (5, 81, 4) (top corners at y = 1.5) must NOT be culled by leaves_offset at (4, 81, 4)
+        planks_west_top_verts = verts[
+            (verts[:, 0] == 5.0)
+            & (verts[:, 1] == 1.5)
+            & (verts[:, 2] >= 4.0)
+            & (verts[:, 2] <= 5.0)
+            & (verts[:, 3] == -1.0)
+        ]
+        self.assertEqual(len(planks_west_top_verts), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,17 @@
+{
+  "id": "purple_torch",
+  "lang": "block.purple_torch",
+  "tab": ["building", "tools"],
+  "model": "flat",
+  "block": "purple_torch",
+  "texture": "purple_torch",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 1,
+  "food": 0
+}
+

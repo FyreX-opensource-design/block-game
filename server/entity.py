@@ -147,20 +147,21 @@ class ItemEntity:
                 highest_y = None
                 for x in range(min_x, max_x + 1):
                     for z in range(min_z, max_z + 1):
-                        boxes = (
-                            world.get_collision_boxes(x, check_y, z)
-                            if _has_collision_boxes(world)
-                            else (
-                                [(float(x), float(check_y), float(z), float(x + 1), float(check_y + 1), float(z + 1))]
-                                if world.is_solid(x, check_y, z)
-                                else []
+                        for cy in (check_y, check_y + 1):
+                            boxes = (
+                                world.get_collision_boxes(x, cy, z)
+                                if _has_collision_boxes(world)
+                                else (
+                                    [(float(x), float(cy), float(z), float(x + 1), float(cy + 1), float(z + 1))]
+                                    if world.is_solid(x, cy, z)
+                                    else []
+                                )
                             )
-                        )
-                        for bx0, by0, bz0, bx1, by1, bz1 in boxes:
-                            if new_y < by1:
-                                hit = True
-                                if highest_y is None or by1 > highest_y:
-                                    highest_y = by1
+                            for bx0, by0, bz0, bx1, by1, bz1 in boxes:
+                                if new_y < by1 and self.pos[1] >= by0 - 1e-4:
+                                    hit = True
+                                    if highest_y is None or by1 > highest_y:
+                                        highest_y = by1
                 if hit and highest_y is not None:
                     self.pos[1] = highest_y
                     self.vel[1] = 0.0
@@ -179,20 +180,21 @@ class ItemEntity:
                 lowest_y = None
                 for x in range(min_x, max_x + 1):
                     for z in range(min_z, max_z + 1):
-                        boxes = (
-                            world.get_collision_boxes(x, check_y, z)
-                            if _has_collision_boxes(world)
-                            else (
-                                [(float(x), float(check_y), float(z), float(x + 1), float(check_y + 1), float(z + 1))]
-                                if world.is_solid(x, check_y, z)
-                                else []
+                        for cy in (check_y, check_y + 1):
+                            boxes = (
+                                world.get_collision_boxes(x, cy, z)
+                                if _has_collision_boxes(world)
+                                else (
+                                    [(float(x), float(cy), float(z), float(x + 1), float(cy + 1), float(z + 1))]
+                                    if world.is_solid(x, cy, z)
+                                    else []
+                                )
                             )
-                        )
-                        for bx0, by0, bz0, bx1, by1, bz1 in boxes:
-                            if (new_y + self.height) > by0:
-                                hit = True
-                                if lowest_y is None or by0 < lowest_y:
-                                    lowest_y = by0
+                            for bx0, by0, bz0, bx1, by1, bz1 in boxes:
+                                if (new_y + self.height) > by0 and (self.pos[1] + self.height) <= by1 + 1e-4:
+                                    hit = True
+                                    if lowest_y is None or by0 < lowest_y:
+                                        lowest_y = by0
                 if hit and lowest_y is not None:
                     self.pos[1] = lowest_y - self.height - 1e-4
                     self.vel[1] = 0.0

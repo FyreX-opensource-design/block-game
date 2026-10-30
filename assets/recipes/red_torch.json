@@ -1,0 +1,13 @@
+{
+  "id": "red_torch",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "#torches",
+    "red_dye"
+  ],
+  "result": {
+    "item": "red_torch",
+    "count": 1
+  }
+}
+

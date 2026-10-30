@@ -1,0 +1,21 @@
+{
+  "id": "purple_torch",
+  "lang": "block.purple_torch",
+  "tab": ["building", "tools"],
+  "model": "torch",
+  "render": "cutout",
+  "solid": false,
+  "hardness": 0.0,
+  "tool": "none",
+  "mining_level": 0,
+  "fluid_breakable": true,
+  "light": {"r": 11, "g": 3, "b": 14, "uv": 12, "ir": 3},
+  "properties": {
+    "torch": true,
+    "tags": ["torches"]
+  },
+  "textures": {
+    "torch": "purple_torch"
+  }
+}
+

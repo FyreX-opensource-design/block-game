@@ -11,6 +11,7 @@ from server.blocks import (
     GRAVEL,
     GRASS,
     LOAD_RADIUS,
+    SALT_WATER,
     SECTION_COUNT,
     STONE,
     UNLOAD_RADIUS,
@@ -79,7 +80,7 @@ class Chunk:
         self.cx = cx
         self.cy = cy
         self.cz = cz
-        self.data = np.zeros((CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE), dtype=np.uint8)
+        self.data = np.zeros((CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE), dtype=np.uint16)
         self.skylight = np.zeros((CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE), dtype=np.uint8)
         self.blocklight = np.zeros((CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE, 5), dtype=np.uint8)
         self.light_valid = False
@@ -184,7 +185,7 @@ def _label_mask(mask):
 
 
 class World:
-    def __init__(self, seed=0, store=None, caves=None, biomes=None, ores=None, day_time=1000.0, features=None):
+    def __init__(self, seed=0, store=None, caves=None, biomes=None, ores=None, day_time=1000.0, features=None, spawn_point=None):
         self.seed = int(seed)
         self.store = store
         self.day_time = float(day_time)
@@ -202,6 +203,9 @@ class World:
         self.players = {}
         self.entities = []
         self.furnaces = {}
+        self._spawn_point = None
+        if spawn_point is not None:
+            self.spawn_point = spawn_point
         from server.fluid import FluidSystem
 
         self.fluid = FluidSystem(self)
@@ -290,7 +294,7 @@ class World:
             was_lit = furnace.is_lit
             furnace.tick(dt)
             if furnace.is_lit != was_lit and getattr(self, "lighting", None) is not None:
-                self.lighting.on_block_changed(furnace.x, furnace.y, furnace.z)
+                self.lighting.on_block_changed(furnace.x, furnace.y, furnace.z, was_emitter=True)
 
     def update_fluids(self, dt):
         if getattr(self, "fluid", None) is not None:
@@ -521,7 +525,19 @@ class World:
         if b_obj is None or not b_obj.solid:
             return []
 
-        from server.blocks import get_slab_info
+        from server.blocks import get_offset_info, get_offset_torch_info, get_slab_info
+
+        t_info = get_offset_torch_info(b_obj)
+        if t_info is not None:
+            if t_info["capped"]:
+                return [(float(x), float(y) + 0.5, float(z), float(x + 1), float(y + 1), float(z + 1))]
+            return []
+
+        o_info = get_offset_info(b_obj)
+        if o_info is not None:
+            if o_info["capped"]:
+                return [(float(x), float(y) - 0.5, float(z), float(x + 1), float(y) + 1.0, float(z + 1))]
+            return [(float(x), float(y) - 0.5, float(z), float(x + 1), float(y) + 0.5, float(z + 1))]
 
         info = get_slab_info(b_obj)
         if info is not None:
@@ -542,7 +558,7 @@ class World:
         iz0 = math.floor(min_z)
         iz1 = math.floor(max_z - 1e-6)
 
-        for y in range(iy0, iy1 + 1):
+        for y in range(iy0, iy1 + 2):
             for z in range(iz0, iz1 + 1):
                 for x in range(ix0, ix1 + 1):
                     boxes = self.get_collision_boxes(x, y, z)
@@ -644,13 +660,60 @@ class World:
             from server.lighting import _get_luts
 
             op_lut, em_lut = _get_luts()
-            if op_lut[old_idx] != op_lut[stored] or np.any(em_lut[old_idx] != em_lut[stored]):
-                self.lighting.on_block_changed(x, y, z)
+            old_em = em_lut[old_idx]
+            new_em = em_lut[stored]
+            if op_lut[old_idx] != op_lut[stored] or np.any(old_em != new_em):
+                was_emitter = bool(np.any(old_em > 0) or np.any(new_em > 0))
+                self.lighting.on_block_changed(x, y, z, was_emitter=was_emitter)
         if getattr(self, "on_block_set", None) is not None:
             self.on_block_set(x, y, z, block_id if block_id not in ("", None) else AIR)
         self.notify_neighbors_falling(x, y, z)
         self.check_plant_support(x, y + 1, z)
+        for tx, ty, tz in ((x, y + 1, z), (x + 1, y, z), (x - 1, y, z), (x, y, z + 1), (x, y, z - 1)):
+            self.check_torch_support(tx, ty, tz)
         return True
+
+    def check_torch_support(self, x, y, z):
+        if y <= 0 or y >= WORLD_HEIGHT:
+            return
+        t_id = self.get_block(x, y, z)
+        if not t_id or t_id == AIR:
+            return
+        from server.blocks import BLOCKS, can_support_torch, is_torch
+
+        b_obj = BLOCKS.get(t_id)
+        if b_obj is None or not is_torch(b_obj):
+            return
+        mount = b_obj.properties.get("mount", "up")
+        if mount in ("up", "up_offset"):
+            support_id = self.get_block(x, y - 1, z)
+        else:
+            offsets = {
+                "east": (-1, 0),
+                "west": (1, 0),
+                "south": (0, -1),
+                "north": (0, 1),
+            }
+            dx, dz = offsets.get(mount, (0, 0))
+            support_id = self.get_block(x + dx, y, z + dz)
+        if not can_support_torch(support_id, mount):
+            from server.blocks import get_offset_torch_info
+            from server.loot import get_block_drops
+
+            t_info = get_offset_torch_info(b_obj)
+            if t_info is not None and t_info["capped"]:
+                torch_obj = BLOCKS.get(t_info["base_id"], b_obj)
+                drops = get_block_drops(torch_obj)
+                for drop_id, count in drops:
+                    if count > 0:
+                        self.spawn_item(drop_id, count=count, pos=(x + 0.5, y + 0.0, z + 0.5))
+                self.set_block(x, y, z, f"{t_info['top_slab']}_top")
+            else:
+                drops = get_block_drops(b_obj)
+                for drop_id, count in drops:
+                    if count > 0:
+                        self.spawn_item(drop_id, count=count, pos=(x + 0.5, y + 0.2, z + 0.5))
+                self.set_block(x, y, z, AIR)
 
     def check_plant_support(self, x, y, z):
         if y <= 0 or y >= WORLD_HEIGHT:
@@ -855,9 +918,9 @@ class World:
         data[clay_mask] = block_index(CLAY)
         data[gravel_mask] = block_index(GRAVEL)
 
-        water = block_index(WATER)
+        ocean_water = block_index(SALT_WATER)
         water_mask = (levels > tops) & (levels <= WATER_LEVEL)
-        data[water_mask] = water
+        data[water_mask] = ocean_water
 
         self._place_ores(data, x0, y0, z0)
         self._carve_caves(data, x0, y0, z0, heights)
@@ -926,6 +989,7 @@ class World:
         surface = heights[TREE_MARGIN : TREE_MARGIN + CHUNK_SIZE, TREE_MARGIN : TREE_MARGIN + CHUNK_SIZE]
         is_water_col = surface.reshape(1, CHUNK_SIZE, CHUNK_SIZE) <= WATER_LEVEL
         water = block_index(WATER)
+        salt_water = block_index(SALT_WATER)
         for cave in active:
             noise = fbm3_grid(
                 xs * cave.horizontal_scale,
@@ -958,7 +1022,7 @@ class World:
                     self.seed + cave.seed_offset + 77,
                 )
                 opened &= ~near_surface | ((breach > cave.breach_threshold) & ~is_water_col)
-            data[opened & (data != 0) & (data != water)] = 0
+            data[opened & (data != 0) & (data != water) & (data != salt_water)] = 0
 
     def _place_features(self, data, x0, y0, z0, heights, sample):
         if not self.features:
@@ -1202,6 +1266,8 @@ class World:
 
         elif shape in ("branching", "fancy", "large_oak"):
             # Majestic branching tree with angled branches and leafy clusters
+            from server.blocks import rotation_variant
+
             for i in range(1, trunk + 1):
                 set_trunk(lx, ground + i, lz, tree.trunk)
             top = ground + trunk
@@ -1210,6 +1276,13 @@ class World:
             for b_idx in range(branch_cnt):
                 dir_idx = int(hash2(wx + b_idx * 7, wz - b_idx * 13, self.seed) * len(branch_dirs))
                 bdx, bdz = branch_dirs[dir_idx]
+                if abs(bdx) > abs(bdz):
+                    branch_axis = "x"
+                elif abs(bdz) > abs(bdx):
+                    branch_axis = "z"
+                else:
+                    branch_axis = "x" if (bdx * bdz > 0) else "z"
+                branch_log = rotation_variant(tree.trunk, branch_axis)
                 blen = getattr(tree, "branch_length", 2)
                 by = ground + max(2, trunk - 1)
                 bx, bz = lx, lz
@@ -1217,7 +1290,7 @@ class World:
                     bx += bdx
                     bz += bdz
                     by += (1 if step == blen else 0)
-                    set_trunk(bx, by, bz, tree.trunk)
+                    set_trunk(bx, by, bz, branch_log)
                 # Crown around branch tip
                 for c_dy in range(-1, 2):
                     for c_dz in range(-1, 2):
@@ -1321,22 +1394,86 @@ class World:
                                 data[dec_y - y0, lz, lx] = b_idx
                         break
 
-    def find_spawn(self):
-        for radius in range(0, 25):
-            for z in range(-radius, radius + 1):
-                for x in range(-radius, radius + 1):
-                    if radius != 0 and max(abs(x), abs(z)) != radius:
+    @property
+    def spawn_point(self):
+        return self.get_spawn_point()
+
+    @spawn_point.setter
+    def spawn_point(self, value):
+        if value is None:
+            self._spawn_point = None
+        elif isinstance(value, dict):
+            x = float(value.get("x", 0.5))
+            z = float(value.get("z", 0.5))
+            y = value.get("y")
+            if y is None:
+                y = float(self.column_top(int(math.floor(x)), int(math.floor(z))) + 1)
+            self._spawn_point = (float(x), float(y), float(z))
+        else:
+            vals = list(value)
+            if len(vals) == 2:
+                x, z = float(vals[0]), float(vals[1])
+                y = float(self.column_top(int(math.floor(x)), int(math.floor(z))) + 1)
+                self._spawn_point = (x, y, z)
+            else:
+                self._spawn_point = (float(vals[0]), float(vals[1]), float(vals[2]))
+
+    def get_spawn_point(self):
+        if self._spawn_point is None:
+            sx, sz, sy = self.find_spawn()
+            self._spawn_point = (float(sx) + 0.5, float(sy), float(sz) + 0.5)
+        return self._spawn_point
+
+    def set_spawn_point(self, x, y=None, z=None):
+        if y is not None and z is None:
+            z = y
+            y = None
+        fx = float(x)
+        fz = float(z if z is not None else 0.0)
+        if y is None:
+            fy = float(self.column_top(int(math.floor(fx)), int(math.floor(fz))) + 1)
+        else:
+            fy = float(y)
+        self._spawn_point = (fx, fy, fz)
+        return self._spawn_point
+
+    def find_spawn(self, origin_x=0, origin_z=0):
+        ox, oz = int(origin_x), int(origin_z)
+        for radius in range(0, 33):
+            for dz in range(-radius, radius + 1):
+                for dx in range(-radius, radius + 1):
+                    if radius != 0 and max(abs(dx), abs(dz)) != radius:
                         continue
+                    x, z = ox + dx, oz + dz
                     if self._clear_spawn(x, z):
                         return x, z, terrain_height(x, z, self.seed, self.biomes) + 1
-        return 0, 0, terrain_height(0, 0, self.seed, self.biomes) + 1
+        fallback = None
+        for radius in range(40, 2049, 8):
+            for step in range(-radius, radius + 1, 8):
+                for dx, dz in ((step, -radius), (step, radius), (-radius, step), (radius, step)):
+                    x, z = ox + dx, oz + dz
+                    if self._clear_spawn(x, z):
+                        return x, z, terrain_height(x, z, self.seed, self.biomes) + 1
+                    if fallback is None and self._valid_spawn_biome_and_height(x, z):
+                        fallback = (x, z, terrain_height(x, z, self.seed, self.biomes) + 1)
+        if fallback is not None:
+            return fallback
+        return ox, oz, terrain_height(ox, oz, self.seed, self.biomes) + 1
 
-    def _clear_spawn(self, x, z):
+    def _valid_spawn_biome_and_height(self, x, z):
         height = terrain_height(x, z, self.seed, self.biomes)
-        if _tree_site(x, z, height, self.seed, self.biomes, lambda px, pz: terrain_height(px, pz, self.seed, self.biomes)):
+        if height <= WATER_LEVEL:
             return False
         biome = biome_at(x, z, self.seed, self.biomes)
-        if biome.id in ("ocean", "beach") or height <= WATER_LEVEL:
+        if not getattr(biome, "valid_spawn", True):
+            return False
+        return True
+
+    def _clear_spawn(self, x, z):
+        if not self._valid_spawn_biome_and_height(x, z):
+            return False
+        height = terrain_height(x, z, self.seed, self.biomes)
+        if _tree_site(x, z, height, self.seed, self.biomes, lambda px, pz: terrain_height(px, pz, self.seed, self.biomes)):
             return False
         for dz in (-1, 0, 1):
             for dx in (-1, 0, 1):
@@ -1376,51 +1513,212 @@ class World:
         dist = 0.0
         limit = int(max_dist * 4) + 2
         for _ in range(limit):
+            from server.fluid import is_fluid
+            from server.blocks import get_offset_info, get_offset_torch_info, get_slab_info, is_offset_block, is_offset_torch, is_slab
+
             blk = self.get_block(x, y, z)
-            if blk not in ("", AIR):
-                from server.fluid import is_fluid
-                from server.blocks import is_slab, get_slab_info
+            above_blk = self.get_block(x, y + 1, z) if y + 1 < WORLD_HEIGHT else AIR
+            above_is_offset = is_offset_block(above_blk)
+            above_is_offset_torch = not solid_only and is_offset_torch(above_blk)
 
-                is_f = is_fluid(blk)
-                is_s = self.is_solid(x, y, z)
-                s_info = get_slab_info(blk)
+            if blk not in ("", AIR) or above_is_offset or above_is_offset_torch:
+                boxes = []
+                if blk not in ("", AIR):
+                    is_f = is_fluid(blk)
+                    is_s = self.is_solid(x, y, z)
+                    s_info = get_slab_info(blk)
+                    o_info = get_offset_info(blk)
+                    t_info = get_offset_torch_info(blk)
 
-                if is_s or (fluids and is_f) or (not solid_only and not is_f):
-                    boxes = []
-                    if s_info is not None:
-                        if s_info["double"]:
-                            boxes.append(("bottom", (float(x), float(y), float(z), float(x + 1), float(y) + 0.5, float(z + 1))))
-                            boxes.append(("top", (float(x), float(y) + 0.5, float(z), float(x + 1), float(y + 1), float(z + 1))))
-                        elif s_info["half"] == "bottom":
-                            boxes.append(("bottom", (float(x), float(y), float(z), float(x + 1), float(y) + 0.5, float(z + 1))))
-                        elif s_info["half"] == "top":
-                            boxes.append(("top", (float(x), float(y) + 0.5, float(z), float(x + 1), float(y + 1), float(z + 1))))
-                    else:
-                        boxes.append(("full", (float(x), float(y), float(z), float(x + 1), float(y + 1), float(z + 1))))
+                    if is_s or (fluids and is_f) or (not solid_only and not is_f):
+                        b_obj = BLOCKS.get(blk)
+                        if t_info is not None:
+                            if not solid_only and b_obj is not None and b_obj.elements:
+                                el = b_obj.elements[0]
+                                fx0, fy0, fz0 = el["from"]
+                                fx1, fy1, fz1 = el["to"]
+                                boxes.append(
+                                    (
+                                        x,
+                                        y,
+                                        z,
+                                        "offset_torch",
+                                        (
+                                            float(x) + max(0.0, (fx0 - 1.0) / 16.0),
+                                            float(y) + (fy0 / 16.0),
+                                            float(z) + max(0.0, (fz0 - 1.0) / 16.0),
+                                            float(x) + min(1.0, (fx1 + 1.0) / 16.0),
+                                            float(y) + min(1.0, (fy1 + 1.0) / 16.0),
+                                            float(z) + min(1.0, (fz1 + 1.0) / 16.0),
+                                        ),
+                                    )
+                                )
+                            if t_info["capped"]:
+                                boxes.append(
+                                    (
+                                        x,
+                                        y,
+                                        z,
+                                        "top",
+                                        (float(x), float(y) + 0.5, float(z), float(x + 1), float(y + 1), float(z + 1)),
+                                    )
+                                )
+                        elif o_info is not None:
+                            boxes.append(
+                                (
+                                    x,
+                                    y,
+                                    z,
+                                    "offset",
+                                    (float(x), float(y) - 0.5, float(z), float(x + 1), float(y) + 0.5, float(z + 1)),
+                                )
+                            )
+                            if o_info["capped"]:
+                                boxes.append(
+                                    (
+                                        x,
+                                        y,
+                                        z,
+                                        "top",
+                                        (float(x), float(y) + 0.5, float(z), float(x + 1), float(y + 1), float(z + 1)),
+                                    )
+                                )
+                        elif s_info is not None:
+                            if s_info["double"]:
+                                boxes.append(
+                                    (
+                                        x,
+                                        y,
+                                        z,
+                                        "bottom",
+                                        (float(x), float(y), float(z), float(x + 1), float(y) + 0.5, float(z + 1)),
+                                    )
+                                )
+                                boxes.append(
+                                    (
+                                        x,
+                                        y,
+                                        z,
+                                        "top",
+                                        (float(x), float(y) + 0.5, float(z), float(x + 1), float(y + 1), float(z + 1)),
+                                    )
+                                )
+                            elif s_info["half"] == "bottom":
+                                boxes.append(
+                                    (
+                                        x,
+                                        y,
+                                        z,
+                                        "bottom",
+                                        (float(x), float(y), float(z), float(x + 1), float(y) + 0.5, float(z + 1)),
+                                    )
+                                )
+                            elif s_info["half"] == "top":
+                                boxes.append(
+                                    (
+                                        x,
+                                        y,
+                                        z,
+                                        "top",
+                                        (float(x), float(y) + 0.5, float(z), float(x + 1), float(y + 1), float(z + 1)),
+                                    )
+                                )
+                        elif b_obj is not None and b_obj.properties.get("torch") and b_obj.elements:
+                            el = b_obj.elements[0]
+                            fx0, fy0, fz0 = el["from"]
+                            fx1, fy1, fz1 = el["to"]
+                            boxes.append(
+                                (
+                                    x,
+                                    y,
+                                    z,
+                                    "full",
+                                    (
+                                        float(x) + max(0.0, (fx0 - 1.0) / 16.0),
+                                        float(y) + (fy0 / 16.0 if fy0 < 0.0 else max(0.0, fy0 / 16.0)),
+                                        float(z) + max(0.0, (fz0 - 1.0) / 16.0),
+                                        float(x) + min(1.0, (fx1 + 1.0) / 16.0),
+                                        float(y) + min(1.0, (fy1 + 1.0) / 16.0),
+                                        float(z) + min(1.0, (fz1 + 1.0) / 16.0),
+                                    ),
+                                )
+                            )
+                        else:
+                            boxes.append(
+                                (
+                                    x,
+                                    y,
+                                    z,
+                                    "full",
+                                    (float(x), float(y), float(z), float(x + 1), float(y + 1), float(z + 1)),
+                                )
+                            )
 
+                if above_is_offset:
+                    boxes.append(
+                        (
+                            x,
+                            y + 1,
+                            z,
+                            "offset",
+                            (float(x), float(y) + 0.5, float(z), float(x + 1), float(y) + 1.5, float(z + 1)),
+                        )
+                    )
+                elif above_is_offset_torch:
+                    above_obj = BLOCKS.get(above_blk)
+                    if above_obj is not None and above_obj.elements:
+                        el = above_obj.elements[0]
+                        fx0, fy0, fz0 = el["from"]
+                        fx1, fy1, fz1 = el["to"]
+                        boxes.append(
+                            (
+                                x,
+                                y + 1,
+                                z,
+                                "offset_torch",
+                                (
+                                    float(x) + max(0.0, (fx0 - 1.0) / 16.0),
+                                    float(y + 1) + (fy0 / 16.0),
+                                    float(z) + max(0.0, (fz0 - 1.0) / 16.0),
+                                    float(x) + min(1.0, (fx1 + 1.0) / 16.0),
+                                    float(y + 1) + min(1.0, (fy1 + 1.0) / 16.0),
+                                    float(z) + min(1.0, (fz1 + 1.0) / 16.0),
+                                ),
+                            )
+                        )
+
+                if boxes:
                     closest_hit = None
-                    for box_part, (bx0, by0, bz0, bx1, by1, bz1) in boxes:
+                    for tx, ty, tz, box_part, (bx0, by0, bz0, bx1, by1, bz1) in boxes:
                         hit_res = _intersect_ray_box(ox, oy, oz, dx, dy, dz, bx0, by0, bz0, bx1, by1, bz1)
                         if hit_res is not None:
                             t_hit, hx, hy, hz, b_norm = hit_res
                             if t_hit <= max_dist:
                                 if closest_hit is None or t_hit < closest_hit[0]:
-                                    closest_hit = (t_hit, hx, hy, hz, b_norm, box_part)
+                                    closest_hit = (
+                                        t_hit,
+                                        hx,
+                                        hy,
+                                        hz,
+                                        b_norm,
+                                        tx,
+                                        ty,
+                                        tz,
+                                        box_part,
+                                        (bx0, by0, bz0, bx1, by1, bz1),
+                                    )
 
                     if closest_hit is not None:
-                        t_hit, hx, hy, hz, b_norm, box_part = closest_hit
-                        loc_y = hy - y
-                        slab_half = box_part if box_part in ("bottom", "top") else ("bottom" if loc_y < 0.5 else "top")
-                        if box_part == "bottom":
-                            part_box = (float(x), float(y), float(z), float(x + 1), float(y) + 0.5, float(z + 1))
-                        elif box_part == "top":
-                            part_box = (float(x), float(y) + 0.5, float(z), float(x + 1), float(y + 1), float(z + 1))
+                        t_hit, hx, hy, hz, b_norm, tx, ty, tz, box_part, part_box = closest_hit
+                        loc_y = hy - ty
+                        if box_part in ("bottom", "top", "offset", "offset_torch"):
+                            slab_half = box_part
                         else:
-                            part_box = (float(x), float(y), float(z), float(x + 1), float(y + 1), float(z + 1))
+                            slab_half = "bottom" if loc_y < 0.5 else "top"
                         return {
-                            "x": x,
-                            "y": y,
-                            "z": z,
+                            "x": tx,
+                            "y": ty,
+                            "z": tz,
                             "nx": b_norm[0],
                             "ny": b_norm[1],
                             "nz": b_norm[2],

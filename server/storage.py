@@ -43,7 +43,7 @@ def display_path(path):
 
 
 class WorldInfo:
-    def __init__(self, world_id, name, seed, created, last_played, player=None, gamemode="survival", day_time=1000.0):
+    def __init__(self, world_id, name, seed, created, last_played, player=None, gamemode="survival", day_time=1000.0, spawn=None):
         self.id = world_id
         self.name = name
         self.seed = int(seed)
@@ -52,6 +52,7 @@ class WorldInfo:
         self.player = player
         self.gamemode = str(gamemode or "survival").lower()
         self.day_time = float(day_time)
+        self.spawn = spawn
 
     def to_dict(self):
         return {
@@ -62,6 +63,7 @@ class WorldInfo:
             "player": self.player,
             "gamemode": self.gamemode,
             "day_time": self.day_time,
+            "spawn": self.spawn,
         }
 
 
@@ -74,8 +76,8 @@ class ChunkStore:
         return self.folder / f"{int(cx)}_{int(cy)}_{int(cz)}.bin"
 
     def write_chunk(self, chunk):
-        raw = np.ascontiguousarray(chunk.data, dtype=np.uint8).tobytes()
-        if len(raw) != CHUNK_BYTES:
+        raw = np.ascontiguousarray(chunk.data, dtype=np.uint16).tobytes()
+        if len(raw) != CHUNK_BYTES * 2:
             raise ValueError("chunk has the wrong size")
         payload = _HEADER.pack(int(chunk.cx), int(chunk.cy), int(chunk.cz), len(raw)) + zlib.compress(raw, level=1)
         path = self.path_for(chunk.cx, chunk.cy, chunk.cz)
@@ -91,15 +93,17 @@ class ChunkStore:
         if len(blob) < 4 + _HEADER.size or blob[:4] != CHUNK_MAGIC:
             return None
         saved_x, saved_y, saved_z, size = _HEADER.unpack_from(blob, 4)
-        if saved_x != int(cx) or saved_y != int(cy) or saved_z != int(cz) or size != CHUNK_BYTES:
+        if saved_x != int(cx) or saved_y != int(cy) or saved_z != int(cz) or size not in (CHUNK_BYTES, CHUNK_BYTES * 2):
             return None
         try:
             raw = zlib.decompress(blob[4 + _HEADER.size :])
         except zlib.error:
             return None
-        if len(raw) != CHUNK_BYTES:
+        if len(raw) != size:
             return None
-        return np.frombuffer(raw, dtype=np.uint8).reshape(CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE).copy()
+        if size == CHUNK_BYTES:
+            return np.frombuffer(raw, dtype=np.uint8).astype(np.uint16).reshape(CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE).copy()
+        return np.frombuffer(raw, dtype=np.uint16).reshape(CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE).copy()
 
 
 class WorldCatalog:
@@ -131,6 +135,7 @@ class WorldCatalog:
             data.get("player"),
             gamemode=str(data.get("gamemode", "survival")),
             day_time=float(data.get("day_time", 1000.0)),
+            spawn=data.get("spawn"),
         )
 
     def create(self, name, seed, gamemode="survival"):

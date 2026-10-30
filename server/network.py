@@ -48,13 +48,15 @@ def decode_skin(encoded_str):
 
 
 def encode_chunk(chunk_data):
-    raw = np.ascontiguousarray(chunk_data, dtype=np.uint8).tobytes()
+    raw = np.ascontiguousarray(chunk_data, dtype=np.uint16).tobytes()
     return base64.b64encode(zlib.compress(raw, level=1)).decode("ascii")
 
 
 def decode_chunk(encoded_str):
     raw = zlib.decompress(base64.b64decode(encoded_str))
-    return np.frombuffer(raw, dtype=np.uint8).reshape(CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE).copy()
+    if len(raw) == CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE:
+        return np.frombuffer(raw, dtype=np.uint8).astype(np.uint16).reshape(CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE).copy()
+    return np.frombuffer(raw, dtype=np.uint16).reshape(CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE).copy()
 
 
 def send_packet(sock, packet):
@@ -212,7 +214,12 @@ class MultiplayerServer:
                 seed_val = self.seed if self.seed is not None else random.randint(0, 2_147_483_647)
                 info = self.catalog.create(self.world_name, seed_val, gamemode=self.gamemode)
             self.seed = info.seed
-            self.world = World(seed=info.seed, store=self.catalog.store_for(info.id), day_time=getattr(info, "day_time", 1000.0))
+            self.world = World(
+                seed=info.seed,
+                store=self.catalog.store_for(info.id),
+                day_time=getattr(info, "day_time", 1000.0),
+                spawn_point=getattr(info, "spawn", None),
+            )
             self.world.on_block_set = lambda bx, by, bz, b: self.broadcast(
                 {"type": "block_change", "x": bx, "y": by, "z": bz, "block": b}
             )
@@ -257,6 +264,7 @@ class MultiplayerServer:
             self.world.flush()
             if self.world_info and self.catalog:
                 self.world_info.day_time = float(self.world.day_time)
+                self.world_info.spawn = list(self.world.get_spawn_point())
                 self.catalog.write(self.world_info)
         for client in list(self.clients.values()):
             self._save_player_data(client)
@@ -491,6 +499,7 @@ class MultiplayerServer:
                 self.world.flush()
                 if self.world_info and self.catalog:
                     self.world_info.day_time = float(self.world.day_time)
+                    self.world_info.spawn = list(self.world.get_spawn_point())
                     self.catalog.write(self.world_info)
             for client in list(self.clients.values()):
                 self._save_player_data(client)
@@ -526,9 +535,9 @@ class MultiplayerServer:
                 player.yaw = client.yaw
                 player.pitch = client.pitch
             else:
-                spawn_x, spawn_z = 0, 0
-                ground = self.world.column_top(spawn_x, spawn_z)
-                client.pos = [spawn_x + 0.5, ground + 1.0, spawn_z + 0.5]
+                sp_x, sp_y, sp_z = self.world.get_spawn_point()
+                ground = self.world.column_top(int(math.floor(sp_x)), int(math.floor(sp_z)))
+                client.pos = [float(sp_x), float(max(sp_y, ground + 1.0)), float(sp_z)]
                 player.pos = list(client.pos)
 
             # Build list of already-connected players

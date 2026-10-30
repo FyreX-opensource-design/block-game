@@ -1,0 +1,16 @@
+{
+  "id": "brackish_water",
+  "lang": "block.brackish_water",
+  "tab": "natural",
+  "model": "block",
+  "block": "brackish_water",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 1,
+  "food": 0
+}
+

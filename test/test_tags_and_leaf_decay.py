@@ -147,6 +147,15 @@ class TestTagsAndLeafDecay(unittest.TestCase):
             )
             self.assertTrue(has_trunk, f"{t_id} should place trunk")
             self.assertTrue(has_leaves, f"{t_id} should place leaves")
+            if t_id == "fancy_oak":
+                has_sideways_branch = any(
+                    world.get_block(x, y, z) in ("log_x", "log_z")
+                    for x in range(5, 12)
+                    for y in range(81, 96)
+                    for z in range(5, 12)
+                    if not (x == 8 and z == 8)
+                )
+                self.assertTrue(has_sideways_branch, "fancy_oak branches should generate sideways logs (log_x / log_z)")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,15 @@
+{
+  "id": "brackish_water",
+  "lang": "block.brackish_water",
+  "tab": "natural",
+  "model": "cube",
+  "render": "cutout",
+  "solid": false,
+  "opacity": 0.6,
+  "hardness": 100.0,
+  "tool": "none",
+  "mining_level": 0,
+  "properties": {"fluid": "brackish_water", "level": 8},
+  "textures": {"top": "brackish_water", "side": "brackish_water", "bottom": "brackish_water"}
+}
+

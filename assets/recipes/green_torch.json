@@ -1,0 +1,13 @@
+{
+  "id": "green_torch",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "#torches",
+    "green_dye"
+  ],
+  "result": {
+    "item": "green_torch",
+    "count": 1
+  }
+}
+

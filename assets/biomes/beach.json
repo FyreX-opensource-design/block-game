@@ -9,6 +9,7 @@
   "ceiling": 0.36,
   "min_size": 32,
   "inland": false,
+  "valid_spawn": false,
   "transition": {
     "ceiling": 0.42,
     "width": 0.16,

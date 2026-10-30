@@ -1,0 +1,16 @@
+{
+  "id": "wood_salt_water_bucket",
+  "lang": "item.wood_salt_water_bucket",
+  "tab": ["tools", "natural"],
+  "model": "flat",
+  "texture": "wood_salt_water_bucket",
+  "max_stack": 1,
+  "left": "none",
+  "right": "use",
+  "durability": 0,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 1,
+  "food": 0
+}
+

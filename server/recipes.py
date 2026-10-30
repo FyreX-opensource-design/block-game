@@ -12,6 +12,7 @@ CRAFTING_SHAPELESS = "crafting_shapeless"
 SMELTING = "smelting"
 BLOCK_HIT = "block_hit"
 FLUID_TRANSFORM = "fluid_transform"
+FLUID_MEET = "fluid_meet"
 CRAFTING_TYPES = (CRAFTING_SHAPED, CRAFTING_SHAPELESS)
 
 
@@ -34,6 +35,10 @@ class Recipe:
         consume_item=True,
         fluid=None,
         block=None,
+        fluids=(),
+        source_result=None,
+        flowing_fluid=None,
+        source_fluid=None,
     ):
         self.id = recipe_id
         self.shaped = shaped
@@ -51,6 +56,10 @@ class Recipe:
         self.consume_item = bool(consume_item)
         self.fluid = fluid
         self.block = block
+        self.fluids = tuple(fluids)
+        self.source_result = source_result if source_result is not None else result
+        self.flowing_fluid = flowing_fluid
+        self.source_fluid = source_fluid
 
 
 def _trim(rows):
@@ -224,6 +233,44 @@ def recipe_from_mapping(entry, source):
             block=block,
         )
 
+    if recipe_type in (FLUID_MEET, "fluid_mix", "fluid_interaction"):
+        raw_fluids = entry.get("fluids", [])
+        if isinstance(raw_fluids, str):
+            fluids = (raw_fluids,)
+        else:
+            fluids = tuple(str(f) for f in raw_fluids)
+        flowing_fluid = entry.get("flowing_fluid", entry.get("fluid_a"))
+        source_fluid = entry.get("source_fluid", entry.get("fluid_b"))
+        if not fluids and flowing_fluid and source_fluid:
+            fluids = (str(flowing_fluid), str(source_fluid))
+        if len(fluids) < 2:
+            raise ValueError(f"{recipe_id} fluid_meet recipe needs two fluids")
+        res = entry.get("result", entry.get("flow_result", ""))
+        res_id = (
+            res
+            if isinstance(res, str)
+            else (res.get("block", res.get("item", "")) if isinstance(res, dict) else "")
+        )
+        src_res = entry.get("source_result", entry.get("source_block", res_id))
+        src_res_id = (
+            src_res
+            if isinstance(src_res, str)
+            else (src_res.get("block", src_res.get("item", res_id)) if isinstance(src_res, dict) else res_id)
+        )
+        return Recipe(
+            recipe_id,
+            False,
+            (),
+            (),
+            res_id,
+            1,
+            FLUID_MEET,
+            fluids=fluids,
+            source_result=src_res_id,
+            flowing_fluid=str(flowing_fluid) if flowing_fluid else None,
+            source_fluid=str(source_fluid) if source_fluid else None,
+        )
+
     result = entry.get("result")
     if isinstance(result, str):
         result = {"item": result}
@@ -308,16 +355,67 @@ def find_block_hit_recipe(item_id, block_id):
     return None
 
 
+def _normalize_fluid_id(fluid_id):
+    if not fluid_id:
+        return ""
+    if fluid_id in BLOCKS:
+        b_obj = BLOCKS[fluid_id]
+        f_prop = b_obj.properties.get("fluid")
+        if isinstance(f_prop, str) and f_prop:
+            return f_prop
+        if getattr(b_obj, "base_id", None):
+            return b_obj.base_id
+    if fluid_id.endswith("_falling"):
+        return fluid_id[: -len("_falling")]
+    for level in range(1, 8):
+        suffix = f"_{level}"
+        if fluid_id.endswith(suffix):
+            return fluid_id[: -len(suffix)]
+    return str(fluid_id)
+
+
 def find_fluid_transform(fluid_id, block_id):
     if not fluid_id or not block_id:
         return None
+    norm_fluid = _normalize_fluid_id(fluid_id)
     norm = BLOCKS[block_id].base_id if block_id in BLOCKS and getattr(BLOCKS[block_id], "base_id", None) else block_id
     for recipe in RECIPES:
         if recipe.type == FLUID_TRANSFORM:
-            if recipe.fluid == fluid_id or (fluid_id.startswith("water") and recipe.fluid == "water"):
+            if (
+                recipe.fluid == fluid_id
+                or recipe.fluid == norm_fluid
+                or (norm_fluid in ("water", "salt_water", "brackish_water") and recipe.fluid == "water")
+            ):
                 if recipe.block == block_id or recipe.block == norm:
                     return recipe.result
     return None
+
+
+def find_fluid_meet_recipe(fluid_a, fluid_b):
+    """Find a fluid_meet recipe matching two meeting fluid blocks or fluid IDs."""
+    norm_a = _normalize_fluid_id(fluid_a)
+    norm_b = _normalize_fluid_id(fluid_b)
+    if not norm_a or not norm_b or norm_a == norm_b:
+        return None
+    pair = {norm_a, norm_b}
+    for recipe in RECIPES:
+        if recipe.type == FLUID_MEET:
+            if set(recipe.fluids[:2]) == pair:
+                return recipe
+    return None
+
+
+def find_fluid_meet(fluid_a, fluid_b, target_is_source=False):
+    """Return the resulting block id when fluid_a and fluid_b meet.
+    If target_is_source is True (a flowing fluid hits a source block), returns recipe.source_result.
+    Otherwise returns recipe.result.
+    """
+    recipe = find_fluid_meet_recipe(fluid_a, fluid_b)
+    if recipe is None:
+        return None
+    if target_is_source:
+        return recipe.source_result or recipe.result
+    return recipe.result
 
 
 class Fuel:

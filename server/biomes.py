@@ -46,6 +46,7 @@ class Biome:
         floor_detail=None,
         curve="smoothstep",
         min_size=0.0,
+        valid_spawn=None,
     ):
         self.id = biome_id
         self.name = str(name or biome_id.replace("_", " ").title())
@@ -66,6 +67,7 @@ class Biome:
         self.cliff_step = float(cliff_step)
         self.transition = dict(transition or {})
         self.min_size = float(min_size)
+        self.valid_spawn = True if valid_spawn is None else bool(valid_spawn)
 
         trans_blend = self.transition.get("blend")
         actual_blend = blend if blend is not None else trans_blend
@@ -250,6 +252,10 @@ def biome_from_mapping(fields, source, trees, decorations=None):
     if min_size < 0:
         raise ValueError(f"{source}: min_size must be non-negative")
 
+    raw_valid_spawn = fields.get("valid_spawn", fields.get("can_spawn", fields.get("spawnable", None)))
+    if raw_valid_spawn is not None and not isinstance(raw_valid_spawn, bool):
+        raise ValueError(f"{source}: valid_spawn must be a boolean")
+
     if blend is None and "blend" in trans:
         blend = _number(trans["blend"], "blend", source)
     if not cliff and "cliff" in trans:
@@ -296,6 +302,7 @@ def biome_from_mapping(fields, source, trees, decorations=None):
         floor_detail=floor_detail_val,
         curve=curve_val,
         min_size=min_size,
+        valid_spawn=raw_valid_spawn,
     )
 
 

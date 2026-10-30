@@ -66,11 +66,15 @@ def get_block_opacity(block_obj):
         return 0
     if bid == "leaves" or base == "leaves" or "leaves" in bid or (hasattr(block_obj, "properties") and block_obj.properties.get("leaf")):
         return 1
-    if bid.startswith("water") or (hasattr(block_obj, "properties") and block_obj.properties.get("fluid") == "water"):
+    if bid.startswith("water") or (hasattr(block_obj, "properties") and block_obj.properties.get("fluid")):
         return 2
     if not getattr(block_obj, "solid", True):
         return 0
     props = getattr(block_obj, "properties", None) or {}
+    if props.get("offset_block"):
+        if not props.get("capped"):
+            return 0
+        return 15
     if props.get("slab") and not props.get("double_slab"):
         if props.get("waterlogged") or getattr(block_obj, "waterlogged", False):
             return 2
@@ -108,8 +112,9 @@ def _get_luts():
         return _OPACITY_LUT, _EMISSION_LUT
     from server.blocks import BY_INDEX
 
-    op_lut = np.zeros(256, dtype=np.int16)
-    em_lut = np.zeros((256, 5), dtype=np.int16)
+    lut_size = max(256, len(BY_INDEX))
+    op_lut = np.zeros(lut_size, dtype=np.int16)
+    em_lut = np.zeros((lut_size, 5), dtype=np.int16)
     for i, b in enumerate(BY_INDEX):
         if b is not None:
             op_lut[i] = get_block_opacity(b)
@@ -226,13 +231,13 @@ class LightingSystem:
             self.light_sources[key] = levels
         else:
             self.light_sources.pop(key, None)
-        self.on_block_changed(x, y, z)
+        self.on_block_changed(x, y, z, was_emitter=True)
 
     def clear_blocklight(self, x, y, z):
         key = (int(x), int(y), int(z))
         if key in self.light_sources:
             del self.light_sources[key]
-            self.on_block_changed(x, y, z)
+            self.on_block_changed(x, y, z, was_emitter=True)
 
     def ensure_chunk_lit(self, chunk):
         if not getattr(chunk, "light_valid", False):
@@ -466,7 +471,7 @@ class LightingSystem:
                             nch.light_valid = False
                             self.world.mark_dirty(ncx, ncy, ncz)
 
-    def on_block_changed(self, x, y, z):
+    def on_block_changed(self, x, y, z, was_emitter=False):
         """Called when a block is placed, broken, or updated at (x, y, z)."""
         cx = x // CHUNK_SIZE
         cy = y // CHUNK_SIZE
@@ -493,14 +498,28 @@ class LightingSystem:
         elif ly == CHUNK_SIZE - 1 and cy < SECTION_COUNT - 1:
             affected.add((cx, cy + 1, cz))
 
-        # Check if block emits light or is a registered light source
+        # Check if block emits light, previously emitted light, or if chunk has active blocklight
         emit = self.get_emission(x, y, z)
-        is_emitter = any(v > 0 for v in emit) or (int(x), int(y), int(z)) in self.light_sources
+        cur_ch = self.world.chunks.get((cx, cy, cz))
+        had_local_bl = (
+            cur_ch is not None
+            and hasattr(cur_ch, "blocklight")
+            and bool(np.any(cur_ch.blocklight > 0))
+        )
+        is_emitter = (
+            was_emitter
+            or had_local_bl
+            or any(v > 0 for v in emit)
+            or (int(x), int(y), int(z)) in self.light_sources
+        )
         if is_emitter:
-            for dcy, dcz, dcx in ((-1, 0, 0), (1, 0, 0), (0, -1, 0), (0, 1, 0), (0, 0, -1), (0, 0, 1)):
+            for dcy in (-1, 0, 1):
                 ty = cy + dcy
-                if 0 <= ty < SECTION_COUNT:
-                    affected.add((cx + dcx, ty, cz + dcz))
+                if not (0 <= ty < SECTION_COUNT):
+                    continue
+                for dcz in (-1, 0, 1):
+                    for dcx in (-1, 0, 1):
+                        affected.add((cx + dcx, ty, cz + dcz))
 
         # Vertical skylight downward propagation (only if sunlight can reach this height)
         if y >= WORLD_HEIGHT - 1 or self.get_skylight(x, y + 1, z) > 0:
@@ -508,11 +527,28 @@ class LightingSystem:
                 if cy - dcy >= 0:
                     affected.add((cx, cy - dcy, cz))
 
-        valid_keys = [k for k in affected if k in self.world.chunks]
+        valid_keys = sorted(
+            (k for k in affected if k in self.world.chunks),
+            key=lambda k: abs(k[0] - cx) + abs(k[1] - cy) + abs(k[2] - cz),
+        )
         for ckey in valid_keys:
-            self.world.chunks[ckey].light_valid = False
+            ch = self.world.chunks[ckey]
+            ch.light_valid = False
+            if is_emitter and hasattr(ch, "blocklight"):
+                ch.blocklight.fill(0)
             self.world.mark_dirty(*ckey)
 
-        # Immediately recompute lighting for the primary chunk so light queries on it are instant
+        # Immediately recompute lighting for the primary chunk; if an emitter changed,
+        # also recompute the affected neighbor chunks so removed blocklight cannot echo back.
         self.compute_chunk_lighting(cx, cy, cz)
+        if is_emitter:
+            for _ in range(3):
+                re_invalidated = [
+                    ckey for ckey in valid_keys
+                    if not getattr(self.world.chunks[ckey], "light_valid", False)
+                ]
+                if not re_invalidated:
+                    break
+                for ckey in re_invalidated:
+                    self.compute_chunk_lighting(*ckey)
 

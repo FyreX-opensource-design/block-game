@@ -1,0 +1,17 @@
+{
+  "id": "green_torch",
+  "lang": "block.green_torch",
+  "tab": ["building", "tools"],
+  "model": "flat",
+  "block": "green_torch",
+  "texture": "green_torch",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 1,
+  "food": 0
+}
+

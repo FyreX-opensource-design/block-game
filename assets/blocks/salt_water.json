@@ -1,0 +1,15 @@
+{
+  "id": "salt_water",
+  "lang": "block.salt_water",
+  "tab": "natural",
+  "model": "cube",
+  "render": "cutout",
+  "solid": false,
+  "opacity": 0.6,
+  "hardness": 100.0,
+  "tool": "none",
+  "mining_level": 0,
+  "properties": {"fluid": "salt_water", "level": 8},
+  "textures": {"top": "salt_water", "side": "salt_water", "bottom": "salt_water"}
+}
+

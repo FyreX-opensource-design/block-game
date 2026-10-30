@@ -1,0 +1,10 @@
+{
+  "id": "brackish_water",
+  "block": "brackish_water",
+  "flow_distance": 7,
+  "speed": 1.0,
+  "dropoff_distance": 4,
+  "infinite_source": true,
+  "push_strength": 1.0
+}
+

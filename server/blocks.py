@@ -15,6 +15,8 @@ SAND = "sand"
 LOG = "log"
 LEAVES = "leaves"
 WATER = "water"
+SALT_WATER = "salt_water"
+BRACKISH_WATER = "brackish_water"
 GRAVEL = "gravel"
 CLAY = "clay"
 CRAFTING_TABLE = "crafting_table"
@@ -297,6 +299,78 @@ def get_double_slab(bottom_id, top_id):
     return candidate1
 
 
+def is_offset_block(block_or_id):
+    if not block_or_id:
+        return False
+    block = BLOCKS.get(block_or_id) if isinstance(block_or_id, str) else block_or_id
+    if block is None or not isinstance(block, Block):
+        return False
+    return bool(block.properties.get("offset_block"))
+
+
+def get_offset_info(block_or_id):
+    """Returns offset block metadata dict or None if not an offset block:
+    {
+        "is_offset": True,
+        "base_id": str,
+        "canonical_id": str,
+        "capped": bool,
+        "top_slab": str | None,
+    }
+    """
+    if not block_or_id:
+        return None
+    block = BLOCKS.get(block_or_id) if isinstance(block_or_id, str) else block_or_id
+    if block is None or not isinstance(block, Block):
+        return None
+    props = block.properties
+    if not props.get("offset_block"):
+        return None
+    base_id = str(props.get("offset_base", getattr(block, "base_id", block.id)))
+    capped = bool(props.get("capped", False))
+    top_slab = props.get("top_slab") if capped else None
+    return {
+        "is_offset": True,
+        "base_id": base_id,
+        "canonical_id": getattr(block, "base_id", base_id),
+        "capped": capped,
+        "top_slab": top_slab,
+    }
+
+
+def get_offset_block(block_id):
+    if not block_id:
+        return None
+    if is_offset_block(block_id):
+        info = get_offset_info(block_id)
+        cand = f"{info['base_id']}_offset"
+        return cand if cand in BLOCKS else block_id
+    cand = f"{block_id}_offset"
+    return cand if cand in BLOCKS and is_offset_block(cand) else None
+
+
+def get_capped_offset_block(offset_block_or_id, slab_block_or_id):
+    o_info = get_offset_info(offset_block_or_id)
+    base_id = o_info["base_id"] if o_info is not None else str(offset_block_or_id)
+    s_info = get_slab_info(slab_block_or_id)
+    slab_base = s_info["base_id"] if s_info is not None else str(slab_block_or_id)
+    cand = f"{base_id}_offset_{slab_base}"
+    return cand if cand in BLOCKS else None
+
+
+def has_half_offset_top(block_or_id):
+    """Returns True if `block_or_id` has its top solid surface at y + 0.5 (bottom single slab or uncapped offset block)."""
+    if not block_or_id:
+        return False
+    s_info = get_slab_info(block_or_id)
+    if s_info is not None:
+        return not s_info["double"] and s_info["half"] == "bottom"
+    o_info = get_offset_info(block_or_id)
+    if o_info is not None:
+        return not o_info["capped"]
+    return False
+
+
 def player_facing_from_yaw(yaw):
     """Returns the cardinal direction the player is looking towards ('north', 'south', 'east', 'west')."""
     if yaw is None:
@@ -327,10 +401,126 @@ def rotation_variant(block_id, axis_or_facing):
     return variant if variant in BLOCKS else block_id
 
 
+def is_torch(block_or_id):
+    if not block_or_id:
+        return False
+    if isinstance(block_or_id, str):
+        block = BLOCKS.get(block_or_id)
+    elif isinstance(block_or_id, Block):
+        block = block_or_id
+    else:
+        return False
+    if block is None:
+        return False
+    return bool(block.properties.get("torch") or block.id.endswith("torch") or getattr(block, "base_id", "").endswith("torch"))
+
+
+def is_offset_torch(block_or_id):
+    if not block_or_id:
+        return False
+    block = BLOCKS.get(block_or_id) if isinstance(block_or_id, str) else block_or_id
+    if block is None or not is_torch(block):
+        return False
+    return block.properties.get("mount") == "up_offset"
+
+
+def get_offset_torch_info(block_or_id):
+    if not block_or_id:
+        return None
+    block = BLOCKS.get(block_or_id) if isinstance(block_or_id, str) else block_or_id
+    if block is None or not isinstance(block, Block):
+        return None
+    props = block.properties
+    if props.get("mount") != "up_offset":
+        return None
+    capped = bool(props.get("capped_torch", False))
+    base_id = str(props.get("torch_base", getattr(block, "base_id", block.id)))
+    top_slab = props.get("top_slab") if capped else None
+    return {
+        "is_offset_torch": True,
+        "base_id": base_id,
+        "capped": capped,
+        "top_slab": top_slab,
+    }
+
+
+def get_capped_offset_torch(torch_block_or_id, slab_block_or_id):
+    t_info = get_offset_torch_info(torch_block_or_id)
+    if t_info is not None:
+        base_id = t_info["base_id"]
+    else:
+        b = BLOCKS.get(torch_block_or_id) if isinstance(torch_block_or_id, str) else torch_block_or_id
+        base_id = getattr(b, "base_id", str(torch_block_or_id)) if b is not None else str(torch_block_or_id)
+    s_info = get_slab_info(slab_block_or_id)
+    slab_base = s_info["base_id"] if s_info is not None else str(slab_block_or_id)
+    cand = f"{base_id}_offset_{slab_base}"
+    return cand if cand in BLOCKS else None
+
+
+def get_offset_torch(block_or_id):
+    if not block_or_id:
+        return None
+    block = BLOCKS.get(block_or_id) if isinstance(block_or_id, str) else block_or_id
+    if block is None or not is_torch(block):
+        return None
+    base = getattr(block, "base_id", block.id)
+    cand = f"{base}_offset"
+    return cand if cand in BLOCKS else None
+
+
+def can_support_torch(block_or_id, mount="up"):
+    """Check if `block_or_id` can support a torch with mount direction ('up', 'up_offset', 'north', 'south', 'east', 'west').
+    - mount == 'up' (standing on top of support block below): full solid blocks, capped offset blocks, or top/double slabs (whose top is at y=16).
+    - mount == 'up_offset' (standing at half-height on top of support block below): bottom single slabs or uncapped offset blocks (whose top is at y=8).
+    - mount in ('north', 'south', 'east', 'west') (attached to side of support block): full solid blocks, offset blocks, double slabs, or bottom slabs.
+    """
+    if not block_or_id:
+        return False
+    block = BLOCKS.get(block_or_id) if isinstance(block_or_id, str) else block_or_id
+    if block is None or not block.solid:
+        return False
+    if mount == "up_offset":
+        return has_half_offset_top(block)
+    t_info = get_offset_torch_info(block)
+    if t_info is not None:
+        return mount == "up" and bool(t_info["capped"])
+    o_info = get_offset_info(block)
+    if o_info is not None:
+        if mount == "up":
+            return bool(o_info["capped"])
+        return True
+    s_info = get_slab_info(block)
+    if s_info is not None:
+        if s_info["double"]:
+            return True
+        if mount == "up":
+            return s_info["half"] == "top"
+        return s_info["half"] == "bottom"
+    return bool(block.full_cube)
+
+
 def placement_block(block_id, normal, yaw=None, local_y=None):
     block = BLOCKS.get(block_id)
     if block is None:
         return block_id
+    if is_torch(block):
+        nx, ny, nz = normal
+        base = getattr(block, "base_id", block_id)
+        if ny > 0:
+            return base
+        if nx > 0:
+            cand = f"{base}_wall_east"
+            return cand if cand in BLOCKS else base
+        if nx < 0:
+            cand = f"{base}_wall_west"
+            return cand if cand in BLOCKS else base
+        if nz > 0:
+            cand = f"{base}_wall_south"
+            return cand if cand in BLOCKS else base
+        if nz < 0:
+            cand = f"{base}_wall_north"
+            return cand if cand in BLOCKS else base
+        return base
     if is_slab(block):
         nx, ny, nz = normal
         if ny < 0:
@@ -413,6 +603,9 @@ def canonical_id(value):
                     return base
         if norm.endswith("_top") and norm[:-4] in BLOCKS:
             return norm[:-4]
+        for wall_sfx in ("_wall_north", "_wall_south", "_wall_east", "_wall_west", "_offset"):
+            if norm.endswith(wall_sfx) and norm[: -len(wall_sfx)] in BLOCKS:
+                return norm[: -len(wall_sfx)]
     if isinstance(value, int) or (isinstance(value, str) and value.isdigit()):
         block = block_from_index(int(value))
         return block.id if block else ""
@@ -884,10 +1077,11 @@ def _load_registry():
                 )
                 _register_block(variant_id, var_block)
 
-        if entry.get("id") == "water" or properties.get("fluid") == "water":
-            fall_id = "water_falling"
+        fluid_type = properties.get("fluid") if isinstance(properties.get("fluid"), str) else ("water" if entry.get("id") == "water" else None)
+        if fluid_type:
+            fall_id = f"{block.id}_falling"
             fall_props = dict(properties)
-            fall_props["fluid"] = "water"
+            fall_props["fluid"] = fluid_type
             fall_props["level"] = 8
             fall_props["falling"] = True
             fall_block = Block(
@@ -912,9 +1106,9 @@ def _load_registry():
             _register_block(fall_id, fall_block)
 
             for level in range(7, 0, -1):
-                flow_id = f"water_{level}"
+                flow_id = f"{block.id}_{level}"
                 flow_props = dict(properties)
-                flow_props["fluid"] = "water"
+                flow_props["fluid"] = fluid_type
                 flow_props["level"] = level
                 flow_props["falling"] = False
                 h = float(level) * 2.0
@@ -983,6 +1177,87 @@ def _load_registry():
                 valid_ground=block.valid_ground,
             )
             _register_block(pers_id, pers_block)
+
+        if properties.get("torch") or entry.get("model") == "torch":
+            block.properties["torch"] = True
+            block.properties["mount"] = "up"
+            wall_boxes = {
+                "east": ([0.0, 2.0, 7.0], [4.0, 12.0, 9.0]),
+                "west": ([12.0, 2.0, 7.0], [16.0, 12.0, 9.0]),
+                "south": ([7.0, 2.0, 0.0], [9.0, 12.0, 4.0]),
+                "north": ([7.0, 2.0, 12.0], [9.0, 12.0, 16.0]),
+            }
+            base_el_faces = dict(resolved[0]["faces"]) if resolved else {i: face_uvs[i] for i in range(6)}
+            for wall_dir, (w_from, w_to) in wall_boxes.items():
+                wall_id = f"{block.id}_wall_{wall_dir}"
+                wall_props = dict(base_props)
+                wall_props["torch"] = True
+                wall_props["mount"] = wall_dir
+                wall_resolved = [
+                    {
+                        "from": list(w_from),
+                        "to": list(w_to),
+                        "faces": dict(base_el_faces),
+                    }
+                ]
+                wall_block = Block(
+                    wall_id,
+                    f"{name} (Wall {wall_dir.capitalize()})",
+                    False,
+                    False,
+                    face_uvs,
+                    wall_resolved,
+                    cutout,
+                    opacity,
+                    membership,
+                    properties=wall_props,
+                    base_id=block.id,
+                    is_variant=True,
+                    hardness=block.hardness,
+                    tool=block.tool,
+                    mining_level=block.mining_level,
+                    loot_table=block.loot_table,
+                    light=light_val,
+                    emission=block.emission,
+                    gravity=block.gravity,
+                    fluid_breakable=block.fluid_breakable,
+                )
+                _register_block(wall_id, wall_block)
+
+            offset_torch_id = f"{block.id}_offset"
+            offset_torch_props = dict(base_props)
+            offset_torch_props["torch"] = True
+            offset_torch_props["mount"] = "up_offset"
+            offset_torch_resolved = [
+                {
+                    "from": [7.0, -8.0, 7.0],
+                    "to": [9.0, 2.0, 9.0],
+                    "faces": dict(base_el_faces),
+                }
+            ]
+            offset_torch_block = Block(
+                offset_torch_id,
+                f"{name} (Offset)",
+                False,
+                False,
+                face_uvs,
+                offset_torch_resolved,
+                cutout,
+                opacity,
+                membership,
+                properties=offset_torch_props,
+                base_id=block.id,
+                is_variant=True,
+                hardness=block.hardness,
+                tool=block.tool,
+                mining_level=block.mining_level,
+                loot_table=block.loot_table,
+                light=light_val,
+                emission=block.emission,
+                gravity=block.gravity,
+                fluid_breakable=block.fluid_breakable,
+            )
+            _register_block(offset_torch_id, offset_torch_block)
 
         if is_slab_type:
             top_model_elements = _load_model("slab_top")
@@ -1203,8 +1478,189 @@ def _load_registry():
             alias_id = f"double_slab_{slab_a.id}"
             blocks[alias_id] = d_block
             index_of[alias_id] = index_of[double_id]
-    if len(by_index) > 256:
-        raise ValueError("there are more than 255 blocks")
+
+    full_solid_blocks = [
+        b
+        for b in list(blocks.values())
+        if b.solid
+        and b.full_cube
+        and not b.properties.get("double_slab")
+        and not b.properties.get("slab")
+        and not b.properties.get("fluid")
+        and not b.properties.get("offset_block")
+    ]
+    for fb in full_solid_blocks:
+        offset_id = f"{fb.id}_offset"
+        offset_faces = {i: fb.face_uvs[i] for i in range(6) if fb.face_uvs[i] is not None}
+        offset_elements = [
+            {
+                "from": [0.0, -8.0, 0.0],
+                "to": [16.0, 8.0, 16.0],
+                "faces": offset_faces,
+                "tint": fb.tint,
+            }
+        ]
+        offset_props = dict(fb.properties)
+        offset_props["offset_block"] = True
+        offset_props["offset_base"] = fb.id
+        offset_props["capped"] = False
+        offset_props["top_slab"] = None
+        off_block = Block(
+            offset_id,
+            f"{fb.name} (Offset)",
+            True,
+            False,
+            list(fb.face_uvs),
+            offset_elements,
+            cutout=fb.cutout,
+            opacity=fb.opacity,
+            properties=offset_props,
+            base_id=fb.base_id,
+            is_variant=True,
+            hardness=fb.hardness,
+            tool=fb.tool,
+            mining_level=fb.mining_level,
+            loot_table=fb.loot_table,
+            emission=fb.emission,
+            gravity=fb.gravity,
+            fluid_breakable=fb.fluid_breakable,
+            soil=fb.soil,
+            plant=fb.plant,
+            requires_soil=fb.requires_soil,
+            valid_ground=fb.valid_ground,
+            tint=fb.tint,
+            station=fb.station,
+            recipe_types=fb.recipe_types,
+            cook_speed=fb.cook_speed,
+        )
+        if len(by_index) == 99:
+            by_index.append(None)
+        blocks[offset_id] = off_block
+        by_index.append(off_block)
+        index_of[offset_id] = len(by_index) - 1
+
+        for slab_b in slab_blocks:
+            capped_id = f"{fb.id}_offset_{slab_b.id}"
+            slab_b_top = blocks[f"{slab_b.id}_top"]
+            bot_faces = {i: fb.face_uvs[i] for i in range(6) if i != 2 and fb.face_uvs[i] is not None}
+            bot_el = {
+                "from": [0.0, -8.0, 0.0],
+                "to": [16.0, 8.0, 16.0],
+                "faces": bot_faces,
+                "tint": fb.tint,
+                "cutout": fb.cutout,
+            }
+            top_els = []
+            for el in slab_b_top.elements:
+                t_faces = {k: v for k, v in el["faces"].items() if k != 3 or fb.cutout}
+                top_els.append(
+                    {
+                        "from": list(el["from"]),
+                        "to": list(el["to"]),
+                        "faces": t_faces,
+                        "tint": slab_b.tint,
+                        "cutout": slab_b.cutout,
+                    }
+                )
+            capped_elements = [bot_el] + top_els
+            capped_props = dict(fb.properties)
+            capped_props["offset_block"] = True
+            capped_props["offset_base"] = fb.id
+            capped_props["capped"] = True
+            capped_props["top_slab"] = slab_b.id
+            capped_face_uvs = list(fb.face_uvs)
+            if len(slab_b.face_uvs) > 2 and slab_b.face_uvs[2] is not None:
+                capped_face_uvs[2] = slab_b.face_uvs[2]
+            cap_block = Block(
+                capped_id,
+                f"{fb.name} (Offset) / {slab_b.name}",
+                True,
+                False,
+                capped_face_uvs,
+                capped_elements,
+                cutout=fb.cutout,
+                opacity=1.0,
+                properties=capped_props,
+                base_id=fb.base_id,
+                is_variant=True,
+                hardness=max(fb.hardness, slab_b.hardness),
+                tool=fb.tool or slab_b.tool,
+                mining_level=max(fb.mining_level, slab_b.mining_level),
+                loot_table=fb.loot_table,
+                emission=fb.emission,
+                gravity=fb.gravity,
+                fluid_breakable=fb.fluid_breakable,
+                soil=slab_b.soil,
+                tint=fb.tint,
+                station=fb.station,
+                recipe_types=fb.recipe_types,
+                cook_speed=fb.cook_speed,
+            )
+            if len(by_index) == 99:
+                by_index.append(None)
+            blocks[capped_id] = cap_block
+            by_index.append(cap_block)
+            index_of[capped_id] = len(by_index) - 1
+
+    base_torch_blocks = [
+        b
+        for b in list(blocks.values())
+        if b.properties.get("torch") and not b.is_variant
+    ]
+    for tb in base_torch_blocks:
+        tb_off = blocks.get(f"{tb.id}_offset")
+        if tb_off is None:
+            continue
+        for slab_b in slab_blocks:
+            capped_t_id = f"{tb.id}_offset_{slab_b.id}"
+            slab_b_top = blocks[f"{slab_b.id}_top"]
+            top_els = [
+                {
+                    "from": list(el["from"]),
+                    "to": list(el["to"]),
+                    "faces": dict(el["faces"]),
+                    "tint": slab_b.tint,
+                }
+                for el in slab_b_top.elements
+            ]
+            capped_t_elements = [dict(tb_off.elements[0])] + top_els
+            capped_t_props = dict(tb_off.properties)
+            capped_t_props["torch"] = True
+            capped_t_props["mount"] = "up_offset"
+            capped_t_props["capped_torch"] = True
+            capped_t_props["torch_base"] = tb.id
+            capped_t_props["top_slab"] = slab_b.id
+            cap_t_block = Block(
+                capped_t_id,
+                f"{tb.name} (Offset) / {slab_b.name}",
+                True,
+                False,
+                list(slab_b_top.face_uvs),
+                capped_t_elements,
+                cutout=True,
+                opacity=0.0,
+                properties=capped_t_props,
+                base_id=tb.id,
+                is_variant=True,
+                hardness=slab_b.hardness,
+                tool=slab_b.tool,
+                mining_level=slab_b.mining_level,
+                loot_table=tb.loot_table,
+                light=tb.light,
+                emission=tb.emission,
+                gravity=False,
+                fluid_breakable=False,
+                soil=slab_b.soil,
+                tint=slab_b.tint,
+            )
+            if len(by_index) == 99:
+                by_index.append(None)
+            blocks[capped_t_id] = cap_t_block
+            by_index.append(cap_t_block)
+            index_of[capped_t_id] = len(by_index) - 1
+
+    if len(by_index) > 65536:
+        raise ValueError("there are more than 65535 blocks")
     grouped = {
         tab.id: tuple(block_id for block_id in creative if tab.id in blocks[block_id].tabs)
         for tab in tabs
@@ -1271,9 +1727,82 @@ def can_place_block(world, x, y, z, block_id, hit=None):
         return False
     b_obj = BLOCKS[block_id]
 
-    # Current position must not be solid (unless combining slabs into a double slab, or partial breaking)
+    cur_blk = world.get_block(x, y, z)
+    cur_t_info = get_offset_torch_info(cur_blk)
+    new_t_info = get_offset_torch_info(b_obj)
+
+    # Allow capping an uncapped offset torch with a top slab, or breaking one part of a capped offset torch.
+    if cur_t_info is not None:
+        if not cur_t_info["capped"] and new_t_info is not None and new_t_info["capped"]:
+            return True
+        if cur_t_info["capped"] and new_t_info is not None and not new_t_info["capped"]:
+            return True
+        new_s = get_slab_info(b_obj)
+        if cur_t_info["capped"] and new_s is not None and not new_s["double"] and new_s["half"] == "top":
+            return True
+        return False
+
+    # Cannot place any block directly into a voxel already occupied by a torch.
+    if is_torch(cur_blk):
+        return False
+
+    # If the voxel above holds an offset block or offset torch, its bottom half occupies [y + 0.5, y + 1.0] in this voxel.
+    if y + 1 < WORLD_HEIGHT:
+        above_blk = world.get_block(x, y + 1, z)
+        if is_offset_block(above_blk):
+            new_s = get_slab_info(b_obj)
+            new_o = get_offset_info(b_obj)
+            allowed_under_offset = (
+                (new_s is not None and not new_s["double"] and new_s["half"] == "bottom")
+                or (new_o is not None and not new_o["capped"])
+                or (new_t_info is not None and not new_t_info["capped"])
+            )
+            if not allowed_under_offset:
+                return False
+        elif is_offset_torch(above_blk):
+            new_s = get_slab_info(b_obj)
+            new_o = get_offset_info(b_obj)
+            allowed_under_offset_torch = (
+                (new_s is not None and not new_s["double"] and new_s["half"] == "bottom")
+                or (new_o is not None and not new_o["capped"])
+            )
+            if not allowed_under_offset_torch:
+                return False
+
+    # If placing an offset block, its bottom half occupies [y - 0.5, y] in the voxel below.
+    if is_offset_block(b_obj):
+        if y - 1 < 0:
+            return False
+        below_blk = world.get_block(x, y - 1, z)
+        below_obj = BLOCKS.get(below_blk)
+        below_t_info = get_offset_torch_info(below_blk)
+        if not (
+            below_blk in ("", AIR, None)
+            or (below_obj is not None and bool(below_obj.properties.get("fluid")))
+            or has_half_offset_top(below_blk)
+            or (below_t_info is not None and not below_t_info["capped"])
+        ):
+            return False
+
+    # Current position must not be solid (unless combining slabs into a double slab, capping an offset block/torch, or partial breaking)
     if world.is_solid(x, y, z):
-        cur_blk = world.get_block(x, y, z)
+        cur_off = get_offset_info(cur_blk)
+        new_off = get_offset_info(b_obj)
+        if cur_off is not None:
+            # Capping an uncapped offset block with a top slab
+            if not cur_off["capped"] and new_off is not None and new_off["capped"]:
+                return True
+            # Breaking the top slab of a capped offset block back to uncapped offset block
+            if cur_off["capped"] and new_off is not None and not new_off["capped"]:
+                return True
+            # Breaking the offset full block of a capped offset block, leaving the top slab
+            new_s = get_slab_info(b_obj)
+            if cur_off["capped"] and new_s is not None and not new_s["double"] and new_s["half"] == "top":
+                return True
+        if new_t_info is not None and new_t_info["capped"] and is_slab(cur_blk):
+            cur_s_info = get_slab_info(cur_blk)
+            if cur_s_info is not None and not cur_s_info["double"] and cur_s_info["half"] == "top":
+                return can_support_torch(world.get_block(x, y - 1, z), "up_offset")
         if is_slab(b_obj) and is_slab(cur_blk):
             cur_info = get_slab_info(cur_blk)
             new_info = get_slab_info(b_obj)
@@ -1297,6 +1826,31 @@ def can_place_block(world, x, y, z, block_id, hit=None):
         # Cannot place on top of or against non-solid blocks (e.g. flowers, tall grass)
         if hit_obj is not None and not hit_obj.solid:
             return False
+
+    # Check torch support requirements
+    if is_torch(b_obj):
+        cur_block = world.get_block(x, y, z)
+        if cur_block not in ("", AIR, None):
+            return False
+        mount = b_obj.properties.get("mount", "up")
+        if hit is not None:
+            ny = hit.get("ny", 0)
+            if ny < 0:
+                return False
+            if ny > 0 and mount not in ("up", "up_offset"):
+                return False
+        if mount in ("up", "up_offset"):
+            support_id = world.get_block(x, y - 1, z)
+            return can_support_torch(support_id, mount)
+        support_offsets = {
+            "east": (-1, 0),
+            "west": (1, 0),
+            "south": (0, -1),
+            "north": (0, 1),
+        }
+        dx, dz = support_offsets.get(mount, (0, 0))
+        support_id = world.get_block(x + dx, y, z + dz)
+        return can_support_torch(support_id, mount)
 
     # Check plant / soil requirements
     if (

@@ -119,8 +119,10 @@ def has_block_tag(block_id, tag_name):
     if block_set and cid in block_set:
         return True
     b_obj = BLOCKS.get(block_id) or BLOCKS.get(cid)
-    if b_obj is not None and hasattr(b_obj, "properties"):
-        if tag_name in b_obj.properties.get("tags", ()):
+    if b_obj is not None:
+        if block_set and getattr(b_obj, "base_id", "") in block_set:
+            return True
+        if hasattr(b_obj, "properties") and tag_name in b_obj.properties.get("tags", ()):
             return True
     return False
 

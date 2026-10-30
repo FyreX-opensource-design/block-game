@@ -9,6 +9,7 @@
   "ceiling": 0.30,
   "min_size": 28,
   "inland": false,
+  "valid_spawn": false,
   "transition": {
     "floor": 50.0,
     "floor_detail": 4.0,

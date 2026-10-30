@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 
 from server.biomes import BIOMES, biome_at, climate_at, climate_grid, load_biomes
-from server.blocks import AIR, CLAY, GRAVEL, GRASS, LOG, SAND, WATER, WATER_LEVEL
+from server.blocks import AIR, CLAY, GRAVEL, GRASS, LOG, SALT_WATER, SAND, WATER, WATER_LEVEL
 from server.noise import fbm, terrain_height
 from server.trees import DECORATORS, load_trees
 from server.world import World, tree_at
@@ -147,7 +147,7 @@ class BiomeTests(unittest.TestCase):
         self.assertLessEqual(h_ocean, 60)
         self.assertIn(world.get_block(ox, h_ocean, oz), (SAND, GRAVEL, CLAY))
         for y in range(h_ocean + 1, WATER_LEVEL + 1):
-            self.assertEqual(world.get_block(ox, y, oz), WATER)
+            self.assertEqual(world.get_block(ox, y, oz), SALT_WATER)
 
         bx, bz = beach_pt
         world.generate_column(bx // 16, bz // 16)
@@ -186,9 +186,9 @@ class BiomeTests(unittest.TestCase):
                 if b.id == "ocean":
                     world.generate_column(x // 16, z // 16)
                     h = terrain_height(x, z, 1)
-                    # Water blocks must remain water
+                    # Ocean water blocks must remain salt_water
                     for y in range(h + 1, WATER_LEVEL + 1):
-                        self.assertEqual(world.get_block(x, y, z), WATER)
+                        self.assertEqual(world.get_block(x, y, z), SALT_WATER)
                     # Seabed and top 3 blocks beneath must remain solid, not cave air
                     for y in range(max(1, h - 3), h + 1):
                         self.assertNotEqual(world.get_block(x, y, z), AIR)
@@ -441,3 +441,39 @@ class BiomeTests(unittest.TestCase):
 
         self.assertTrue(dry_beach_runs)
         self.assertGreaterEqual(float(np.median(dry_beach_runs)), 12.0)
+
+    def test_biome_valid_spawn_and_world_spawn_relocation(self):
+        from server.commands import CommandContext, CommandHandler
+        from server.player import Player
+
+        by_id = {b.id: b for b in BIOMES}
+        self.assertFalse(by_id["ocean"].valid_spawn)
+        self.assertFalse(by_id["beach"].valid_spawn)
+        self.assertTrue(by_id["plains"].valid_spawn)
+        self.assertTrue(by_id["forest"].valid_spawn)
+
+        # Find a seed where (0, 0) is in an ocean biome
+        ocean_seed = None
+        for s in range(200):
+            if biome_at(0, 0, s, BIOMES).id == "ocean":
+                ocean_seed = s
+                break
+        self.assertIsNotNone(ocean_seed)
+
+        world = World(seed=ocean_seed)
+        sp_x, sp_y, sp_z = world.get_spawn_point()
+        sx, sz = int(np.floor(sp_x)), int(np.floor(sp_z))
+        spawn_biome = biome_at(sx, sz, ocean_seed, BIOMES)
+        self.assertTrue(spawn_biome.valid_spawn, f"Spawn biome {spawn_biome.id} must be a valid spawn biome")
+        self.assertGreater(terrain_height(sx, sz, ocean_seed, BIOMES), WATER_LEVEL)
+
+        # Move world spawn via command /setworldspawn
+        player = Player(world)
+        player.pos = [120.5, 75.0, -45.5]
+        handler = CommandHandler()
+        ctx = CommandContext(sender="Player", player=player, world=world)
+        handler.execute(ctx, "/setworldspawn")
+        self.assertEqual(world.get_spawn_point(), (120.5, 75.0, -45.5))
+
+        handler.execute(ctx, "/setworldspawn 200 80 300")
+        self.assertEqual(world.get_spawn_point(), (200.0, 80.0, 300.0))
