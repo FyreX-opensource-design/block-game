@@ -1,0 +1,12 @@
+{
+  "id": "sandstone",
+  "lang": "block.sandstone",
+  "tab": "natural",
+  "model": "cube",
+  "hardness": 0.5,
+  "tool": "shovel",
+  "mining_level": 0,
+  "loot_table": "blocks/sandstone",
+  "gravity": false,
+  "textures": {"top": "sandstone", "side": "sandstone", "bottom": "sandstone"}
+}

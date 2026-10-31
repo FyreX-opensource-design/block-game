@@ -100,6 +100,7 @@ Players can type `T` to open chat or `/` to enter commands:
 | `/light` | `/light [levels \| set <r> <g> <b> [uv] [ir] \| clear]` | Queries or sets skylight and blocklight at the player's position. |
 | `/vision` | `/vision <normal \| uv \| thermal \| spectrum>` | Switches spectral vision mode. |
 | `/spawn` | `/spawn <mob_type> [x y z]` | Spawns a mob entity (e.g. `/spawn pig`). |
+| `/gamemode` | `/gamemode <creative \| survival> [player]` | Sets the game mode for a player (defaults to yourself, or specify a player by name). |
 
 ---
 

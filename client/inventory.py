@@ -49,6 +49,7 @@ class CreativeInventory:
         self.table_preview = empty_stack()
         self.drag_button = None
         self.drag_slots = set()
+        self._applied_gamemode = "creative"
 
     def layout(
         self,
@@ -80,11 +81,22 @@ class CreativeInventory:
         if self.container_type == "furnace":
             return self._layout_furnace(frame, width, height, hotbar, selected, mouse, storage, self.furnace)
 
-        if gamemode == "survival" and self._current().screen != "player":
-            player_tab = next((t for t in TABS if t.screen == "player"), TABS[-1])
-            self.tab = player_tab.id
-
+        mode_changed = gamemode != self._applied_gamemode
+        self._applied_gamemode = gamemode
         current = self._current()
+        if mode_changed:
+            if gamemode == "survival":
+                if current.screen != "player":
+                    player_tab = next((t for t in TABS if t.screen == "player"), TABS[-1])
+                    self.tab = player_tab.id
+                    current = self._current()
+            elif current.screen == "player":
+                # Creative inventories are laid out on block tabs; if the current tab
+                # belongs to the survival player screen, switch to a creative tab.
+                blocks_tab = next((t for t in TABS if t.screen == "blocks"), TABS[0])
+                if current.id != blocks_tab.id:
+                    self.tab = blocks_tab.id
+                    current = self._current()
         player = current.screen == "player"
         self.preview = self._preview(craft) if player else empty_stack()
         if player:

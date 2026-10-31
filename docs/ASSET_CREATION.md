@@ -35,8 +35,10 @@ Defines climate noise thresholds, terrain heights, surface/subsurface layers, tr
 - `id` (string, required): Lowercase identifier matching filename.
 - `ceiling` (float, required): Climate noise threshold (between 0.0 and 1.0). Biome bands climb in ascending order.
 - `surface` (string): Block ID for surface layer (default `"grass"`).
-- `soil` (string): Block ID for subsurface layers (default `"dirt"`).
+- `soil` (string): Block ID for subsurface layers (default `"dirt"`). For sandy beaches this is `sand`, with `sandstone` below via `subsoil`.
 - `soil_depth` (int): Number of soil layers below surface (default `3`).
+- `subsoil` (string, optional): Block ID for deeper subsurface layers below the soil layers (default: the `soil` block itself).
+- `subsoil_depth` (int, optional): Number of subsoil layers below the soil layers (default `0`). Sandy beaches use `sandstone` here.
 - `scale` (float): Climate noise scale (must match across all biomes, typically `0.006`).
 - `octaves` (int): Climate noise octaves (typically `2`).
 - `seed_offset` (int): Offset added to world seed (typically `90`).
@@ -63,8 +65,7 @@ Defines climate noise thresholds, terrain heights, surface/subsurface layers, tr
     - `blend` (float): Softness of the cliff transition (default `0.10`).
     - `power` (float): Steepness of the coastal profile (default `4.0`).
     - `uplift` (float): How far cliffs rise above the normal shelf (default `7.0`).
-    - `surface` (string): Surface block on cliff tops (default `"stone"`).
-    - `soil` (string): Subsurface block under cliff tops (default `"stone"`).
+  - Cliff headland materials (`surface` / `soil`) live on the cliff biome variant, e.g. `cliff_beach.json`.
 
 Biome variants do not appear in the top-level biome list. They are resolved per coordinate alongside their parent, so a gravel beach can share the beach climate band while replacing its surface and soil.
 
@@ -134,6 +135,29 @@ return {
 }
 ```
 
+### Example: Variant (`cliff_beach.json`)
+```json
+{
+  "id": "cliff_beach",
+  "surface": "stone",
+  "soil": "stone",
+  "soil_depth": 3,
+  "scale": 0.006,
+  "octaves": 2,
+  "seed_offset": 90,
+  "ceiling": 0.36,
+  "inland": false,
+  "valid_spawn": false,
+  "variant_of": "beach",
+  "variant_noise": {
+    "coast_cliff": true
+  },
+  "tree_chance": 0.0,
+  "trees": [],
+  "grass_color": "#a7cf5b"
+}
+```
+
 The matching base biome can also describe coastline shape, such as the cliffs in `beach.json`:
 
 ```json
@@ -143,12 +167,12 @@ The matching base biome can also describe coastline shape, such as the cliffs in
     "threshold": 0.42,
     "blend": 0.10,
     "power": 4.0,
-    "uplift": 7.0,
-    "surface": "stone",
-    "soil": "stone"
+    "uplift": 7.0
   }
 }
 ```
+
+Cliff headland materials are defined on the cliff biome variant (`surface` / `soil` above), while the base biome only describes the terrain profile.
 
 ---
 
@@ -181,6 +205,56 @@ Defines 3D blocks, hitboxes, models, hardness, and visual characteristics.
   - Cube: `{"top": "...", "side": "...", "bottom": "..."}` or `{"all": "..."}`.
   - Cross: `{"cross": "..."}`.
   - Orientable: `{"top": "...", "bottom": "...", "front": "...", "side": "..."}`.
+- `type` (string, optional): `"slab"` to register half-height slab variants (e.g. `sandstone_slab` generates `sandstone_slab_top` and waterlogged halves).
+- `gravity` (bool): Whether the block falls as a falling entity (default `false`).
+
+### Example (`sandstone.json`)
+```json
+{
+  "id": "sandstone",
+  "lang": "block.sandstone",
+  "tab": "natural",
+  "model": "cube",
+  "hardness": 0.5,
+  "tool": "shovel",
+  "mining_level": 0,
+  "loot_table": "blocks/sandstone",
+  "gravity": false,
+  "textures": {"top": "sandstone", "side": "sandstone", "bottom": "sandstone"}
+}
+```
+
+### Example Slab (`sandstone_slab.json`)
+```json
+{
+  "id": "sandstone_slab",
+  "lang": "block.sandstone_slab",
+  "type": "slab",
+  "tab": ["building"],
+  "model": "slab",
+  "hardness": 1.0,
+  "tool": "axe",
+  "mining_level": 0,
+  "loot_table": "blocks/sandstone_slab",
+  "textures": {"top": "sandstone", "side": "sandstone", "bottom": "sandstone"}
+}
+```
+
+### Example (`smooth_sandstone.json`)
+```json
+{
+  "id": "smooth_sandstone",
+  "lang": "block.smooth_sandstone",
+  "tab": "building",
+  "model": "cube",
+  "hardness": 0.6,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/smooth_sandstone",
+  "gravity": false,
+  "textures": {"top": "smooth_sandstone", "side": "smooth_sandstone", "bottom": "smooth_sandstone"}
+}
+```
 
 ### Example (`muddy_grass.json`)
 ```json

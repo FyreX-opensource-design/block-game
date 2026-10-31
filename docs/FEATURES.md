@@ -25,6 +25,12 @@ The world is procedurally generated using deterministic seed-based noise algorit
   - Sandy beaches transition into gravel shores on some stretches of coast.
   - Other coastal stretches rise into steep stone cliffs that overlook the ocean.
   - The variation is applied only to dry sand-beach columns; seabeds and inland terrain are unaffected.
+- **Sandstone Strata**:
+  - Sandy beaches keep a few layers of sand (`soil`) followed by a few layers of `sandstone` (`subsoil`) below the surface, before stone.
+  - Gravel beaches keep gravel sub-layers via the `gravel_beach` variant.
+  - Stone cliffs keep stone sub-layers via the `cliff_beach` variant.
+- **New Blocks**:
+  - `sandstone`, `smooth_sandstone`, `sandstone_slab`, and `smooth_sandstone_slab` (the slab variants support top/half/waterlogged halves and doubles).
 - **Underground Cave Systems**:
   - **Tunnels**: 3D dual-frequency worm/spaghetti noise carving continuous subterranean pathways (`assets/caves/tunnels.json`).
   - **Caverns**: Wide open underground chambers defined in Lua (`assets/caves/caverns.lua`).
@@ -162,7 +168,25 @@ Multiple crafting tiers and interaction methods:
 
 ---
 
-## 9. Survival Mechanics, Entities & AI
+## 9. Game Modes
+
+Creative and survival gameplay modes, switchable per player:
+
+- **Creative Mode**:
+  - Infinite block breaking and placing, creative inventory grid with tabs.
+  - Creative players can hold any item indefinitely.
+- **Survival Mode**:
+  - Blocks must be harvested (with appropriate tools) before being placed.
+  - Standard inventory with limited storage and crafting.
+- **Switching Modes**:
+  - `/gamemode <creative | survival>` sets your own mode.
+  - `/gamemode <creative | survival> <player>` sets another player's mode.
+  - The mode applies to block breaking/placing, inventory UI, and held item behavior.
+  - Defaults come from the server (`--gamemode`, default `survival`).
+
+---
+
+## 10. Survival Mechanics, Entities & AI
 
 Full survival game loop with living creatures:
 
@@ -180,7 +204,7 @@ Full survival game loop with living creatures:
 
 ---
 
-## 10. HUD Readouts & In-Game Commands
+## 11. HUD Readouts & In-Game Commands
 
 - **On-Screen HUD**:
   - Current coordinates: `X`, `Y`, `Z`.
@@ -189,5 +213,5 @@ Full survival game loop with living creatures:
   - Hotbar and container UI.
 - **Chat & In-Game Commands**:
   - Press `T` for chat, `/` for command entry.
-  - Commands include: `/help`, `/pos`, `/biome`, `/tp`, `/say`, `/seed`, `/light`, `/vision`, `/time`, `/spawn`.
+  - Commands include: `/help`, `/pos`, `/biome`, `/tp`, `/say`, `/seed`, `/light`, `/vision`, `/time`, `/spawn`, `/gamemode`.
 

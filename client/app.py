@@ -358,6 +358,9 @@ class Game(pyglet.window.Window):
                         self.world.entities.append(e)
                 if not self._smoke:
                     self.set_exclusive_mouse(True)
+            elif p_type == "gamemode":
+                self.gamemode = str(pkt.get("gamemode") or "survival").lower()
+                self._reset_breaking()
             elif p_type == "player_join":
                 self._add_remote_player(pkt)
             elif p_type == "player_move":

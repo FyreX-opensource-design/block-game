@@ -56,6 +56,41 @@ class AssetTests(unittest.TestCase):
         self.assertEqual(len(elements), 1)
         self.assertEqual(_load_model("cube")[0]["to"], [16, 16, 16])
 
+    def test_sandstone_blocks_register_with_items_and_loot(self):
+        from server.items import ITEMS
+        from server.loot import load_loot_table
+
+        for block_id in ("sandstone", "smooth_sandstone", "sandstone_slab", "smooth_sandstone_slab"):
+            self.assertIn(block_id, BLOCKS, f"{block_id} should be registered")
+            self.assertIn(block_id, ITEMS, f"{block_id} should have an item")
+            self.assertTrue((ASSETS / "blocks" / f"{block_id}.json").is_file())
+            self.assertTrue((ASSETS / "items" / f"{block_id}.json").is_file())
+            self.assertTrue((ASSETS / "loot" / f"blocks/{block_id}.json").is_file())
+            base_id = block_id[: -len("_slab")] if block_id.endswith("_slab") else block_id
+            self.assertTrue((ASSETS / "textures" / f"{base_id}.png").is_file(), f"{block_id} should use {base_id} textures")
+
+        sandstone = BY_NAME["sandstone"]
+        smooth = BY_NAME["smooth_sandstone"]
+        self.assertTrue(sandstone.full_cube)
+        self.assertTrue(smooth.full_cube)
+        self.assertNotEqual(sandstone.id, smooth.id)
+        from server.blocks import is_slab
+
+        self.assertFalse(is_slab(sandstone.id))
+        self.assertFalse(is_slab(smooth.id))
+
+        for table_id in (
+            "blocks/sandstone",
+            "blocks/smooth_sandstone",
+            "blocks/sandstone_slab",
+            "blocks/smooth_sandstone_slab",
+        ):
+            self.assertIsNotNone(load_loot_table(table_id))
+
+        for texture in ("sandstone", "smooth_sandstone"):
+            self.assertTrue((ASSETS / "textures" / f"{texture}.png").is_file())
+            self.assertEqual(tuple(read_png(ASSETS / "textures" / f"{texture}.png").shape), (16, 16, 4))
+
     def test_side_texture_keeps_grass_above_dirt(self):
         image = read_png(ASSETS / "textures" / "grass_side.png")
         self.assertGreater(int(image[0, 0, 1]), int(image[0, 0, 0]))

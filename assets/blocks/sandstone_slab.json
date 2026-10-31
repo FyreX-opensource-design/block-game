@@ -1,0 +1,12 @@
+{
+  "id": "sandstone_slab",
+  "lang": "block.sandstone_slab",
+  "type": "slab",
+  "tab": ["building"],
+  "model": "slab",
+  "hardness": 1.0,
+  "tool": "axe",
+  "mining_level": 0,
+  "loot_table": "blocks/sandstone_slab",
+  "textures": {"top": "sandstone", "side": "sandstone", "bottom": "sandstone"}
+}

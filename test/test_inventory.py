@@ -191,3 +191,34 @@ class InventoryTests(unittest.TestCase):
         self.assertEqual(stack_id(furnace.output), "")
         self.assertEqual(stack_id(hotbar[0]), "stone")
         self.assertEqual(stack_count(hotbar[0]), 2)
+
+    def test_gamemode_switch_to_creative_uses_creative_tab(self):
+        inventory = CreativeInventory()
+        storage = empty_slots(INVENTORY_SLOTS)
+        craft = empty_slots(4)
+        hotbar = empty_slots(HOTBAR_SLOTS)
+
+        frame = inventory.layout(1280, 720, hotbar, 0, (0, 0), storage, craft, gamemode="survival")
+        self.assertEqual(inventory.tab, "inventory")
+        self.assertIn("store:0", {hit.action for hit in frame.hits})
+
+        frame = inventory.layout(1280, 720, hotbar, 0, (0, 0), storage, craft, gamemode="creative")
+        self.assertEqual(inventory.tab, "building")
+        actions = {hit.action for hit in frame.hits}
+        self.assertIn("tab:building", actions)
+        self.assertIn("item:planks", actions)
+
+    def test_gamemode_switch_back_to_survival_uses_player_tab(self):
+        inventory = CreativeInventory()
+        hotbar = empty_slots(HOTBAR_SLOTS)
+        frame = inventory.layout(1280, 720, hotbar, 0, (0, 0), gamemode="survival")
+        self.assertEqual(inventory.tab, "inventory")
+
+        frame = inventory.layout(1280, 720, hotbar, 0, (0, 0), gamemode="creative")
+        self.assertEqual(inventory.tab, "building")
+
+        frame = inventory.layout(1280, 720, hotbar, 0, (0, 0), gamemode="survival")
+        self.assertEqual(inventory.tab, "inventory")
+        actions = {hit.action for hit in frame.hits}
+        self.assertIn("store:0", actions)
+        self.assertIn("craft:0", actions)

@@ -195,6 +195,56 @@ class CommandHandlerTests(unittest.TestCase):
         self.handler.execute(ctx, "/heal")
         self.assertTrue(any("Healed to full!" in r[0] for r in ctx.responses))
 
+    def test_gamemode_command_sets_creative(self):
+        ctx = CommandContext(player=self.player, world=self.world)
+        handled = self.handler.execute(ctx, "/gamemode creative")
+        self.assertTrue(handled)
+        self.assertEqual(self.player.gamemode, "creative")
+        self.assertTrue(any("Game mode set to creative" in r[0] for r in ctx.responses))
+
+    def test_gamemode_command_sets_survival(self):
+        self.player.gamemode = "creative"
+        ctx = CommandContext(player=self.player, world=self.world)
+        handled = self.handler.execute(ctx, "/gamemode survival")
+        self.assertTrue(handled)
+        self.assertEqual(self.player.gamemode, "survival")
+        self.assertTrue(any("Game mode set to survival" in r[0] for r in ctx.responses))
+
+    def test_gamemode_command_rejects_unknown_mode(self):
+        ctx = CommandContext(player=self.player, world=self.world)
+        handled = self.handler.execute(ctx, "/gamemode hardcore")
+        self.assertTrue(handled)
+        self.assertTrue(any("Game mode must be creative or survival" in r[0] for r in ctx.responses))
+        self.assertIsNone(self.player.gamemode)
+
+    def test_gamemode_command_requires_a_mode(self):
+        ctx = CommandContext(player=self.player, world=self.world)
+        handled = self.handler.execute(ctx, "/gamemode")
+        self.assertTrue(handled)
+        self.assertTrue(any("Usage: /gamemode" in r[0] for r in ctx.responses))
+
+    def test_gamemode_command_targets_other_player(self):
+        class FakeClient:
+            def __init__(self, uuid, username):
+                self.uuid = uuid
+                self.username = username
+                self.alive = True
+
+            def send(self, packet):
+                self.last_packet = packet
+
+        class FakeServer:
+            clients = {"u2": FakeClient("u2", "Bob")}
+
+        other = Player(self.world)
+        other.apply_identity("u2", None)
+        self.world.players["u2"] = other
+        ctx = CommandContext(sender="Alice", player=self.player, world=self.world, server=FakeServer())
+        handled = self.handler.execute(ctx, "/gamemode creative Bob")
+        self.assertTrue(handled)
+        self.assertEqual(other.gamemode, "creative")
+        self.assertTrue(any("Game mode set to creative for" in r[0] for r in ctx.responses))
+
 
 class NetworkChatIntegrationTests(unittest.TestCase):
     def test_multiplayer_chat_and_commands(self):

@@ -30,6 +30,25 @@ class ItemTests(unittest.TestCase):
         self.assertIn("wood_pickaxe", creative_items("tools"))
         self.assertNotIn("wood_pickaxe", creative_items("building"))
 
+    def test_sandstone_items_place_and_harvest(self):
+        sandstone = ITEMS["sandstone"]
+        self.assertEqual(sandstone.block, "sandstone")
+        self.assertEqual(sandstone.right, "place")
+        self.assertEqual(sandstone.left, "break")
+        self.assertEqual(sandstone.max_stack, 64)
+        self.assertEqual(sandstone.mining_level, 0)
+        self.assertIn("sandstone", creative_items("natural"))
+        self.assertIn("sandstone", creative_items("building"))
+
+        smooth = ITEMS["smooth_sandstone"]
+        self.assertEqual(smooth.block, "smooth_sandstone")
+        self.assertEqual(smooth.mining_level, 1)
+        self.assertIn("smooth_sandstone", creative_items("building"))
+
+        slab = ITEMS["sandstone_slab"]
+        self.assertEqual(slab.block, "sandstone_slab")
+        self.assertIn("sandstone_slab", creative_items("building"))
+
     def test_block_icons_are_isometric(self):
         top = read_png("assets/textures/grass_top.png")
         side = read_png("assets/textures/grass_side.png")

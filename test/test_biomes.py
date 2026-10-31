@@ -157,6 +157,36 @@ class BiomeTests(unittest.TestCase):
         h_beach = terrain_height(bx, bz, 1)
         self.assertEqual(world.get_block(bx, h_beach, bz), SAND)
 
+    def test_beach_generates_sandstone_under_the_sand(self):
+        world = World(seed=1, caves=[])
+        beach = next(biome for biome in BIOMES if biome.id == "beach")
+        self.assertEqual(beach.surface, SAND)
+        self.assertEqual(beach.soil, "sand")
+        self.assertEqual(beach.subsoil, "sandstone")
+        self.assertEqual(beach.soil_depth, 3)
+        self.assertEqual(beach.subsoil_depth, 3)
+
+        beach_pt = None
+        for z in range(-150, 150, 8):
+            for x in range(-150, 150, 8):
+                if biome_at(x, z, 1, BIOMES).id == "beach":
+                    beach_pt = (x, z)
+                    break
+            if beach_pt:
+                break
+        self.assertIsNotNone(beach_pt)
+
+        bx, bz = beach_pt
+        world.generate_column(bx // 16, bz // 16)
+        h_beach = terrain_height(bx, bz, 1)
+        self.assertEqual(world.get_block(bx, h_beach, bz), SAND)
+        self.assertEqual(world.get_block(bx, h_beach - 1, bz), SAND)
+        for y in range(int(h_beach) - int(beach.soil_depth) - int(beach.subsoil_depth), int(h_beach) - int(beach.soil_depth)):
+            self.assertEqual(world.get_block(bx, y, bz), "sandstone")
+        for y in range(int(h_beach) - int(beach.soil_depth), int(h_beach)):
+            self.assertEqual(world.get_block(bx, y, bz), "sand")
+        self.assertNotEqual(world.get_block(bx, int(h_beach) - int(beach.soil_depth) - int(beach.subsoil_depth) - 1, bz), "sandstone")
+
     def test_beach_boundary_stays_smooth_away_from_cliffs(self):
         # Sample across the beach boundary in steps of 1 block. Steep steps are
         # allowed only on stretches that the coastal noise marks as cliffs.

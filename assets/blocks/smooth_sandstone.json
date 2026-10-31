@@ -1,0 +1,12 @@
+{
+  "id": "smooth_sandstone",
+  "lang": "block.smooth_sandstone",
+  "tab": "building",
+  "model": "cube",
+  "hardness": 0.6,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/smooth_sandstone",
+  "gravity": false,
+  "textures": {"top": "smooth_sandstone", "side": "smooth_sandstone", "bottom": "smooth_sandstone"}
+}

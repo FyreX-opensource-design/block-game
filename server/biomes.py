@@ -51,6 +51,8 @@ class Biome:
         variant_noise=None,
         coast=None,
         variants=(),
+        subsoil=None,
+        subsoil_depth=0.0,
     ):
         self.id = biome_id
         self.name = str(name or biome_id.replace("_", " ").title())
@@ -76,6 +78,8 @@ class Biome:
         self.variant_noise = dict(variant_noise or {})
         self.coast = dict(coast or {})
         self.variants = tuple(variants)
+        self.subsoil = subsoil
+        self.subsoil_depth = float(subsoil_depth)
 
         trans_blend = self.transition.get("blend")
         actual_blend = blend if blend is not None else trans_blend
@@ -337,6 +341,13 @@ def biome_from_mapping(fields, source, trees, decorations=None):
     cliff_step = _number(fields.get("cliff_step", 0.0), "cliff_step", source)
     blend = _number(fields["blend"], "blend", source) if "blend" in fields else None
 
+    raw_subsoil = fields.get("subsoil")
+    subsoil = _block(raw_subsoil, "subsoil", source) if raw_subsoil is not None else _block(soil, "soil", source)
+    raw_subsoil_depth = fields.get("subsoil_depth")
+    subsoil_depth = _whole(raw_subsoil_depth, "subsoil_depth", source) if raw_subsoil_depth is not None else 0
+    if subsoil_depth < 0:
+        raise ValueError(f"{source}: subsoil_depth must be non-negative")
+
     trans_map = fields.get("transition")
     if trans_map is not None and not isinstance(trans_map, dict):
         raise ValueError(f"{source}: transition must be an object")
@@ -421,6 +432,8 @@ def biome_from_mapping(fields, source, trees, decorations=None):
         variant_of=variant_of,
         variant_noise=variant_noise,
         coast=coast,
+        subsoil=subsoil,
+        subsoil_depth=subsoil_depth,
     )
 
 

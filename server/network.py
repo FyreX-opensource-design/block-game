@@ -523,6 +523,7 @@ class MultiplayerServer:
             # Register player in world
             player = Player(self.world)
             player.apply_identity(uuid, client.skin_rgba)
+            player.gamemode = str(getattr(self, "gamemode", "survival") or "survival").lower()
             self.world.register_player(player)
 
             # Determine spawn position: load saved position or calculate default spawn

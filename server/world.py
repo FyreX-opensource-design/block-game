@@ -1063,8 +1063,11 @@ class World:
         biome_indices, catalog = biome_index_grid(xx, zz, self.seed, self.biomes)
         here = biome_indices[margin : margin + CHUNK_SIZE, margin : margin + CHUNK_SIZE]
         depth = np.array([biome.soil_depth for biome in catalog], dtype=np.int16)[here]
+        sub_depth = np.array([biome.subsoil_depth for biome in catalog], dtype=np.int16)[here]
         filled = levels <= tops
-        stone_mask = filled & ((levels == 0) | (levels < tops - depth.reshape(1, CHUNK_SIZE, CHUNK_SIZE)))
+        soil_top = tops - depth.reshape(1, CHUNK_SIZE, CHUNK_SIZE)
+        sub_top = soil_top - sub_depth.reshape(1, CHUNK_SIZE, CHUNK_SIZE)
+        stone_mask = filled & ((levels == 0) | (levels < sub_top))
         top_mask = filled & (levels == tops) & (levels != 0)
         cover_mask = filled & ~stone_mask & ~top_mask
         data[stone_mask] = stone
@@ -1072,7 +1075,8 @@ class World:
             columns = here == index
             if not np.any(columns):
                 continue
-            data[cover_mask & columns] = block_index(biome.soil)
+            data[cover_mask & columns & (levels >= soil_top)] = block_index(biome.soil)
+            data[cover_mask & columns & (levels < soil_top)] = block_index(biome.subsoil)
             data[top_mask & columns] = block_index(biome.surface)
 
         chunk_xx = xx[margin : margin + CHUNK_SIZE, margin : margin + CHUNK_SIZE]

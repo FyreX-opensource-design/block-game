@@ -62,6 +62,28 @@ class TestSlabs(unittest.TestCase):
         self.assertEqual(info_double["bottom"], "stone_slab")
         self.assertEqual(info_double["top"], "planks_slab")
 
+    def test_sandstone_and_smooth_sandstone_slabs_register(self):
+        self.assertTrue(is_slab("sandstone_slab"))
+        self.assertTrue(is_slab("smooth_sandstone_slab"))
+        self.assertTrue(is_slab("sandstone_slab_top"))
+        self.assertTrue(is_slab("smooth_sandstone_slab_top"))
+
+        sandstone_info = get_slab_info("sandstone_slab")
+        self.assertIsNotNone(sandstone_info)
+        self.assertTrue(sandstone_info["is_slab"])
+        self.assertFalse(sandstone_info["double"])
+        self.assertEqual(sandstone_info["half"], "bottom")
+        self.assertEqual(sandstone_info["base_id"], "sandstone_slab")
+        self.assertEqual(sandstone_info["top"], "sandstone_slab")
+
+        smooth_info = get_slab_info("smooth_sandstone_slab")
+        self.assertIsNotNone(smooth_info)
+        self.assertEqual(smooth_info["base_id"], "smooth_sandstone_slab")
+
+        top_info = get_slab_info("smooth_sandstone_slab_top")
+        self.assertIsNotNone(top_info)
+        self.assertEqual(top_info["half"], "top")
+
     def test_collision_boxes(self):
         self.world.set_block(1, 80, 1, "stone_slab")
         boxes = self.world.get_collision_boxes(1, 80, 1)

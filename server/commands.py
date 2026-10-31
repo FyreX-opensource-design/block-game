@@ -131,6 +131,12 @@ class CommandHandler:
             "Query or set the world spawn point.",
             usage="/worldspawn [query | set [x [y] z]]",
         )
+        self.register(
+            "gamemode",
+            self._cmd_gamemode,
+            "Sets your game mode to creative or survival, or another player's to the given mode.",
+            usage="/gamemode <creative | survival> [player]",
+        )
 
     def _cmd_help(self, ctx, args):
         if args:
@@ -429,4 +435,51 @@ class CommandHandler:
             return
         self._cmd_setworldspawn(ctx, args)
 
+    def _cmd_gamemode(self, ctx, args):
+        if not args:
+            ctx.error("Usage: /gamemode <creative | survival> [player]")
+            return
+        mode = str(args[0]).lower()
+        if mode not in ("creative", "survival"):
+            ctx.error("Game mode must be creative or survival.")
+            return
 
+        player = ctx.player
+        if len(args) > 1:
+            server = ctx.server
+            clients = getattr(server, "clients", None) if server is not None else None
+            target_client = None
+            if clients:
+                wanted = str(args[1]).lower()
+                for client in clients.values():
+                    if getattr(client, "alive", True) and str(getattr(client, "username", "")).lower() == wanted:
+                        target_client = client
+                        break
+            if target_client is None or not getattr(target_client, "uuid", None):
+                ctx.error(f"Player not found: {args[1]}")
+                return
+            player = ctx.world.players.get(getattr(target_client, "uuid", "")) if ctx.world is not None else None
+            if player is None:
+                ctx.error(f"Player not found: {args[1]}")
+                return
+
+        if player is None or getattr(player, "uuid", None) is None:
+            ctx.error("Player not available.")
+            return
+
+        player.gamemode = mode
+
+        client = None
+        server = ctx.server
+        if server is not None:
+            for candidate in list(getattr(server, "clients", {}).values()) + list(getattr(server, "pending_clients", [])):
+                if getattr(candidate, "uuid", None) == getattr(player, "uuid", None) and getattr(candidate, "alive", True):
+                    client = candidate
+                    break
+        if client is not None:
+            client.send({"type": "gamemode", "gamemode": mode})
+
+        if ctx.player is player:
+            ctx.reply(f"Game mode set to {mode}.")
+        else:
+            ctx.reply(f"Game mode set to {mode} for {getattr(player, 'uuid', args[1])}.")

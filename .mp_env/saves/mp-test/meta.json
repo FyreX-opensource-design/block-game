@@ -1,9 +1,14 @@
 {
   "name": "mp_test",
   "seed": 1337,
-  "created": 1793362432.6003888,
-  "last_played": 1793362432.6003888,
+  "created": 1793407952.3302703,
+  "last_played": 1793407952.3302703,
   "player": null,
   "gamemode": "survival",
-  "day_time": 1949.600000000209
+  "day_time": 4147.60000000065,
+  "spawn": [
+    23.5,
+    70.0,
+    20.5
+  ]
 }

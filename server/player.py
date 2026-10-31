@@ -40,6 +40,11 @@ class Player:
         self.actual_speed = None
         self.uuid = ""
         self.skin = None
+        self.gamemode = None
+
+    @property
+    def effective_gamemode(self):
+        return str(getattr(self, "gamemode", None) or "survival").lower()
 
     def apply_identity(self, player_id, skin_rgba):
         self.uuid = str(player_id)
