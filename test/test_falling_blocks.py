@@ -178,3 +178,38 @@ class TestFallingBlocksAndClay(unittest.TestCase):
         self.assertEqual(falling.block_id, "sand")
         self.assertGreater(falling.pickup_delay, 1000)
 
+    def _game_with_player(self, player):
+        from client.app import Game
+
+        game = Game.__new__(Game)
+        game.world = self.world
+        game.player = player
+        return game
+
+    def test_fallen_block_on_player_returns_block_id(self):
+        player = Player(self.world)
+        player.pos = [5.0, 5.0, 5.0]
+        falling = self.world.spawn_falling_block("sand", pos=[5.2, 5.2, 5.2])
+        game = self._game_with_player(player)
+        try:
+            self.assertEqual(game._fallen_block_on_player(), "sand")
+        finally:
+            self.world.remove_entity(falling.id)
+
+    def test_no_fallen_block_on_player_returns_none(self):
+        player = Player(self.world)
+        player.pos = [5.0, 5.0, 5.0]
+        game = self._game_with_player(player)
+        self.assertIsNone(game._fallen_block_on_player())
+
+    def test_fallen_block_above_player_does_not_block_view(self):
+        player = Player(self.world)
+        player.pos = [5.0, 5.0, 5.0]
+        # Block resting on top of the player (just above the head) is not "inside".
+        falling = self.world.spawn_falling_block("sand", pos=[5.2, player.pos[1] + player.height, 5.2])
+        game = self._game_with_player(player)
+        try:
+            self.assertIsNone(game._fallen_block_on_player())
+        finally:
+            self.world.remove_entity(falling.id)
+

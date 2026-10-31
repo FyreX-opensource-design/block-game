@@ -186,7 +186,18 @@ Creative and survival gameplay modes, switchable per player:
 
 ---
 
-## 10. Survival Mechanics, Entities & AI
+## 10. Falling Blocks & Player Occlusion
+
+Blocks with the `gravity` trait fall as falling block entities:
+
+- **Falling Columns**: Unsupported gravity blocks (e.g. sand, gravel) convert to falling entities and fall until they land.
+- **Landed Falls**: On landing, the block is written back into the world (or dropped if the landing spot is blocked).
+
+When a block that has fallen ends up at a player's head height (a falling entity overlapping the player, or a solid block at head height), its texture takes over the first-person view as a screen-space "inside block" overlay, so the player cannot see through the world (buried terrain is not drawn by the chunk mesher, which culls faces inside solid blocks). The overlay is drawn at the end of the world pass with depth testing disabled; the HUD and inventory GUI render after it and are unaffected.
+
+---
+
+## 11. Survival Mechanics, Entities & AI
 
 Full survival game loop with living creatures:
 
@@ -204,7 +215,7 @@ Full survival game loop with living creatures:
 
 ---
 
-## 11. HUD Readouts & In-Game Commands
+## 12. HUD Readouts & In-Game Commands
 
 - **On-Screen HUD**:
   - Current coordinates: `X`, `Y`, `Z`.

@@ -3,7 +3,7 @@ import moderngl
 import numpy as np
 from pyglet import gl
 
-from server.blocks import ASSETS, CHUNK_SIZE, HOTBAR_SLOTS
+from server.blocks import ASSETS, BLOCKS, CHUNK_SIZE, FACE_INDEX, HOTBAR_SLOTS
 from server.images import read_png
 from server.items import ITEMS
 from server.mesh import CORNERS
@@ -938,6 +938,58 @@ class Renderer:
         vertices, indices = self.player_meshes.posed_vertices(player.pos, player.yaw, poses)
         self._draw_entity(vp, camera, vertices, indices, self.skin, fog=True, day_time=day_time)
         self._draw_held(vp, camera, player, poses, item_id, first_person=False, eye=None, fog=True, day_time=day_time)
+
+    def draw_fallen_block_overlay(self, width, height, block_id, tiles=4):
+        """Fill the viewport with the texture of the block the player is inside.
+
+        When a block that has fallen ends up at the player's head height, its
+        texture takes over the first-person view so the player cannot see through
+        the world (world chunk meshes do not draw faces buried inside solid
+        blocks). Drawn screen-space at the end of the world pass with depth
+        testing disabled, so it always covers and can never lose a depth fight —
+        unlike a 3D cube at the eye, whose faces get back-face culled when the
+        camera is inside it. The HUD and GUI render after this pass and are
+        unaffected.
+        """
+        if block_id not in BLOCKS:
+            return
+        block = BLOCKS[block_id]
+        # Prefer a side face so the overlay reads like being surrounded by the block.
+        face_uvs = None
+        for face in ("north", "east", "south", "west", "up", "down"):
+            idx = FACE_INDEX[face]
+            if idx < len(block.face_uvs) and block.face_uvs[idx] is not None:
+                face_uvs = block.face_uvs[idx]
+                break
+        if face_uvs is None:
+            return
+        us = [float(face_uvs[i][0]) for i in range(len(face_uvs))]
+        vs = [float(face_uvs[i][1]) for i in range(len(face_uvs))]
+        u0, u1 = min(us), max(us)
+        v0, v1 = min(vs), max(vs)
+        floats = []
+        step_x = width / tiles
+        step_y = height / tiles
+        for ty in range(tiles):
+            for tx in range(tiles):
+                floats.extend(
+                    _quad_uv(
+                        tx * step_x,
+                        ty * step_y,
+                        (tx + 1) * step_x,
+                        (ty + 1) * step_y,
+                        u0,
+                        v0,
+                        u1,
+                        v1,
+                    )
+                )
+        self.ctx.disable(moderngl.DEPTH_TEST)
+        self.ctx.disable(moderngl.CULL_FACE)
+        self.ctx.enable(moderngl.BLEND)
+        self.ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
+        self._textured(ortho(width, height), floats, self.atlas)
+        self.ctx.enable(moderngl.DEPTH_TEST)
 
     def draw_other_players(self, vp, camera, other_players, time, day_time=1000.0):
         if not other_players:

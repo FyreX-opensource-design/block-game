@@ -805,6 +805,60 @@ class Game(pyglet.window.Window):
         self._break_required = 0.0
         self._break_progress = 0.0
 
+    def _fallen_block_on_player(self):
+        """Return the block id of a fallen block covering the local player, if any.
+
+        Falling blocks that land on (or fall into) the player occupy the space the
+        player is standing in. When that happens the block takes over the first-person
+        view so the player cannot see through the world. Returns None when no fallen
+        block is covering the player.
+        """
+        world = getattr(self, "world", None)
+        player = getattr(self, "player", None)
+        if world is None or player is None:
+            return None
+        entities = getattr(world, "entities", None) or []
+        px = float(player.pos[0])
+        py = float(player.pos[1])
+        pz = float(player.pos[2])
+        radius = float(getattr(player, "radius", 0.3) or 0.3)
+        top = py + float(getattr(player, "height", 1.8) or 1.8)
+        best_block = None
+        best_y = None
+        for entity in entities:
+            if not (getattr(entity, "is_falling_block", False) or hasattr(entity, "block_id")):
+                continue
+            if not getattr(entity, "alive", True):
+                continue
+            block_id = str(getattr(entity, "block_id", "") or "")
+            if not block_id or block_id not in BLOCKS:
+                continue
+            fx = float(entity.pos[0])
+            fy = float(entity.pos[1])
+            fz = float(entity.pos[2])
+            if fy + 1.0 <= py or fy >= top:
+                continue
+            if fx + 0.5 <= px - radius or fx - 0.5 >= px + 1.0 + radius:
+                continue
+            if fz + 0.5 <= pz - radius or fz - 0.5 >= pz + 1.0 + radius:
+                continue
+            if best_y is None or fy > best_y:
+                best_y = fy
+                best_block = block_id
+        if best_block is not None:
+            return best_block
+        # Landed fallen blocks become world blocks; treat a solid block at the
+        # player's head height as the fallen block taking over the view.
+        head_y = top - 0.2
+        head_block = ""
+        try:
+            head_block = str(world.get_block(int(math.floor(px)), int(math.floor(head_y)), int(math.floor(pz))) or "")
+        except Exception:
+            return None
+        if head_block and head_block != "" and head_block != AIR and head_block in BLOCKS and BLOCKS[head_block].solid:
+            return head_block
+        return None
+
     def _start_breaking(self, target_or_pos):
         if isinstance(target_or_pos, dict):
             target = target_or_pos
@@ -1743,6 +1797,19 @@ class Game(pyglet.window.Window):
                         day_time=day_time,
                     )
             self.renderer.draw_translucent(vp, self.camera, day_time=day_time)
+            if (
+                self.mode in ("play", "pause", "inventory", "options")
+                and self.player is not None
+                and self.ready
+                and self.view_mode == VIEW_FIRST
+            ):
+                fallen_block = self._fallen_block_on_player()
+                if fallen_block is not None:
+                    # A block that fell onto the player takes over the first-person
+                    # view (its texture fills the screen) so the player cannot see
+                    # through the world. HUD and GUI render after this and are
+                    # unaffected.
+                    self.renderer.draw_fallen_block_overlay(fw, fh, fallen_block)
             if self.mode in ("play", "pause", "inventory", "options") and self.player is not None and self.ready:
                 if self.view_mode == VIEW_FIRST:
                     self.renderer.draw_player(
