@@ -206,7 +206,6 @@ class Game(pyglet.window.Window):
         self.other_players = {}
         self._net_timer = 0.0
         self._closing = False
-        self._client_picked_entity_ids = set()
         self.chat = ChatState()
         self.command_handler = CommandHandler()
         self.vision_mode = 0
@@ -273,32 +272,7 @@ class Game(pyglet.window.Window):
                 self.world.update_transformations(min(dt, 0.05))
                 self.world.update_saplings(min(dt, 0.05))
                 self.world.update_furnaces(min(dt, 0.05))
-            if self.player is not None and self.mode == "play":
-                px = self.player.pos[0]
-                py = self.player.pos[1] + 0.8
-                pz = self.player.pos[2]
-                for entity in list(self.world.entities):
-                    if not isinstance(entity, ItemEntity):
-                        continue
-                    if entity.pickup_delay <= 0 and entity.count > 0:
-                        dx = entity.pos[0] - px
-                        dy = entity.pos[1] - py
-                        dz = entity.pos[2] - pz
-                        dist = math.sqrt(dx * dx + dy * dy + dz * dz)
-                        if dist < 2.5:
-                            pull = (2.5 - dist) * 4.0 * min(dt, 0.05)
-                            entity.vel[0] -= dx * pull
-                            entity.vel[2] -= dz * pull
-                        if dist <= 1.6:
-                            leftover = add_to_inventory([self.hotbar, self.storage], entity.item, entity.count)
-                            picked = entity.count - leftover
-                            if picked > 0:
-                                entity.count = leftover
-                                if self.network_client is not None and entity.count <= 0:
-                                    self._client_picked_entity_ids.add(entity.id)
-                                    self.network_client.send_pickup_item(entity.id)
-                                if entity.count <= 0:
-                                    self.world.remove_entity(entity.id)
+            self._update_item_pickups(min(dt, 0.05))
 
         if self.gamemode == "survival" and self.mode == "play":
             if self._mouse_held_left:
@@ -317,6 +291,42 @@ class Game(pyglet.window.Window):
                             self._reset_breaking()
             else:
                 self._reset_breaking()
+
+    def _update_item_pickups(self, dt):
+        """Pull nearby items toward the player and collect them.
+
+        In multiplayer the server owns pickups: it removes the entity and sends
+        ``give_item``. The client still animates the pull, but must not add the
+        item to its own inventory as well, or drops that land at the player's
+        feet get counted twice (both sides pick up in the same tick).
+        """
+        if self.world is None or self.player is None or self.mode != "play":
+            return
+        px = self.player.pos[0]
+        py = self.player.pos[1] + 0.8
+        pz = self.player.pos[2]
+        for entity in list(self.world.entities):
+            if not isinstance(entity, ItemEntity):
+                continue
+            if entity.pickup_delay > 0 or entity.count <= 0:
+                continue
+            dx = entity.pos[0] - px
+            dy = entity.pos[1] - py
+            dz = entity.pos[2] - pz
+            dist = math.sqrt(dx * dx + dy * dy + dz * dz)
+            if dist < 2.5:
+                pull = (2.5 - dist) * 4.0 * min(dt, 0.05)
+                entity.vel[0] -= dx * pull
+                entity.vel[2] -= dz * pull
+            if dist <= 1.6:
+                if self.network_client is not None:
+                    continue
+                leftover = add_to_inventory([self.hotbar, self.storage], entity.item, entity.count)
+                picked = entity.count - leftover
+                if picked > 0:
+                    entity.count = leftover
+                    if entity.count <= 0:
+                        self.world.remove_entity(entity.id)
 
     def _update_local_health(self, dt):
         if self.player is None or self.gamemode != "survival":
@@ -518,19 +528,22 @@ class Game(pyglet.window.Window):
                             mob.pos = list(pkt["pos"])
                             mob.target_pos = list(pkt["pos"])
             elif p_type == "give_item":
-                eid = pkt.get("id")
-                if eid is not None and eid in self._client_picked_entity_ids:
-                    self._client_picked_entity_ids.discard(eid)
-                else:
-                    item = pkt.get("item")
-                    count = int(pkt.get("count", 1))
-                    if item and count > 0:
-                        add_to_inventory([self.hotbar, self.storage], item, count)
+                item = pkt.get("item")
+                count = int(pkt.get("count", 1))
+                if item and count > 0:
+                    leftover = add_to_inventory([self.hotbar, self.storage], item, count)
+                    if leftover > 0 and self.network_client is not None and self.player is not None:
+                        # The inventory is full. Put the remainder back on the
+                        # ground instead of silently losing it, with a delay so
+                        # it is not immediately picked up again.
+                        pos = [self.player.pos[0], self.player.pos[1] + 0.5, self.player.pos[2]]
+                        self.network_client.send_drop_item(
+                            item, leftover, pos, [0.0, 1.0, 0.0], pickup_delay=2.0
+                        )
             elif p_type == "remove_entity":
                 eid = pkt.get("id")
                 if self.world is not None:
                     self.world.remove_entity(eid)
-                self._client_picked_entity_ids.discard(eid)
             elif p_type == "furnace_sync":
                 f_data = pkt.get("furnace")
                 if f_data and self.world is not None:
@@ -1076,15 +1089,24 @@ class Game(pyglet.window.Window):
         if self.world.set_block(x, y, z, next_block):
             self._upload_block_change(x, y, z)
 
-    def _spawn_break_drops(self, drops, x, drop_y, z):
-        """Spawn the items dropped by a broken block.
+    def _spawn_loose_item(self, item_id, count, pos, vel=None, pickup_delay=0.0):
+        """Put a loose item into the world.
 
-        In singleplayer the client owns the world, so it spawns the items
-        itself. In multiplayer the server is authoritative: it spawns the
-        item and broadcasts ``spawn_item`` to every client. Spawning a local
-        copy as well would leave the breaker with two entities (the local one
-        and the server's), which is the duplicate-drop bug.
+        Singleplayer spawns the entity locally. Multiplayer asks the server,
+        which spawns it and broadcasts ``spawn_item`` so every client sees the
+        same entity with the same id.
         """
+        if not item_id or count <= 0:
+            return
+        if self.network_client is not None:
+            self.network_client.send_drop_item(
+                item_id, count, pos, vel or [0.0, 0.0, 0.0], pickup_delay
+            )
+        else:
+            self.world.spawn_item(item_id, count=count, pos=pos, vel=vel, pickup_delay=pickup_delay)
+
+    def _spawn_break_drops(self, drops, x, drop_y, z):
+        """Spawn the items dropped by a broken block."""
         for drop_id, count in drops:
             if count <= 0:
                 continue
@@ -1092,11 +1114,7 @@ class Game(pyglet.window.Window):
             vy = random.uniform(2.2, 3.8)
             vz = random.uniform(-0.8, 0.8)
             pos = [x + 0.5, drop_y, z + 0.5]
-            vel = [vx, vy, vz]
-            if self.network_client is not None:
-                self.network_client.send_drop_item(drop_id, count, pos, vel, pickup_delay=0.3)
-            else:
-                self.world.spawn_item(drop_id, count=count, pos=pos, vel=vel, pickup_delay=0.3)
+            self._spawn_loose_item(drop_id, count, pos, [vx, vy, vz], pickup_delay=0.3)
 
     def _drop_held_item(self):
         if self.player is None or self.world is None:
@@ -1123,11 +1141,7 @@ class Game(pyglet.window.Window):
         vz = fz * 5.5 + self.player.vel[2] * 0.4
         pos = [px, py, pz]
         vel = [vx, vy, vz]
-        if self.network_client is not None:
-            # Server-authoritative: it spawns the entity and broadcasts it.
-            self.network_client.send_drop_item(item_id, 1, pos, vel, pickup_delay=1.0)
-        else:
-            self.world.spawn_item(item_id, count=1, pos=pos, vel=vel, pickup_delay=1.0)
+        self._spawn_loose_item(item_id, 1, pos, vel, pickup_delay=1.0)
 
     def _place_block(self):
         self._aim()
@@ -2447,7 +2461,7 @@ class Game(pyglet.window.Window):
                                 self.hotbar[self.selected] = make_stack(held_id, cnt - 1)
                                 leftover = add_to_inventory([self.hotbar, self.storage], filled_id, 1)
                                 if leftover > 0:
-                                    self.world.spawn_item(filled_id, count=leftover, pos=list(self.player.pos))
+                                    self._spawn_loose_item(filled_id, leftover, list(self.player.pos), pickup_delay=0.5)
                         return True
                 elif is_water_source(target_block):
                     filled_id = get_filled_bucket(held_id, get_fluid_type(target_block) or "water")
@@ -2467,7 +2481,7 @@ class Game(pyglet.window.Window):
                                 self.hotbar[self.selected] = make_stack(held_id, cnt - 1)
                                 leftover = add_to_inventory([self.hotbar, self.storage], filled_id, 1)
                                 if leftover > 0:
-                                    self.world.spawn_item(filled_id, count=leftover, pos=list(self.player.pos))
+                                    self._spawn_loose_item(filled_id, leftover, list(self.player.pos), pickup_delay=0.5)
                         return True
             return False
 
@@ -2507,7 +2521,7 @@ class Game(pyglet.window.Window):
                         self.hotbar[self.selected] = make_stack(held_id, cnt - 1)
                         leftover = add_to_inventory([self.hotbar, self.storage], empty_id, 1)
                         if leftover > 0:
-                            self.world.spawn_item(empty_id, count=leftover, pos=list(self.player.pos))
+                            self._spawn_loose_item(empty_id, leftover, list(self.player.pos), pickup_delay=0.5)
                 return True
             target_obj = BLOCKS.get(cur_target)
             is_plant_or_breakable = (
@@ -2544,7 +2558,7 @@ class Game(pyglet.window.Window):
                     self.hotbar[self.selected] = make_stack(held_id, cnt - 1)
                     leftover = add_to_inventory([self.hotbar, self.storage], empty_id, 1)
                     if leftover > 0:
-                        self.world.spawn_item(empty_id, count=leftover, pos=list(self.player.pos))
+                        self._spawn_loose_item(empty_id, leftover, list(self.player.pos), pickup_delay=0.5)
             return True
 
         return False

@@ -991,6 +991,78 @@ class RemoteItemDropTests(unittest.TestCase):
         client.send_drop_item.assert_called_once()
         self.assertEqual(stack_count(game.hotbar[0]), 1)
 
+    def test_multiplayer_loose_item_is_spawned_by_server(self):
+        from unittest.mock import MagicMock
+
+        client = MagicMock()
+        game, world = self._game(client)
+
+        game._spawn_loose_item("sand", 2, [1.0, 2.0, 3.0], pickup_delay=0.5)
+
+        self.assertEqual(self._item_drops(world), [])
+        client.send_drop_item.assert_called_once_with(
+            "sand", 2, [1.0, 2.0, 3.0], [0.0, 0.0, 0.0], 0.5
+        )
+
+    def test_singleplayer_loose_item_spawns_locally(self):
+        game, world = self._game(None)
+
+        game._spawn_loose_item("sand", 2, [1.0, 2.0, 3.0], pickup_delay=0.5)
+
+        drops = self._item_drops(world)
+        self.assertEqual(len(drops), 1)
+        self.assertEqual(drops[0].item, "sand")
+        self.assertEqual(drops[0].count, 2)
+        self.assertEqual(drops[0].pickup_delay, 0.5)
+
+
+class ItemPickupTests(unittest.TestCase):
+    """Only one side may grant an item when a drop is at the player's feet."""
+
+    def _game(self, network_client=None):
+        from client.app import Game
+        from server.player import Player
+
+        world = World(seed=1)
+        game = Game.__new__(Game)
+        game.world = world
+        game.player = Player(world)
+        game.player.pos = [2.5, 3.0, 2.5]
+        game.mode = "play"
+        game.network_client = network_client
+        game.hotbar = [None] * 9
+        game.storage = [None] * 27
+        return game, world
+
+    def _has_item(self, game, item_id):
+        from server.stacks import stack_id
+
+        return any(stack_id(slot) == item_id for slot in game.hotbar + game.storage)
+
+    def test_multiplayer_pickup_is_left_to_the_server(self):
+        from unittest.mock import MagicMock
+
+        client = MagicMock()
+        game, world = self._game(client)
+        entity = world.spawn_item("sand", count=1, pos=[2.5, 3.0, 2.5], pickup_delay=0.0)
+
+        game._update_item_pickups(0.02)
+
+        # The server removes the entity and sends give_item; the client must not
+        # add its own copy as well.
+        self.assertFalse(self._has_item(game, "sand"))
+        self.assertIn(entity, world.entities)
+        client.send_pickup_item.assert_not_called()
+
+    def test_singleplayer_pickup_adds_to_inventory(self):
+        game, world = self._game(None)
+        entity = world.spawn_item("sand", count=1, pos=[2.5, 3.0, 2.5], pickup_delay=0.0)
+
+        game._update_item_pickups(0.02)
+
+        self.assertTrue(self._has_item(game, "sand"))
+        self.assertNotIn(entity, world.entities)
+
 
 if __name__ == "__main__":
     unittest.main()
