@@ -1,0 +1,18 @@
+{
+  "id": "cracked_stone_bricks",
+  "lang": "block.cracked_stone_bricks",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/cracked_stone_bricks",
+  "gravity": false,
+  "textures": {
+    "top": "cracked_stone_bricks",
+    "side": "cracked_stone_bricks",
+    "bottom": "cracked_stone_bricks"
+  }
+}

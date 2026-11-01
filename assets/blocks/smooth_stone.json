@@ -1,0 +1,18 @@
+{
+  "id": "smooth_stone",
+  "lang": "block.smooth_stone",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/smooth_stone",
+  "gravity": false,
+  "textures": {
+    "top": "smooth_stone",
+    "side": "smooth_stone",
+    "bottom": "smooth_stone"
+  }
+}

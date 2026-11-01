@@ -1,0 +1,17 @@
+{
+  "id": "cracked_stone_bricks",
+  "lang": "block.cracked_stone_bricks",
+  "tab": [
+    "building"
+  ],
+  "model": "block",
+  "block": "cracked_stone_bricks",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0,
+  "mining_level": 1,
+  "mining_speed": 1,
+  "attack": 1,
+  "food": 0
+}

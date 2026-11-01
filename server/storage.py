@@ -20,7 +20,23 @@ _LEGACY_HEADER = struct.Struct("<iiiI")
 META_NAME = "meta.json"
 # Blocks introduced after the last BG02 release. BG02 chunks stored global block
 # indices from before these existed, so they are skipped when mapping legacy data.
-_LEGACY_NEW_BLOCKS = frozenset({"oak_sapling", "pine_sapling"})
+_LEGACY_NEW_BLOCKS = frozenset(
+    {
+        "oak_sapling",
+        "pine_sapling",
+        "sandstone",
+        "sandstone_slab",
+        "smooth_sandstone",
+        "smooth_sandstone_slab",
+        "smooth_stone",
+        "smooth_stone_slab",
+        "stone_bricks",
+        "stone_brick_slab",
+        "cracked_stone_bricks",
+        "mossy_stone_bricks",
+        "chiseled_stone_bricks",
+    }
+)
 # The block registry keeps this index free for compatibility with old saves.
 _LEGACY_RESERVED_INDEX = 99
 

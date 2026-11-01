@@ -1,0 +1,18 @@
+{
+  "id": "chiseled_stone_bricks",
+  "lang": "block.chiseled_stone_bricks",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/chiseled_stone_bricks",
+  "gravity": false,
+  "textures": {
+    "top": "chiseled_stone_bricks",
+    "side": "chiseled_stone_bricks",
+    "bottom": "chiseled_stone_bricks"
+  }
+}

@@ -91,6 +91,59 @@ class AssetTests(unittest.TestCase):
             self.assertTrue((ASSETS / "textures" / f"{texture}.png").is_file())
             self.assertEqual(tuple(read_png(ASSETS / "textures" / f"{texture}.png").shape), (16, 16, 4))
 
+    def test_stone_brick_family_registers_with_items_loot_and_recipes(self):
+        from server.items import ITEMS
+        from server.loot import load_loot_table
+        from server.recipes import craft_match, smelt_match
+
+        blocks = {
+            "smooth_stone": "smooth_stone",
+            "smooth_stone_slab": "smooth_stone",
+            "stone_bricks": "stone_bricks",
+            "stone_brick_slab": "stone_bricks",
+            "cracked_stone_bricks": "cracked_stone_bricks",
+            "mossy_stone_bricks": "mossy_stone_bricks",
+            "chiseled_stone_bricks": "chiseled_stone_bricks",
+        }
+        for block_id, texture in blocks.items():
+            self.assertIn(block_id, BLOCKS, f"{block_id} should be registered")
+            self.assertIn(block_id, ITEMS, f"{block_id} should have an item")
+            self.assertEqual(ITEMS[block_id].name, BLOCKS[block_id].name)
+            self.assertTrue((ASSETS / "blocks" / f"{block_id}.json").is_file())
+            self.assertTrue((ASSETS / "items" / f"{block_id}.json").is_file())
+            self.assertTrue((ASSETS / "loot" / f"blocks/{block_id}.json").is_file())
+            self.assertIsNotNone(load_loot_table(f"blocks/{block_id}"))
+            self.assertIn(block_id, TAB_ITEMS["building"])
+            path = ASSETS / "textures" / f"{texture}.png"
+            self.assertTrue(path.is_file(), f"{block_id} should use {texture} textures")
+            self.assertEqual(tuple(read_png(path).shape), (16, 16, 4))
+
+        from server.blocks import is_slab
+
+        self.assertFalse(is_slab("smooth_stone"))
+        self.assertFalse(is_slab("stone_bricks"))
+        self.assertFalse(is_slab("cracked_stone_bricks"))
+        self.assertTrue(is_slab("smooth_stone_slab"))
+        self.assertTrue(is_slab("stone_brick_slab"))
+        self.assertTrue(BLOCKS["smooth_stone"].full_cube)
+        self.assertTrue(BLOCKS["stone_bricks"].full_cube)
+
+        self.assertEqual(smelt_match("stone")[0], "smooth_stone")
+        self.assertEqual(smelt_match("stone_bricks")[0], "cracked_stone_bricks")
+
+        def grid(*rows):
+            cells = []
+            for row in range(3):
+                for column in range(3):
+                    cells.append(rows[row][column] if row < len(rows) and column < len(rows[row]) else "")
+            return cells
+
+        self.assertEqual(craft_match(grid(["stone", "stone"], ["stone", "stone"]))[0], "stone_bricks")
+        self.assertEqual(craft_match(grid(["stone_bricks"] * 3))[0], "stone_brick_slab")
+        self.assertEqual(craft_match(grid(["smooth_stone"] * 3))[0], "smooth_stone_slab")
+        self.assertEqual(craft_match(grid(["stone_brick_slab"], ["stone_brick_slab"]))[0], "chiseled_stone_bricks")
+        self.assertEqual(craft_match(grid(["stone_bricks", "green_dye"]))[0], "mossy_stone_bricks")
+
     def test_side_texture_keeps_grass_above_dirt(self):
         image = read_png(ASSETS / "textures" / "grass_side.png")
         self.assertGreater(int(image[0, 0, 1]), int(image[0, 0, 0]))

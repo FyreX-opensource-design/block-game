@@ -1,0 +1,12 @@
+{
+  "id": "mossy_stone_bricks",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "stone_bricks",
+    "green_dye"
+  ],
+  "result": {
+    "item": "mossy_stone_bricks",
+    "count": 1
+  }
+}
