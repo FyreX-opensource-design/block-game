@@ -1,0 +1,16 @@
+{
+  "id": "smooth_sandstone_vertical_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "#",
+    "#"
+  ],
+  "key": {
+    "#": "smooth_sandstone_slab"
+  },
+  "result": {
+    "item": "smooth_sandstone_vertical_slab",
+    "count": 3
+  }
+}

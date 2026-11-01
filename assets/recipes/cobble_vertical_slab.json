@@ -1,0 +1,16 @@
+{
+  "id": "cobble_vertical_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "#",
+    "#"
+  ],
+  "key": {
+    "#": "cobble_slab"
+  },
+  "result": {
+    "item": "cobble_vertical_slab",
+    "count": 3
+  }
+}

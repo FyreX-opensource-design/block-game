@@ -2581,8 +2581,71 @@ class Game(pyglet.window.Window):
 
             if py < 0 or py >= WORLD_HEIGHT:
                 return False
-            if self.world.is_solid(px, py, pz):
-                return False
+
+            # For vertical slabs, check if water can flow through based on facing direction
+            from server.blocks import is_vertical_slab, get_slab_info
+            target_block = self.world.get_block(px, py, pz)
+            vslab_info = get_slab_info(target_block)
+            if vslab_info is not None:
+                base_id = vslab_info.get("base_id", str(target_block))
+                if base_id == "vertical_slab" or base_id.startswith("cobble_vertical_slab"):
+                    # Get the player's facing direction (yaw normalized to 0-360)
+                    if self.player is not None:
+                        yaw = self.player.yaw
+                        # Convert yaw to cardinal direction
+                        # yaw=0 is looking south, yaw=90 is looking west, etc.
+                        direction = int(math.floor(yaw / 45)) % 4
+                        # Map to cardinal directions (yaw=0 = south)
+                        yaw_dir = ["south", "west", "north", "east"]
+                        facing = yaw_dir[direction] if direction < 4 else None
+                    else:
+                        facing = None
+                    
+                    # Map hit direction to cardinal
+                    nx, ny, nz = hit["nx"], hit["ny"], hit["nz"]
+                    if nx == 1:
+                        hit_face = "east"
+                    elif nx == -1:
+                        hit_face = "west"
+                    elif nz == 1:
+                        hit_face = "south"
+                    elif nz == -1:
+                        hit_face = "north"
+                    else:
+                        hit_face = None
+                    
+                    # If hitting the back face, allow water through (set facing to opposite)
+                    if hit_face and facing and hit_face != facing:
+                        # Set vertical slab facing to the direction we're hitting from
+                        opposite = {
+                            "east": "west",
+                            "west": "east",
+                            "south": "north",
+                            "north": "south",
+                        }
+                        new_facing = opposite.get(hit_face)
+                        if new_facing:
+                            # Update the slab's facing property
+                            vslab_info["facing"] = new_facing
+                            # Place water on the other side
+                            px = px + (1 if hit_face == "east" else -1 if hit_face == "west" else 0)
+                            pz = pz + (1 if hit_face == "south" else -1 if hit_face == "north" else 0)
+                            if py < 0 or py >= WORLD_HEIGHT or self.world.is_solid(px, py, pz):
+                                return False
+                        else:
+                            return False
+                    elif facing and hit_face == facing:
+                        # Hitting the back face - allow through
+                        px = px + (1 if hit_face == "east" else -1 if hit_face == "west" else 0)
+                        pz = pz + (1 if hit_face == "south" else -1 if hit_face == "north" else 0)
+                        if py < 0 or py >= WORLD_HEIGHT or self.world.is_solid(px, py, pz):
+                            return False
+                    else:
+                        # Normal case - blocked by the slab
+                        return False
+            else:
+                if self.world.is_solid(px, py, pz):
+                    return False
 
             if self.network_client is not None:
                 self.network_client.send_set_block(px, py, pz, fluid_id)

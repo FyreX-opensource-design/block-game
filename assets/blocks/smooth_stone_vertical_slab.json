@@ -1,0 +1,19 @@
+{
+  "id": "smooth_stone_vertical_slab",
+  "lang": "block.smooth_stone_vertical_slab",
+  "type": "vertical_slab",
+  "tab": [
+    "building"
+  ],
+  "model": "vertical_slab",
+  "hardness": 2.0,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/smooth_stone_vertical_slab",
+  "full_block": "smooth_stone",
+  "textures": {
+    "top": "smooth_stone",
+    "side": "smooth_stone",
+    "bottom": "smooth_stone"
+  }
+}

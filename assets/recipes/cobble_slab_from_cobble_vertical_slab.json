@@ -1,0 +1,11 @@
+{
+  "id": "cobble_slab_from_cobble_vertical_slab",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "cobble_vertical_slab"
+  ],
+  "result": {
+    "item": "cobble_slab",
+    "count": 1
+  }
+}

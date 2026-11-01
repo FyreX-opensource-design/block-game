@@ -1,0 +1,11 @@
+{
+  "id": "stone_slab_from_stone_vertical_slab",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "stone_vertical_slab"
+  ],
+  "result": {
+    "item": "stone_slab",
+    "count": 1
+  }
+}

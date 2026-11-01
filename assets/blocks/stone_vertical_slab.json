@@ -1,0 +1,19 @@
+{
+  "id": "stone_vertical_slab",
+  "lang": "block.stone_vertical_slab",
+  "type": "vertical_slab",
+  "tab": [
+    "building"
+  ],
+  "model": "vertical_slab",
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/stone_vertical_slab",
+  "full_block": "stone",
+  "textures": {
+    "top": "stone",
+    "side": "stone",
+    "bottom": "stone"
+  }
+}

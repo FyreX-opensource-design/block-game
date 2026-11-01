@@ -688,6 +688,55 @@ class World:
         block = BLOCKS.get(self.get_block(x, y, z))
         return block is not None and block.solid
 
+    def is_solid_for_water_flow(self, x, y, z, flow_dir):
+        """Check if a block is solid for water flow, considering facing direction on vertical slabs.
+
+        flow_dir: tuple (nx, ny, nz) of the water's approach direction.
+        Returns True if water is blocked, False if water can flow through.
+        For vertical slabs, water hitting the "back" long face passes through.
+        """
+        block = BLOCKS.get(self.get_block(x, y, z))
+        if block is None or not block.solid:
+            return False
+
+        # Check for vertical slab waterlogged variants
+        base_id = getattr(block, "base_id", str(block.id))
+        if base_id.endswith("_waterlogged") or str(block.properties.get("fluid", "")) == "water":
+            return True
+
+        # Special handling for vertical slabs
+        if base_id == "vertical_slab" or base_id.startswith("cobble_vertical_slab"):
+            # Get the slab's facing direction from its properties
+            facing = block.properties.get("facing", None)
+            if facing in ("north", "south", "east", "west"):
+                # Map water approach direction to cardinal directions
+                # flow_dir is (nx, ny, nz) - the direction water is moving
+                # We want to know which face of the block the water is hitting
+                nx, ny, nz = flow_dir
+                if nx == 1:
+                    hit_face = "east"
+                elif nx == -1:
+                    hit_face = "west"
+                elif nz == 1:
+                    hit_face = "south"
+                elif nz == -1:
+                    hit_face = "north"
+                elif ny == 1:
+                    hit_face = "up"
+                elif ny == -1:
+                    hit_face = "down"
+                else:
+                    hit_face = None
+
+                # If hitting the back face (opposite to facing), water passes through
+                if hit_face and hit_face != facing:
+                    return False
+
+                # Otherwise, water is blocked by the slab
+                return True
+
+        return True
+
     def blocks_movement(self, x, y, z):
         if y < 0:
             return True

@@ -1,0 +1,15 @@
+{
+  "id": "vertical_slab",
+  "type": "wall",
+  "name": "Vertical Slab",
+  "block": "vertical_slab",
+  "model": "vertical_slab",
+  "creative": true,
+  "tab": ["materials"],
+  "base_id": "vertical_slab",
+  "textures": {
+    "side": "vertical_slab",
+    "top": "vertical_slab_top",
+    "bottom": "vertical_slab_bottom"
+  }
+}

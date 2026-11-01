@@ -273,6 +273,15 @@ def get_slab_info(block_or_id):
     }
 
 
+def is_vertical_slab(block_or_id):
+    """Return True if block_or_id is a vertical slab."""
+    block = BLOCKS.get(block_or_id) if isinstance(block_or_id, str) else block_or_id
+    if block is None:
+        return False
+    base_id = getattr(block, "base_id", str(block.id))
+    return base_id == "vertical_slab" or base_id.startswith("cobble_vertical_slab")
+
+
 def get_waterlogged_slab(base_id, half="bottom", level=8):
     s_info = get_slab_info(base_id)
     b_id = s_info["base_id"] if s_info else base_id
