@@ -1051,6 +1051,37 @@ class FallingBlockSyncTests(unittest.TestCase):
             self.assertEqual(len(spawns), 1)
             self.assertEqual(spawns[0]["block"], "sand")
 
+    def test_falling_block_triggered_by_player_stepping_is_broadcast(self):
+        from unittest.mock import MagicMock
+
+        from server.network import MultiplayerServer, RemoteClient
+
+        with tempfile.TemporaryDirectory() as tmp:
+            world = World(seed=12)
+            server = MultiplayerServer(host="127.0.0.1", port=0, saves_dir=tmp, world=world)
+            world.chunks[(0, 0, 0)] = Chunk(0, 0, 0)
+            # Generated terrain can leave sand sitting on air. It only starts
+            # falling once a player stands on it and triggers the support scan.
+            world.set_block(2, 5, 2, "sand", simulate=False)
+
+            client = MagicMock(spec=RemoteClient)
+            client.alive = True
+            client.uuid = "p1"
+            client.pos = [2.5, 6.0, 2.5]
+            client.vel = [0.0, 0.0, 0.0]
+            client.sent_chunks = set()
+            client.out_queue = []
+            pkts = []
+            client.send = lambda pkt: pkts.append(pkt)
+            server.clients["p1"] = client
+
+            server.tick()
+
+            self.assertEqual(world.get_block(2, 5, 2), AIR)
+            spawns = [p for p in pkts if p.get("type") == "spawn_falling_block"]
+            self.assertEqual(len(spawns), 1)
+            self.assertEqual(spawns[0]["block"], "sand")
+
 
 class ItemPickupTests(unittest.TestCase):
     """Only one side may grant an item when a drop is at the player's feet."""

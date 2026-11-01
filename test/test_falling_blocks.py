@@ -250,6 +250,23 @@ class TestFallingBlocksAndClay(unittest.TestCase):
         self.assertEqual(world.get_block(2, 5, 2), "sand")
         self.assertEqual(world.entities, [])
 
+    def test_non_simulating_world_ignores_player_step_falling(self):
+        # Multiplayer clients run Player.update locally, which asks the world
+        # to re-check falling blocks under the player's feet. That must be a
+        # no-op on a non-simulating world, otherwise the stepping client starts
+        # falls the server (and every other client) never sees.
+        world = World(seed=1)
+        world.simulate_blocks = False
+        chunk = Chunk(0, 0, 0)
+        chunk.data.fill(0)
+        world.chunks[(0, 0, 0)] = chunk
+        world.set_block(2, 5, 2, "sand")
+
+        world.notify_neighbors_falling(2, 4, 2)
+
+        self.assertEqual(world.get_block(2, 5, 2), "sand")
+        self.assertEqual(world.entities, [])
+
     def test_non_simulating_falling_block_does_not_place_block(self):
         world = World(seed=1)
         world.simulate_blocks = False

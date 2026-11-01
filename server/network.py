@@ -404,6 +404,11 @@ class MultiplayerServer:
 
         # Update world entities, furnaces, fluids, and time
         if self.world:
+            # Player physics runs on the clients, so the server never calls
+            # Player.update. Run the support scan under each player itself,
+            # otherwise generated sand/gravel only falls on the stepping
+            # client and the other players never see it.
+            self._update_player_falling()
             prev_entities = {e.id: e for e in self.world.entities}
             self.world.advance_time(0.02)
             self._time_sync_timer += 0.02
@@ -570,6 +575,35 @@ class MultiplayerServer:
         text = "You died" + (f": {cause}" if cause else "") + f". You respawned at {where}."
         client.send({"type": "chat", "sender": "", "text": text, "color": [255, 100, 100, 255]})
         self._save_player_data(client)
+
+    def _update_player_falling(self):
+        """Re-check block support under every connected player.
+
+        Player movement is simulated on the clients, so ``Player.update`` (and
+        its falling-block scan) never runs on the server. Generated sand or
+        gravel can therefore sit on air until a player walks over it. Do the
+        scan server-side so the resulting fall is authoritative and broadcast
+        to every client, instead of only happening in the stepping player's
+        local world.
+        """
+        if self.world is None:
+            return
+        for uuid, client in list(self.clients.items()):
+            if not getattr(client, "alive", True) or not client.uuid:
+                continue
+            player = self.world.players.get(uuid)
+            radius = getattr(player, "radius", 0.3)
+            pos = getattr(client, "pos", None)
+            if not pos:
+                continue
+            by = math.floor(pos[1] - 0.05)
+            min_x = math.floor(pos[0] - radius)
+            max_x = math.floor(pos[0] + radius - 1e-6)
+            min_z = math.floor(pos[2] - radius)
+            max_z = math.floor(pos[2] + radius - 1e-6)
+            for x in range(min_x, max_x + 1):
+                for z in range(min_z, max_z + 1):
+                    self.world.notify_neighbors_falling(x, by, z)
 
     def _update_player_health(self, dt):
         if self.world is None:

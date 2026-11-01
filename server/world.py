@@ -553,6 +553,8 @@ class World:
         return False, [], False
 
     def check_falling(self, x, y, z):
+        if not getattr(self, "simulate_blocks", True):
+            return None
         if y <= 0 or y >= WORLD_HEIGHT:
             return None
         block_id = self.get_block(x, y, z)
@@ -604,6 +606,8 @@ class World:
         return None
 
     def notify_neighbors_falling(self, x, y, z):
+        if not getattr(self, "simulate_blocks", True):
+            return
         if getattr(self, "_in_falling_update", False):
             return
         self._in_falling_update = True
