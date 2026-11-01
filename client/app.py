@@ -2321,6 +2321,9 @@ class Game(pyglet.window.Window):
         if self._handle_block_hit_interaction(hit):
             return
 
+        if self._handle_food_interaction():
+            return
+
         self._place_block()
 
     def _handle_mob_interaction(self):
@@ -2410,6 +2413,42 @@ class Game(pyglet.window.Window):
                         self.hotbar[self.selected] = empty_stack()
                     else:
                         self.hotbar[self.selected] = make_stack(held_id, cnt - 1)
+        return True
+
+    def _handle_food_interaction(self):
+        """Eat the held food item, restoring health.
+
+        Survival food restores health through the ``food`` value. In multiplayer
+        the server is authoritative for health, so the client asks the server to
+        feed via an ``eat_item`` packet and applies the resulting health update
+        that arrives through the ``health`` packet. Item consumption is local,
+        mirroring how block break/place consumption is handled.
+        """
+        if self.player is None or self.world is None:
+            return False
+        if self.gamemode != "survival":
+            return False
+        if self.selected >= len(self.hotbar):
+            return False
+        held_slot = self.hotbar[self.selected]
+        held_id = stack_id(held_slot)
+        held = ITEMS.get(held_id) if held_id else None
+        if held is None or str(held.right) != "eat" or not held.food:
+            return False
+        if self.player.dead or self.player.health >= self.player.max_health:
+            return False
+
+        if self.network_client is not None:
+            self.network_client.send_eat_item(held_id)
+        else:
+            self.player.eat(held.food)
+
+        # Consume one unit of food.
+        count = stack_count(held_slot)
+        if count <= 1:
+            self.hotbar[self.selected] = empty_stack()
+        else:
+            self.hotbar[self.selected] = make_stack(held_id, count - 1)
         return True
 
     def _handle_bucket_interaction(self):

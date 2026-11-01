@@ -1,0 +1,11 @@
+{
+  "id": "cooked_mutton",
+  "type": "smelting",
+  "ingredient": "raw_mutton",
+  "result": {
+    "item": "cooked_mutton",
+    "count": 1
+  },
+  "cookingtime": 10.0,
+  "experience": 0.1
+}

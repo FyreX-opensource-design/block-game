@@ -1,0 +1,11 @@
+{
+  "id": "cooked_porkchop",
+  "type": "smelting",
+  "ingredient": "raw_porkchop",
+  "result": {
+    "item": "cooked_porkchop",
+    "count": 1
+  },
+  "cookingtime": 10.0,
+  "experience": 0.1
+}

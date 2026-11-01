@@ -146,6 +146,24 @@ class Player:
         self.dead = self.health <= 0.0
         return self.health
 
+    def eat(self, nutrition=0.0):
+        """Absorb food and restore health.
+
+        Food items carry a ``food`` value (health points restored per item).
+        Returns the amount of health restored this call.
+        """
+        if not self.survival or self.dead:
+            return 0.0
+        try:
+            nutrition = float(nutrition)
+        except (TypeError, ValueError):
+            return 0.0
+        if nutrition <= 0:
+            return 0.0
+        before = self.health
+        restored = float(self.set_health(self.health + nutrition) - before)
+        return max(0.0, restored)
+
     def reset_damage_state(self):
         self._fall_peak = None
         self._suffocation_timer = 0.0

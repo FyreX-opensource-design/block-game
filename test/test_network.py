@@ -1083,6 +1083,55 @@ class FallingBlockSyncTests(unittest.TestCase):
             self.assertEqual(spawns[0]["block"], "sand")
 
 
+class PlayerFoodTests(unittest.TestCase):
+    """Food eating is handled by the server so health stays multiplayer-authoritative."""
+
+    def _server_with_player(self, tmp, world):
+        from unittest.mock import MagicMock
+
+        from server.network import MultiplayerServer, RemoteClient
+        from server.player import Player
+
+        server = MultiplayerServer(host="127.0.0.1", port=0, saves_dir=tmp, world=world)
+        player = Player(world)
+        player.apply_identity("p1", None)
+        world.register_player(player)
+        client = MagicMock(spec=RemoteClient)
+        client.alive = True
+        client.uuid = "p1"
+        client.pos = [2.5, 10.0, 2.5]
+        client.out_queue = []
+        pkts = []
+        client.send = lambda pkt: pkts.append(pkt)
+        server.clients["p1"] = client
+        return server, client, pkts, player
+
+    def test_eat_item_heals_the_server_player(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            world = World(seed=12)
+            world.chunks[(0, 0, 0)] = Chunk(0, 0, 0)
+            server, client, pkts, player = self._server_with_player(tmp, world)
+            player.health = 5.0
+
+            server._handle_packet(client, {"type": "eat_item", "item": "cooked_porkchop"})
+
+            health_pkts = [p for p in pkts if p.get("type") == "health"]
+            self.assertEqual(len(health_pkts), 1)
+            self.assertEqual(float(health_pkts[0]["health"]), 13.0)
+            self.assertEqual(float(health_pkts[0]["max_health"]), 20.0)
+
+    def test_eat_item_with_unknown_food_does_not_change_health(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            world = World(seed=12)
+            world.chunks[(0, 0, 0)] = Chunk(0, 0, 0)
+            server, client, pkts, player = self._server_with_player(tmp, world)
+            player.health = 5.0
+
+            server._handle_packet(client, {"type": "eat_item", "item": "does_not_exist"})
+
+            self.assertEqual([p for p in pkts if p.get("type") == "health"], [])
+
+
 class ItemPickupTests(unittest.TestCase):
     """Only one side may grant an item when a drop is at the player's feet."""
 

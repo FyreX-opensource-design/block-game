@@ -144,6 +144,42 @@ class AssetTests(unittest.TestCase):
         self.assertEqual(craft_match(grid(["stone_brick_slab"], ["stone_brick_slab"]))[0], "chiseled_stone_bricks")
         self.assertEqual(craft_match(grid(["stone_bricks", "green_dye"]))[0], "mossy_stone_bricks")
 
+    def test_food_items_are_registered_and_edible(self):
+        from server.items import ITEMS
+        from server.loot import load_loot_table
+        from server.recipes import smelt_match
+
+        food_items = (
+            ("apple", 4, "apple", "item.apple"),
+            ("cooked_porkchop", 8, "cooked_porkchop", "item.cooked_porkchop"),
+            ("raw_mutton", 2, "raw_mutton", "item.raw_mutton"),
+            ("cooked_mutton", 6, "cooked_mutton", "item.cooked_mutton"),
+        )
+        for item_id, nutrition, texture, lang_key in food_items:
+            item = ITEMS[item_id]
+            self.assertEqual(item.food, nutrition)
+            self.assertEqual(item.right, "eat")
+            self.assertEqual(item.texture, texture)
+            self.assertEqual(item.model, "flat")
+            self.assertEqual(str(item.max_stack), "64")
+            self.assertTrue((ASSETS / "textures" / f"{texture}.png").is_file())
+            self.assertEqual(tuple(read_png(ASSETS / "textures" / f"{texture}.png").shape), (16, 16, 4))
+            self.assertEqual(str(ITEMS["raw_porkchop"].food), "3")
+            self.assertEqual(ITEMS["raw_porkchop"].right, "eat")
+
+        self.assertEqual(smelt_match("raw_porkchop")[0], "cooked_porkchop")
+        self.assertEqual(smelt_match("raw_mutton")[0], "cooked_mutton")
+
+        leaves = load_loot_table("blocks/leaves")
+        apple_entries = [e for e in leaves["pools"][0]["entries"] if e.get("name") == "apple"]
+        self.assertEqual(len(apple_entries), 1)
+        self.assertEqual(apple_entries[0]["chance"], 0.05)
+
+        sheep = load_loot_table("entities/sheep")
+        mutton_entries = [e for e in sheep["pools"][0]["entries"] if e.get("name") == "raw_mutton"]
+        self.assertEqual(len(mutton_entries), 1)
+        self.assertEqual(mutton_entries[0]["count"], [1, 2])
+
     def test_side_texture_keeps_grass_above_dirt(self):
         image = read_png(ASSETS / "textures" / "grass_side.png")
         self.assertGreater(int(image[0, 0, 1]), int(image[0, 0, 0]))

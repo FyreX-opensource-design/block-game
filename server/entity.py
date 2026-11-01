@@ -1015,6 +1015,7 @@ class Sheep(Mob):
 
     def on_death(self, world=None, killer=None):
         if world is not None:
+            super().on_death(world=world, killer=killer)
             if not self.sheared:
                 world.spawn_item(
                     self.wool_block,

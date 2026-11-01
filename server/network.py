@@ -864,6 +864,18 @@ class MultiplayerServer:
                     self.world.remove_entity(entity_id)
                     self.broadcast({"type": "remove_entity", "id": entity_id})
 
+        elif p_type == "eat_item":
+            item_id = str(packet.get("item", ""))
+            if self.world is not None and item_id and client.uuid:
+                from server.items import ITEMS
+
+                player = self.world.players.get(client.uuid)
+                item = ITEMS.get(item_id)
+                nutrition = float(getattr(item, "food", 0) or 0) if item is not None else 0.0
+                if player is not None and player.survival and not player.dead and nutrition > 0.0:
+                    player.eat(nutrition)
+                    self._send_player_health(client, player)
+
         elif p_type == "furnace_open":
             fx = int(packet.get("x", 0))
             fy = int(packet.get("y", 0))

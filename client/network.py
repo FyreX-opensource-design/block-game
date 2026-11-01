@@ -121,6 +121,16 @@ class NetworkClient:
         }
         self._enqueue(packet)
 
+    def send_eat_item(self, item_id):
+        """Ask the server to feed the local player (authoritative health update)."""
+        if not self.connected:
+            return
+        packet = {
+            "type": "eat_item",
+            "item": str(item_id or ""),
+        }
+        self._enqueue(packet)
+
     def send_attack_mob(self, entity_id):
         """Send attack mob packet to the server."""
         if not self.connected:

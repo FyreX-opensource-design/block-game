@@ -145,6 +145,25 @@ class TestMobEntity(unittest.TestCase):
         self.assertGreater(len(new_items), 0)
         self.assertGreaterEqual(new_items[0].count, 1)
 
+    def test_sheep_death_drops_raw_mutton(self):
+        player = MagicMock()
+        player.pos = [0.0, 1.0, 0.0]
+
+        sheep = Sheep(pos=[5.0, 1.0, 5.0], health=2.0)
+        self.world.spawn_mob(sheep)
+
+        initial_entities = len(self.world.entities)
+
+        sheep.take_damage(2.0, attacker=player, world=self.world)
+        self.assertFalse(sheep.alive)
+        self.assertEqual(sheep.health, 0.0)
+
+        new_items = [
+            e for e in self.world.entities[initial_entities:] if getattr(e, "item", "") == "raw_mutton"
+        ]
+        self.assertGreater(len(new_items), 0)
+        self.assertGreaterEqual(new_items[0].count, 1)
+
     def test_pig_gravity_and_ground_collision(self):
         # Set solid stone ground at y=5
         for x in range(3):

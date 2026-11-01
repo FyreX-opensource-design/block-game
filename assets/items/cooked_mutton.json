@@ -1,0 +1,17 @@
+{
+  "id": "cooked_mutton",
+  "lang": "item.cooked_mutton",
+  "tab": [
+    "materials"
+  ],
+  "model": "flat",
+  "texture": "cooked_mutton",
+  "max_stack": 64,
+  "left": "none",
+  "right": "eat",
+  "durability": 0,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 1,
+  "food": 6
+}
