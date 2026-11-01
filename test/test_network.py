@@ -383,6 +383,68 @@ class NetworkIntegrationTests(unittest.TestCase):
             c2.disconnect()
             s2.stop()
 
+    def test_personal_spawnpoint_persists_and_home_teleports(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            uuid = "spawn-player-uuid"
+            spawn = [12.5, 70.0, -34.5]
+
+            server = MultiplayerServer(host="127.0.0.1", port=0, world_name="SpawnTest", saves_dir=tmp)
+            server.start()
+            port = server.actual_port
+
+            def wait_for(client, wanted, timeout=2.0):
+                found = []
+                t0 = time.time()
+                while time.time() - t0 < timeout:
+                    server.tick()
+                    for pkt in client.poll_events():
+                        if pkt.get("type") == wanted:
+                            found.append(pkt)
+                    if found:
+                        return found
+                    time.sleep(0.02)
+                return found
+
+            client = NetworkClient("127.0.0.1", port, uuid, "Homebody")
+            self.assertTrue(client.connect(timeout=2.0))
+            self.assertTrue(wait_for(client, "login_ack"))
+
+            # Set a personal spawn point via command
+            client.send_chat(f"/spawnpoint {spawn[0]} {spawn[1]} {spawn[2]}")
+            replies = wait_for(client, "chat")
+            self.assertTrue(any("Personal spawn point set" in p.get("text", "") for p in replies))
+
+            player = server.world.players.get(uuid)
+            self.assertIsNotNone(player)
+            self.assertEqual(player.get_spawn_point(), spawn)
+            self.assertEqual(server.players_data[uuid]["spawn"], spawn)
+
+            # Walk away, disconnect, and rejoin: personal spawn wins over last position
+            client.send_move([50.5, 70.0, 50.5], [0.0, 0.0, 0.0], 0.0, 0.0, "")
+            time.sleep(0.08)
+            server.tick()
+            client.disconnect()
+            time.sleep(0.08)
+            server.tick()
+
+            client2 = NetworkClient("127.0.0.1", port, uuid, "Homebody")
+            self.assertTrue(client2.connect(timeout=2.0))
+            ack = wait_for(client2, "login_ack")
+            self.assertTrue(ack)
+            self.assertEqual([round(v, 1) for v in ack[0]["pos"]], spawn)
+
+            # /home teleports the client back to the personal spawn point
+            client2.send_move([80.5, 72.0, 80.5], [0.0, 0.0, 0.0], 0.0, 0.0, "")
+            time.sleep(0.08)
+            server.tick()
+            client2.send_chat("/home")
+            teleports = wait_for(client2, "teleport")
+            self.assertTrue(teleports)
+            self.assertEqual([round(v, 1) for v in teleports[0]["pos"]], spawn)
+
+            client2.disconnect()
+            server.stop()
+
     def test_game_returns_to_menu_on_server_shutdown_during_play(self):
         from unittest.mock import MagicMock
         from client.app import Game
@@ -826,6 +888,35 @@ class MultiplayerFurnaceAndSlabSyncTests(unittest.TestCase):
             self.assertGreater(len(c2_prog), 0)
             self.assertNotIn("furnace", c1_prog[0])
             self.assertIn("cook_time", c1_prog[0])
+
+
+class RemoteBlockChangeTests(unittest.TestCase):
+    def _game(self):
+        from client.app import Game
+
+        world = World(seed=1)
+        world.chunks[(0, 0, 0)] = Chunk(0, 0, 0)
+        game = Game.__new__(Game)
+        game.world = world
+        uploaded = []
+        game._upload = lambda key: uploaded.append(key)
+        return game, world, uploaded
+
+    def test_remote_block_change_updates_world_and_mesh(self):
+        game, world, uploaded = self._game()
+        self.assertEqual(world.get_block(1, 1, 1), AIR)
+
+        self.assertTrue(game._apply_remote_block_change(1, 1, 1, "stone"))
+
+        self.assertEqual(world.get_block(1, 1, 1), "stone")
+        # The affected chunk is rebuilt immediately, not left to the dirty queue.
+        self.assertIn((0, 0, 0), uploaded)
+
+    def test_remote_block_change_for_unloaded_chunk_is_ignored(self):
+        game, _world, uploaded = self._game()
+
+        self.assertFalse(game._apply_remote_block_change(100, 50, 100, "stone"))
+        self.assertEqual(uploaded, [])
 
 
 if __name__ == "__main__":

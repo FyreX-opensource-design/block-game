@@ -30,6 +30,7 @@ from client.player_render import (
 from client.render import SKY, Renderer, chunk_origin
 from client.texture import build_atlas, build_item_atlas
 from server.commands import CommandContext, CommandHandler
+from server.damage import DEFAULT_MAX_HEALTH
 from server.items import ITEMS
 from server.servers import load_servers, parse_address, save_servers
 from server.blocks import (
@@ -225,6 +226,8 @@ class Game(pyglet.window.Window):
     def tick(self, dt):
         if self.network_client is not None:
             self._network_tick(dt)
+            if self.player is not None and self.player.hurt_time > 0:
+                self.player.hurt_time = max(0.0, self.player.hurt_time - min(dt, 0.05))
         self._play_time += min(dt, 0.05)
         now = time.monotonic()
         for other in self.other_players.values():
@@ -245,6 +248,8 @@ class Game(pyglet.window.Window):
         if self.mode == "play":
             self._apply_input()
             self.player.update(min(dt, 0.05))
+            if self.network_client is None:
+                self._update_local_health(min(dt, 0.05))
         if self.network_client is None:
             self._stream()
             self._autosave += dt
@@ -313,6 +318,30 @@ class Game(pyglet.window.Window):
             else:
                 self._reset_breaking()
 
+    def _update_local_health(self, dt):
+        if self.player is None or self.gamemode != "survival":
+            return
+        events = self.player.update_health(dt)
+        if not events:
+            return
+        if self.player.dead:
+            self._handle_local_death(events)
+
+    def _handle_local_death(self, events):
+        cause = ""
+        for event in events:
+            if event.fatal and event.message:
+                cause = event.message
+        had_spawn = self.player.get_spawn_point() is not None
+        pos = self.player.respawn()
+        self.eye = (pos[0], pos[1] + self.player.eye, pos[2])
+        self.camera = self.eye
+        self._reset_breaking()
+        if cause:
+            self.chat.add_message(f"You died: {cause}", sender="", color=(255, 100, 100, 255))
+        where = "your spawn point" if had_spawn else "the world spawn"
+        self.chat.add_message(f"You respawned at {where}.", sender="", color=(255, 215, 0, 255))
+
     def _network_tick(self, dt):
         if self.network_client is None:
             return
@@ -329,7 +358,13 @@ class Game(pyglet.window.Window):
                 self._reset_breaking()
                 self.world = World(seed=pkt.get("seed", 0), day_time=pkt.get("day_time", 1000.0))
                 self.world.spawner = None
+                # The server is authoritative in multiplayer. Applying its
+                # block changes must not re-run world simulation locally, or
+                # clients spawn their own falling blocks/fluids/drops and
+                # drift away from the server.
+                self.world.simulate_blocks = False
                 self.player = Player(self.world)
+                self.player.gamemode = self.gamemode
                 skin = load_skin_rgba(self.profile["skin"])
                 self.player.apply_identity(self.profile["uuid"], skin)
                 self.renderer.set_skin(skin)
@@ -339,6 +374,9 @@ class Game(pyglet.window.Window):
                     self.player.yaw = float(pkt["yaw"])
                 if "pitch" in pkt:
                     self.player.pitch = float(pkt["pitch"])
+                self.player.max_health = float(pkt.get("max_health", DEFAULT_MAX_HEALTH))
+                self.player.set_health(pkt.get("health", self.player.max_health))
+                self.player.hurt_time = float(pkt.get("hurt_time", 0.0))
                 self.eye = (pos[0], pos[1] + self.player.eye, pos[2])
                 self.camera = self.eye
                 self.ready = True
@@ -358,8 +396,24 @@ class Game(pyglet.window.Window):
                         self.world.entities.append(e)
                 if not self._smoke:
                     self.set_exclusive_mouse(True)
+            elif p_type == "teleport":
+                if self.player is not None:
+                    pos = list(pkt.get("pos", self.player.pos))
+                    self.player.pos = pos
+                    self.player.vel = list(pkt.get("vel", [0.0, 0.0, 0.0]))
+                    self.eye = (pos[0], pos[1] + self.player.eye, pos[2])
+                    self.camera = self.eye
+            elif p_type == "health":
+                if self.player is not None:
+                    self.player.max_health = float(pkt.get("max_health", self.player.max_health))
+                    self.player.set_health(pkt.get("health", self.player.health))
+                    self.player.hurt_time = float(pkt.get("hurt_time", self.player.hurt_time))
+                    if pkt.get("dead"):
+                        self.player.dead = True
             elif p_type == "gamemode":
                 self.gamemode = str(pkt.get("gamemode") or "survival").lower()
+                if self.player is not None:
+                    self.player.gamemode = self.gamemode
                 self._reset_breaking()
             elif p_type == "player_join":
                 self._add_remote_player(pkt)
@@ -402,12 +456,9 @@ class Game(pyglet.window.Window):
                     self._upload((cx, cy, cz))
                     self.world.dirty.discard((cx, cy, cz))
             elif p_type == "block_change":
-                x = pkt.get("x")
-                y = pkt.get("y")
-                z = pkt.get("z")
-                block = pkt.get("block")
-                if self.world is not None:
-                    self.world.set_block(x, y, z, block)
+                self._apply_remote_block_change(
+                    pkt.get("x"), pkt.get("y"), pkt.get("z"), pkt.get("block")
+                )
             elif p_type == "spawn_item":
                 if self.world is not None:
                     if not any(e.id == pkt["id"] for e in self.world.entities):
@@ -650,6 +701,24 @@ class Game(pyglet.window.Window):
         mesh = build_chunk_mesh(self.world, key[0], key[1], key[2])
         self.renderer.set_chunk(key, mesh, chunk_origin(key))
 
+    def _apply_remote_block_change(self, x, y, z, block):
+        """Apply a block change from the server and rebuild affected meshes.
+
+        Local edits call :meth:`_upload_block_change` immediately; remote edits
+        must do the same, otherwise the change sits in the dirty-chunk queue and
+        the world can look different from other players' for a long time.
+
+        A change for a chunk the client has not received yet is ignored: the
+        server streams chunks with authoritative data, so the change is already
+        included by the time that chunk arrives. Returns True when applied.
+        """
+        if self.world is None or x is None or y is None or z is None:
+            return False
+        if not self.world.set_block(x, y, z, block):
+            return False
+        self._upload_block_change(x, y, z)
+        return True
+
     def _upload_block_change(self, x, y, z):
         cx = x // CHUNK_SIZE
         cy = y // CHUNK_SIZE
@@ -806,12 +875,12 @@ class Game(pyglet.window.Window):
         self._break_progress = 0.0
 
     def _fallen_block_on_player(self):
-        """Return the block id of a fallen block covering the local player, if any.
+        """Return the block id of a fallen block at the local player's head height.
 
-        Falling blocks that land on (or fall into) the player occupy the space the
-        player is standing in. When that happens the block takes over the first-person
-        view so the player cannot see through the world. Returns None when no fallen
-        block is covering the player.
+        A falling block that comes to rest at the player's head height takes over
+        the first-person view so the player cannot see through the world. A block
+        resting on the player's feet does not occlude the view. Returns
+        None when no fallen block is at the player's head height.
         """
         world = getattr(self, "world", None)
         player = getattr(self, "player", None)
@@ -836,7 +905,9 @@ class Game(pyglet.window.Window):
             fx = float(entity.pos[0])
             fy = float(entity.pos[1])
             fz = float(entity.pos[2])
-            if fy + 1.0 <= py or fy >= top:
+            # Only a block at the player's head height occludes the first-person
+            # view; one resting at the feet does not.
+            if fy + 1.0 <= top - 0.5 or fy >= top:
                 continue
             if fx + 0.5 <= px - radius or fx - 0.5 >= px + 1.0 + radius:
                 continue
@@ -1352,6 +1423,7 @@ class Game(pyglet.window.Window):
             spawn_point=getattr(info, "spawn", None),
         )
         self.player = Player(self.world)
+        self.player.gamemode = self.gamemode
         skin = load_skin_rgba(self.profile["skin"])
         self.player.apply_identity(self.profile["uuid"], skin)
         self.world.register_player(self.player)
@@ -1375,6 +1447,19 @@ class Game(pyglet.window.Window):
                 self.inventory.held_count = stack_count(carried)
                 self.inventory.stash_held(self.hotbar, self.storage, self.craft)
             self.selected = int(saved.get("slot", 0)) % HOTBAR_SLOTS
+            self.player.max_health = float(saved.get("max_health", DEFAULT_MAX_HEALTH))
+            self.player.set_health(saved.get("health", self.player.max_health))
+            if self.player.health <= 0:
+                self.player.health = self.player.max_health
+                self.player.dead = False
+            saved_spawn = saved.get("spawn")
+            if isinstance(saved_spawn, (list, tuple)) and len(saved_spawn) >= 3:
+                try:
+                    self.player.spawn_point = [float(saved_spawn[0]), float(saved_spawn[1]), float(saved_spawn[2])]
+                    self.player.pos[:] = self.player.spawn_point
+                    self.player.vel = [0.0, 0.0, 0.0]
+                except (TypeError, ValueError):
+                    self.player.spawn_point = None
             self._fresh_spawn = False
         else:
             self.hotbar = empty_slots(HOTBAR_SLOTS)
@@ -1416,6 +1501,9 @@ class Game(pyglet.window.Window):
             "carried": pack_stack(make_stack(self.inventory.held, self.inventory.held_count))
             if self.inventory.held and not self.inventory.held_infinite
             else "",
+            "spawn": list(self.player.spawn_point) if getattr(self.player, "spawn_point", None) else None,
+            "health": float(self.player.health),
+            "max_health": float(self.player.max_health),
         }
         self.info.last_played = time.time()
         self.catalog.write(self.info)
@@ -1835,8 +1923,19 @@ class Game(pyglet.window.Window):
             self._nametag_labels = []
 
         if self.mode == "play" and self.ready:
+            if self.gamemode == "survival" and self.player is not None and self.player.hurt_time > 0:
+                self.renderer.draw_hurt_flash(fw, fh, min(1.0, self.player.hurt_time / 0.4))
             break_prog = self._break_progress if (self.gamemode == "survival" and self._breaking_block is not None) else 0.0
-            self.renderer.draw_hud(fw, fh, self.hotbar, self.selected, crosshair=True, break_progress=break_prog)
+            self.renderer.draw_hud(
+                fw,
+                fh,
+                self.hotbar,
+                self.selected,
+                crosshair=True,
+                break_progress=break_prog,
+                health=self.player.health if (self.gamemode == "survival" and self.player is not None) else None,
+                max_health=self.player.max_health if self.player is not None else 20.0,
+            )
             chat_rects, self._chat_labels = self.chat.layout(self.width, self.height, scale)
             if chat_rects:
                 self.renderer.draw_rects(

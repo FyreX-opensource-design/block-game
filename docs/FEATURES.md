@@ -202,12 +202,13 @@ When a block that has fallen ends up at a player's head height (a falling entity
 Full survival game loop with living creatures:
 
 - **Health & Damage**:
-  - 20 HP health pool with visual heart indicators.
-  - Damage sources: Fall damage, drowning (oxygen bar), mob attacks, suffocation.
-  - Invulnerability tick frames with red flash damage visualization.
-- **Hunger & Saturation**:
-  - Hunger bar with saturation buffer.
-  - Sprinting and jumping deplete hunger; eating foods (e.g. `raw_porkchop`) restores hunger and health.
+  - Survival players have a 20 HP health pool shown as 10 hearts above the hotbar.
+  - Damage types are data-driven assets in `assets/damage/` (see `docs/ASSET_CREATION.md`).
+  - Fall damage: 1 HP per block fallen beyond 3 blocks; landing in water is safe.
+  - Suffocation: 1 HP every 0.5 seconds while the player's head is inside a solid block.
+  - Taking damage briefly tints the screen red.
+  - At 0 HP the player dies and respawns at their personal spawn point (or the world spawn if none is set), with full health.
+  - Creative-mode players are immune to environmental damage.
 - **Entities & Mob AI**:
   - Wandering animals (e.g. `pig`) with multi-bone 3D models and animated walking legs.
   - Idle wandering, obstacle avoidance, panic sprint when attacked, and sound effects.
@@ -224,5 +225,9 @@ Full survival game loop with living creatures:
   - Hotbar and container UI.
 - **Chat & In-Game Commands**:
   - Press `T` for chat, `/` for command entry.
-  - Commands include: `/help`, `/pos`, `/biome`, `/tp`, `/say`, `/seed`, `/light`, `/vision`, `/time`, `/spawn`, `/gamemode`.
+  - Commands include: `/help`, `/pos`, `/biome`, `/tp`, `/say`, `/seed`, `/light`, `/vision`, `/time`, `/spawn`, `/spawnpoint`, `/home`, `/delhome`, `/setworldspawn`, `/worldspawn`, `/gamemode`.
+- **Per-Player Spawn Points**:
+  - `/spawnpoint [x [y] z]` (alias `/sethome`) sets your personal spawn point; with no coordinates it uses your current position.
+  - `/home` teleports you back to your personal spawn point; `/delhome` (or `/spawnpoint clear`) clears it.
+  - Each player's spawn point is stored per player (per-player JSON files in multiplayer, the world's player record in singleplayer) and is used when that player joins the world.
 

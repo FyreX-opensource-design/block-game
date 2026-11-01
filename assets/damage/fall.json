@@ -1,0 +1,9 @@
+{
+  "id": "fall",
+  "name": "Fall",
+  "kind": "fall",
+  "damage": 1.0,
+  "min_distance": 3.0,
+  "per_block": true,
+  "message": "fell from a high place"
+}

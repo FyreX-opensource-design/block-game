@@ -1,3 +1,4 @@
+import math
 import shlex
 
 
@@ -137,6 +138,30 @@ class CommandHandler:
             "Sets your game mode to creative or survival, or another player's to the given mode.",
             usage="/gamemode <creative | survival> [player]",
         )
+        self.register(
+            "spawnpoint",
+            self._cmd_spawnpoint,
+            "Sets your personal spawn point, used when you join the world and by /home.",
+            usage="/spawnpoint [x [y] z] | /spawnpoint clear",
+        )
+        self.register(
+            "sethome",
+            self._cmd_spawnpoint,
+            "Alias for /spawnpoint.",
+            usage="/sethome [x [y] z] | /sethome clear",
+        )
+        self.register(
+            "home",
+            self._cmd_home,
+            "Teleports you to your personal spawn point.",
+            usage="/home",
+        )
+        self.register(
+            "delhome",
+            self._cmd_delhome,
+            "Clears your personal spawn point.",
+            usage="/delhome",
+        )
 
     def _cmd_help(self, ctx, args):
         if args:
@@ -190,11 +215,97 @@ class CommandHandler:
             return
 
         if ctx.player is not None:
-            ctx.player.pos = [x, y, z]
-            ctx.player.vel = [0.0, 0.0, 0.0]
+            self._teleport_player(ctx, ctx.player, [x, y, z])
             ctx.reply(f"Teleported to {x:.1f}, {y:.1f}, {z:.1f}")
         else:
             ctx.error("Player not available.")
+
+    def _teleport_player(self, ctx, player, pos):
+        """Move a player to pos, syncing multiplayer clients that own the player."""
+        player.pos = [float(pos[0]), float(pos[1]), float(pos[2])]
+        player.vel = [0.0, 0.0, 0.0]
+        player.on_ground = False
+        server = getattr(ctx, "server", None)
+        if server is None:
+            return
+        uuid = getattr(player, "uuid", "")
+        clients = getattr(server, "clients", None) or {}
+        client = clients.get(uuid)
+        if client is None:
+            return
+        client.pos = list(player.pos)
+        client.vel = [0.0, 0.0, 0.0]
+        client.send({"type": "teleport", "pos": list(player.pos), "vel": [0.0, 0.0, 0.0]})
+
+    def _persist_player_spawn(self, ctx, player):
+        """Write the player's personal spawn point to the appropriate store."""
+        app = getattr(ctx, "app", None)
+        if app is not None and getattr(app, "_persist_world", None) is not None:
+            app._persist_world()
+            return
+        server = getattr(ctx, "server", None)
+        if server is not None and getattr(server, "set_player_spawn", None) is not None:
+            server.set_player_spawn(getattr(player, "uuid", ""), player.get_spawn_point())
+
+    def _cmd_spawnpoint(self, ctx, args):
+        player = ctx.player
+        if player is None:
+            ctx.error("Player not available.")
+            return
+
+        if args and args[0].lower() in ("clear", "none", "remove", "delete"):
+            player.clear_spawn_point()
+            self._persist_player_spawn(ctx, player)
+            ctx.reply("Personal spawn point cleared.")
+            return
+
+        world = ctx.world or (ctx.server.world if ctx.server is not None else None)
+        if not args:
+            x, y, z = (float(v) for v in player.pos[:3])
+        elif len(args) == 2:
+            try:
+                x, z = float(args[0]), float(args[1])
+            except ValueError:
+                ctx.error("Coordinates must be numbers.")
+                return
+            if world is not None and hasattr(world, "column_top"):
+                y = float(world.column_top(int(math.floor(x)), int(math.floor(z))) + 1.0)
+            else:
+                y = float(player.pos[1])
+        elif len(args) >= 3:
+            try:
+                x, y, z = float(args[0]), float(args[1]), float(args[2])
+            except ValueError:
+                ctx.error("Coordinates must be numbers.")
+                return
+        else:
+            ctx.error("Usage: /spawnpoint [x [y] z] | /spawnpoint clear")
+            return
+
+        sp = player.set_spawn_point(x, y, z)
+        self._persist_player_spawn(ctx, player)
+        ctx.reply(f"Personal spawn point set to ({sp[0]:.1f}, {sp[1]:.1f}, {sp[2]:.1f})")
+
+    def _cmd_home(self, ctx, args):
+        player = ctx.player
+        if player is None:
+            ctx.error("Player not available.")
+            return
+        sp = player.get_spawn_point()
+        if sp is None:
+            ctx.error("No personal spawn point set. Use /spawnpoint to set one.")
+            return
+        self._teleport_player(ctx, player, sp)
+        ctx.reply(f"Teleported to your spawn point ({sp[0]:.1f}, {sp[1]:.1f}, {sp[2]:.1f})")
+
+    def _cmd_delhome(self, ctx, args):
+        player = ctx.player
+        if player is None:
+            ctx.error("Player not available.")
+            return
+        player.clear_spawn_point()
+        self._persist_player_spawn(ctx, player)
+        ctx.reply("Personal spawn point cleared.")
 
     def _cmd_say(self, ctx, args):
         if not args:

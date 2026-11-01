@@ -414,6 +414,11 @@ class FallingBlockEntity:
         self.alive = False
         if by <= 0 or by >= 16 * 16:
             return
+        # A non-simulating world (multiplayer client) must not write the landed
+        # block itself: the server owns placement and broadcasts the landing as
+        # a block_change. Writing here would create phantom blocks.
+        if not getattr(world, "simulate_blocks", True):
+            return
 
         cur_id = world.get_block(bx, by, bz)
         cur_block = BLOCKS.get(cur_id)

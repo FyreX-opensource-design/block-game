@@ -1,5 +1,7 @@
 import math
 
+from server.damage import DEFAULT_MAX_HEALTH, get_damage_type
+
 GRAVITY = 28.0
 JUMP = 8.5
 WALK = 4.6
@@ -11,6 +13,25 @@ RADIUS = 0.3
 def look_direction(yaw, pitch):
     cp = math.cos(pitch)
     return (-math.sin(yaw) * cp, math.sin(pitch), -math.cos(yaw) * cp)
+
+
+class DamageEvent:
+    """One environmental damage hit applied to a player."""
+
+    __slots__ = ("damage_type", "amount", "fatal")
+
+    def __init__(self, damage_type, amount, fatal=False):
+        self.damage_type = damage_type
+        self.amount = float(amount)
+        self.fatal = bool(fatal)
+
+    @property
+    def message(self):
+        return getattr(self.damage_type, "message", "") or ""
+
+    def __repr__(self):
+        return f"DamageEvent({getattr(self.damage_type, 'id', '?')!r}, {self.amount}, fatal={self.fatal})"
+
 
 
 class Input:
@@ -41,6 +62,15 @@ class Player:
         self.uuid = ""
         self.skin = None
         self.gamemode = None
+        # Personal spawn point set with /spawnpoint; used on join and /home.
+        self.spawn_point = None
+        # Survival health. Damage types live in assets/damage (see server.damage).
+        self.max_health = float(DEFAULT_MAX_HEALTH)
+        self.health = float(DEFAULT_MAX_HEALTH)
+        self.hurt_time = 0.0
+        self.dead = False
+        self._fall_peak = None
+        self._suffocation_timer = 0.0
 
     @property
     def effective_gamemode(self):
@@ -81,6 +111,166 @@ class Player:
         self.pos[2] = z + 0.5
         self.vel = [0.0, 0.0, 0.0]
         self.on_ground = True
+
+    def set_spawn_point(self, x, y, z):
+        self.spawn_point = [float(x), float(y), float(z)]
+        return list(self.spawn_point)
+
+    def get_spawn_point(self):
+        if not self.spawn_point:
+            return None
+        return [float(v) for v in self.spawn_point]
+
+    def clear_spawn_point(self):
+        self.spawn_point = None
+
+    # ------------------------------------------------------------------
+    # Health and environmental damage
+    # ------------------------------------------------------------------
+    @property
+    def survival(self):
+        return self.effective_gamemode == "survival"
+
+    @property
+    def health_fraction(self):
+        if self.max_health <= 0:
+            return 0.0
+        return max(0.0, min(1.0, float(self.health) / float(self.max_health)))
+
+    def set_health(self, value):
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            value = self.max_health
+        self.health = max(0.0, min(float(self.max_health), value))
+        self.dead = self.health <= 0.0
+        return self.health
+
+    def reset_damage_state(self):
+        self._fall_peak = None
+        self._suffocation_timer = 0.0
+
+    def head_in_block(self):
+        """Return True when the player's head is inside a solid block."""
+        if self.world is None:
+            return False
+        from server.blocks import AIR, BLOCKS
+
+        x = math.floor(self.pos[0])
+        y = math.floor(self.pos[1] + self.height - 0.1)
+        z = math.floor(self.pos[2])
+        try:
+            block_id = self.world.get_block(x, y, z)
+        except Exception:
+            return False
+        if not block_id or block_id == AIR:
+            return False
+        block = BLOCKS.get(block_id)
+        return block is not None and bool(getattr(block, "solid", False))
+
+    def take_damage(self, amount, damage_type=None):
+        """Apply damage to a survival player. Returns the amount dealt."""
+        if not self.survival or self.dead:
+            return 0.0
+        try:
+            amount = float(amount)
+        except (TypeError, ValueError):
+            return 0.0
+        if amount <= 0:
+            return 0.0
+        before = self.health
+        self.health = max(0.0, self.health - amount)
+        self.hurt_time = 0.4
+        if self.health <= 0.0:
+            self.dead = True
+        return before - self.health
+
+    def update_health(self, dt, grounded=None, in_water=None):
+        """Advance fall and suffocation damage.
+
+        Returns the list of :class:`DamageEvent` objects applied this step.
+        ``grounded`` and ``in_water`` may be supplied by callers that do not run
+        the client physics simulation (for example the multiplayer server).
+        """
+        events = []
+        self.hurt_time = max(0.0, self.hurt_time - max(0.0, float(dt)))
+        if not self.survival or self.dead:
+            self.reset_damage_state()
+            return events
+
+        if grounded is None:
+            grounded = bool(self.on_ground)
+        if in_water is None:
+            try:
+                in_water = self.in_water()
+            except Exception:
+                in_water = False
+
+        # Fall damage: remember the highest point while airborne and apply
+        # damage once when the player lands (not when landing in water).
+        if in_water:
+            self._fall_peak = None
+        elif not grounded:
+            y = float(self.pos[1])
+            if self._fall_peak is None or y > self._fall_peak:
+                self._fall_peak = y
+        else:
+            peak = self._fall_peak
+            self._fall_peak = None
+            if peak is not None:
+                distance = peak - float(self.pos[1])
+                fall = get_damage_type("fall")
+                if fall is not None and distance > fall.min_distance:
+                    if fall.per_block:
+                        amount = fall.damage * math.floor(distance - fall.min_distance)
+                    else:
+                        amount = fall.damage
+                    dealt = self.take_damage(amount, fall)
+                    if dealt > 0:
+                        events.append(DamageEvent(fall, dealt, self.dead))
+
+        # Suffocation: the head being inside a solid block deals damage once
+        # every `interval` seconds.
+        suffocation = get_damage_type("suffocation")
+        if suffocation is not None and self.head_in_block():
+            self._suffocation_timer += max(0.0, float(dt))
+            interval = max(0.05, suffocation.interval)
+            while self._suffocation_timer + 1e-9 >= interval and not self.dead:
+                self._suffocation_timer -= interval
+                dealt = self.take_damage(suffocation.damage, suffocation)
+                if dealt > 0:
+                    events.append(DamageEvent(suffocation, dealt, self.dead))
+        else:
+            self._suffocation_timer = 0.0
+
+        return events
+
+    def respawn_position(self):
+        """Where this player should reappear after dying."""
+        spawn = self.get_spawn_point()
+        if spawn is not None:
+            return spawn
+        world = self.world
+        if world is not None and hasattr(world, "get_spawn_point"):
+            try:
+                x, y, z = world.get_spawn_point()
+                ground = world.column_top(int(math.floor(x)), int(math.floor(z)))
+                return [float(x), float(max(float(y), float(ground) + 1.0)), float(z)]
+            except Exception:
+                pass
+        return [0.5, 30.0, 0.5]
+
+    def respawn(self):
+        """Restore health and move the player to their respawn point."""
+        pos = self.respawn_position()
+        self.pos = [float(pos[0]), float(pos[1]), float(pos[2])]
+        self.vel = [0.0, 0.0, 0.0]
+        self.health = float(self.max_health)
+        self.dead = False
+        self.hurt_time = 0.0
+        self.on_ground = False
+        self.reset_damage_state()
+        return list(self.pos)
 
     def collides_at(self, px, py, pz):
         if isinstance(getattr(self.world, "chunks", None), dict) and hasattr(self.world, "collides_box"):

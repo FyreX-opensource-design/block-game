@@ -1,5 +1,5 @@
 import unittest
-from server.blocks import ASSETS, BLOCKS, block_index
+from server.blocks import AIR, ASSETS, BLOCKS, block_index
 from server.recipes import craft_match, smelt_match
 from server.entity import FallingBlockEntity, ItemEntity
 from server.images import read_png
@@ -189,10 +189,22 @@ class TestFallingBlocksAndClay(unittest.TestCase):
     def test_fallen_block_on_player_returns_block_id(self):
         player = Player(self.world)
         player.pos = [5.0, 5.0, 5.0]
-        falling = self.world.spawn_falling_block("sand", pos=[5.2, 5.2, 5.2])
+        # Block at the player's head height occludes the view.
+        falling = self.world.spawn_falling_block("sand", pos=[5.2, player.pos[1] + player.height - 0.8, 5.2])
         game = self._game_with_player(player)
         try:
             self.assertEqual(game._fallen_block_on_player(), "sand")
+        finally:
+            self.world.remove_entity(falling.id)
+
+    def test_fallen_block_at_feet_does_not_block_view(self):
+        player = Player(self.world)
+        player.pos = [5.0, 5.0, 5.0]
+        # A block resting on the player's feet does not occlude the view.
+        falling = self.world.spawn_falling_block("sand", pos=[5.2, player.pos[1] + 0.2, 5.2])
+        game = self._game_with_player(player)
+        try:
+            self.assertIsNone(game._fallen_block_on_player())
         finally:
             self.world.remove_entity(falling.id)
 
@@ -212,4 +224,101 @@ class TestFallingBlocksAndClay(unittest.TestCase):
             self.assertIsNone(game._fallen_block_on_player())
         finally:
             self.world.remove_entity(falling.id)
+
+    def test_falling_block_origin_removal_is_broadcast(self):
+        changes = []
+        self.world.on_block_set = lambda x, y, z, b: changes.append((x, y, z, b))
+
+        self.world.set_block(2, 5, 2, "sand")
+
+        # The server clears the origin when the sand starts falling...
+        self.assertEqual(self.world.get_block(2, 5, 2), AIR)
+        # ...and clients must be told, otherwise they keep a phantom block.
+        self.assertIn((2, 5, 2, AIR), changes)
+
+    def test_non_simulating_world_does_not_spawn_falling_blocks(self):
+        # Multiplayer clients apply server block changes without running the
+        # world simulation locally.
+        world = World(seed=1)
+        world.simulate_blocks = False
+        chunk = Chunk(0, 0, 0)
+        chunk.data.fill(0)
+        world.chunks[(0, 0, 0)] = chunk
+
+        self.assertTrue(world.set_block(2, 5, 2, "sand"))
+
+        self.assertEqual(world.get_block(2, 5, 2), "sand")
+        self.assertEqual(world.entities, [])
+
+    def test_non_simulating_falling_block_does_not_place_block(self):
+        world = World(seed=1)
+        world.simulate_blocks = False
+        chunk = Chunk(0, 0, 0)
+        chunk.data.fill(0)
+        world.chunks[(0, 0, 0)] = chunk
+        world.set_block(2, 1, 2, "stone")
+
+        world.spawn_falling_block("sand", pos=[2.5, 5.0, 2.5])
+        for _ in range(200):
+            world.update_entities(0.02)
+
+        # The server broadcasts the landing; the client must not invent it.
+        self.assertEqual(world.get_block(2, 2, 2), AIR)
+        self.assertEqual(world.entities, [])
+
+    def test_falling_block_stays_in_sync_between_server_and_clients(self):
+        def make_world():
+            world = World(seed=1)
+            chunk = Chunk(0, 0, 0)
+            chunk.data.fill(0)
+            chunk.data[1, 2, 2] = block_index("stone")  # floor at y=1
+            world.chunks[(0, 0, 0)] = chunk
+            return world
+
+        server = make_world()
+        changes = []
+        server.on_block_set = lambda x, y, z, b: changes.append((x, y, z, b))
+        clients = [make_world(), make_world()]
+        for world in clients:
+            world.simulate_blocks = False
+
+        def apply_changes():
+            for x, y, z, block in changes:
+                for world in clients:
+                    world.set_block(x, y, z, block)
+            changes.clear()
+
+        server.set_block(2, 5, 2, "sand")
+        apply_changes()
+
+        known = set()
+        for _ in range(300):
+            server.update_entities(0.02)
+            current = {e.id: e for e in server.entities}
+            for eid, entity in current.items():
+                if eid not in known and getattr(entity, "is_falling_block", False):
+                    known.add(eid)
+                    data = {
+                        "id": eid,
+                        "block": entity.block_id,
+                        "pos": entity.pos,
+                        "vel": entity.vel,
+                        "time": entity.time_falling,
+                    }
+                    for world in clients:
+                        world.entities.append(FallingBlockEntity.from_dict(data))
+            for eid in list(known):
+                if eid not in current:
+                    known.discard(eid)
+                    for world in clients:
+                        world.remove_entity(eid)
+            apply_changes()
+            for world in clients:
+                world.update_entities(0.02)
+
+        self.assertEqual(server.get_block(2, 5, 2), AIR)
+        self.assertEqual(server.get_block(2, 2, 2), "sand")
+        for world in clients:
+            self.assertEqual(world.get_block(2, 5, 2), AIR)
+            self.assertEqual(world.get_block(2, 2, 2), "sand")
 

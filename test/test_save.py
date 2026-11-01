@@ -11,6 +11,7 @@ import numpy as np
 import server.storage as storage
 from client.menu import MenuState
 from server.blocks import AIR, BLOCKS, STONE, block_index
+from server.damage import DEFAULT_MAX_HEALTH
 from server.noise import terrain_height
 from server.storage import ChunkStore, WorldCatalog, default_saves_dir
 from server.world import Chunk, World
@@ -154,6 +155,42 @@ class SaveTests(unittest.TestCase):
             self.assertEqual(loaded.player["x"], 4.5)
             self.assertEqual(loaded.player["slot"], 3)
             self.assertEqual(loaded.seed, 12)
+
+    def test_local_world_persists_personal_spawn_point(self):
+        from client.app import Game
+        from server.player import Player
+
+        with tempfile.TemporaryDirectory() as folder:
+            catalog = WorldCatalog(folder)
+            info = catalog.create("Home", 3)
+            world = World(seed=info.seed)
+            player = Player(world)
+            player.pos = [7.5, 70.0, 9.5]
+            player.set_spawn_point(7.5, 70.0, 9.5)
+            player.set_health(7.5)
+
+            game = Game.__new__(Game)
+            game.world = world
+            game.info = info
+            game.player = player
+            game.catalog = catalog
+            game.selected = 0
+            game.hotbar = [None] * 9
+            game.storage = [None] * 36
+            game.craft = [None] * 4
+
+            class _Inv:
+                held = ""
+                held_count = 0
+                held_infinite = False
+
+            game.inventory = _Inv()
+            game._persist_world()
+
+            loaded = catalog.read(info.id)
+            self.assertEqual(loaded.player["spawn"], [7.5, 70.0, 9.5])
+            self.assertEqual(loaded.player["health"], 7.5)
+            self.assertEqual(loaded.player["max_health"], DEFAULT_MAX_HEALTH)
 
     def test_different_seeds_change_the_terrain(self):
         differed = False

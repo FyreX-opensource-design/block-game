@@ -25,6 +25,18 @@ SKY = (0.56, 0.78, 0.96)
 FOG_NEAR = 22.0
 FOG_FAR = 58.0
 
+# A small pixel-art heart used for the survival health bar.
+HEART_PATTERN = (
+    "0110110",
+    "1111111",
+    "1111111",
+    "0111110",
+    "0011100",
+    "0001000",
+)
+HEART_PATTERN_WIDTH = len(HEART_PATTERN[0])
+HEART_PATTERN_HEIGHT = len(HEART_PATTERN)
+
 WORLD_VERT = """
 #version 330 core
 uniform mat4 vp;
@@ -1231,17 +1243,72 @@ class Renderer:
         vbo.release()
         self.ctx.enable(moderngl.CULL_FACE)
 
-    def draw_hud(self, width, height, hotbar, selected, crosshair, break_progress=0.0):
+    def draw_hud(self, width, height, hotbar, selected, crosshair, break_progress=0.0, health=None, max_health=20.0):
         self.ctx.disable(moderngl.DEPTH_TEST)
         self.ctx.disable(moderngl.CULL_FACE)
         self.ctx.enable(moderngl.BLEND)
         self.ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
         projection = ortho(width, height)
         self._hotbar(projection, width, height, hotbar, selected)
+        if health is not None:
+            self._hearts(projection, width, height, health, max_health)
         if crosshair:
             self._crosshair(projection, width, height)
             if break_progress > 0.0:
                 self._break_progress_indicator(projection, width, height, break_progress)
+
+    def draw_hurt_flash(self, width, height, intensity):
+        """Draw the translucent red overlay shown briefly after taking damage."""
+        try:
+            intensity = max(0.0, min(1.0, float(intensity)))
+        except (TypeError, ValueError):
+            return
+        if intensity <= 0.0:
+            return
+        self.draw_rects(width, height, [(0, 0, width, height, (0.72, 0.0, 0.0, 0.42 * intensity))])
+
+    def _hearts(self, projection, width, height, health, max_health):
+        try:
+            health = float(health)
+            max_health = float(max_health)
+        except (TypeError, ValueError):
+            return
+        if max_health <= 0.0:
+            return
+        hearts = max(1, int(math.ceil(max_health / 2.0)))
+        slot = 50
+        gap = 8
+        total = HOTBAR_SLOTS * slot + (HOTBAR_SLOTS - 1) * gap
+        x0 = (width - total) / 2
+        y0 = 28 + slot + 10
+        scale = 3
+        spacing = 2
+        heart_width = HEART_PATTERN_WIDTH * scale
+        for index in range(hearts):
+            hx = x0 + index * (heart_width + spacing)
+            self._heart(projection, hx, y0, scale, (0.16, 0.04, 0.05, 0.9), 1.0)
+            value = max(0.0, min(2.0, health - index * 2.0))
+            if value <= 0.0:
+                continue
+            color = (0.88, 0.10, 0.12, 1.0) if value >= 2.0 else (0.92, 0.30, 0.18, 1.0)
+            self._heart(projection, hx, y0, scale, color, value / 2.0)
+
+    def _heart(self, projection, x, y, scale, color, fraction):
+        fraction = max(0.0, min(1.0, float(fraction)))
+        if fraction <= 0.0:
+            return
+        floats = []
+        for row, line in enumerate(HEART_PATTERN):
+            for col, pixel in enumerate(line):
+                if pixel != "1":
+                    continue
+                if (col + 0.5) / HEART_PATTERN_WIDTH > fraction:
+                    continue
+                px = x + col * scale
+                py = y + (HEART_PATTERN_HEIGHT - 1 - row) * scale
+                floats.extend(_quad(px, py, px + scale, py + scale))
+        if floats:
+            self._tris(projection, floats, color)
 
     def _break_progress_indicator(self, projection, width, height, progress):
         cx = width / 2

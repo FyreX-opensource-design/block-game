@@ -357,6 +357,12 @@ class World:
         self.chunks = {}
         self.dirty = set()
         self.modified = set()
+        # When False the world only stores voxel data for block changes; the
+        # simulation side effects (falling blocks, fluids, drops, support
+        # checks, ...) are skipped. Multiplayer clients set this to False so
+        # the server remains the single authority and clients don't create
+        # phantom blocks/entities from locally simulated changes.
+        self.simulate_blocks = True
         self.columns = set()
         self.column_max = {}
         self.players = {}
@@ -576,6 +582,12 @@ class World:
                     self.lighting.on_block_changed(x, y, z)
                 if getattr(self, "fluid", None) is not None:
                     self.fluid.schedule(x, y, z)
+                # The block is removed here directly (rather than via
+                # set_block) to avoid re-entering the falling-block scan, so
+                # broadcast the removal explicitly or clients keep a phantom
+                # block where the falling block started.
+                if getattr(self, "on_block_set", None) is not None:
+                    self.on_block_set(x, y, z, AIR)
             return self.spawn_falling_block(block_id, pos=[x + 0.5, float(y), z + 0.5])
         return None
 
@@ -757,7 +769,9 @@ class World:
             return terrain_height(x, z, self.seed, self.biomes)
         return 0
 
-    def set_block(self, x, y, z, block_id):
+    def set_block(self, x, y, z, block_id, simulate=None):
+        if simulate is None:
+            simulate = getattr(self, "simulate_blocks", True)
         if y <= 0 or y >= WORLD_HEIGHT:
             return False
         if block_id in ("", AIR, None):
@@ -777,7 +791,10 @@ class World:
             return False
         old_idx = int(chunk.data[ly, lz, lx])
         old_block = block_from_index(old_idx)
-        if (old_block and (old_block.id == "furnace" or getattr(old_block, "base_id", "") == "furnace" or getattr(old_block, "station", None) == "furnace")) or (x, y, z) in self.furnaces:
+        if simulate and (
+            (old_block and (old_block.id == "furnace" or getattr(old_block, "base_id", "") == "furnace" or getattr(old_block, "station", None) == "furnace"))
+            or (x, y, z) in self.furnaces
+        ):
             furnace = self.furnaces.pop((x, y, z), None)
             if furnace:
                 from server.stacks import stack_count, stack_id
@@ -787,7 +804,7 @@ class World:
                     scnt = stack_count(stack)
                     if sid and scnt > 0:
                         self.spawn_item(sid, count=scnt, pos=(x + 0.5, y + 0.5, z + 0.5))
-        if old_block and getattr(old_block, "fluid_breakable", False):
+        if simulate and old_block and getattr(old_block, "fluid_breakable", False):
             from server.fluid import is_fluid, is_water
 
             if is_water(block_id) or is_fluid(block_id):
@@ -798,9 +815,6 @@ class World:
                     if count > 0:
                         self.spawn_item(drop_id, count=count, pos=(x + 0.5, y + 0.2, z + 0.5))
         chunk.data[ly, lz, lx] = stored
-        is_furnace = block_id == "furnace" or (block_id in BLOCKS and (getattr(BLOCKS[block_id], "base_id", "") == "furnace" or getattr(BLOCKS[block_id], "station", None) == "furnace"))
-        if is_furnace:
-            self.get_or_create_furnace(x, y, z)
         self.modified.add((cx, cy, cz))
         self.mark_dirty(cx, cy, cz)
         if lx == 0:
@@ -815,14 +829,6 @@ class World:
             self.mark_dirty(cx, cy, cz - 1)
         if lz == CHUNK_SIZE - 1:
             self.mark_dirty(cx, cy, cz + 1)
-        if getattr(self, "fluid", None) is not None:
-            self.fluid.schedule(x, y, z)
-        if getattr(self, "leaf_decay", None) is not None and old_block:
-            from server.tags import has_block_tag
-            if has_block_tag(old_block.id, "logs") or "log" in old_block.id:
-                self.leaf_decay.schedule_neighbors(x, y, z, radius=5)
-            elif has_block_tag(old_block.id, "leaves") or "leaves" in old_block.id:
-                self.leaf_decay.schedule_neighbors(x, y, z, radius=2)
         if getattr(self, "lighting", None) is not None:
             from server.lighting import _get_luts
 
@@ -834,6 +840,19 @@ class World:
                 self.lighting.on_block_changed(x, y, z, was_emitter=was_emitter)
         if getattr(self, "on_block_set", None) is not None:
             self.on_block_set(x, y, z, block_id if block_id not in ("", None) else AIR)
+        if not simulate:
+            return True
+        is_furnace = block_id == "furnace" or (block_id in BLOCKS and (getattr(BLOCKS[block_id], "base_id", "") == "furnace" or getattr(BLOCKS[block_id], "station", None) == "furnace"))
+        if is_furnace:
+            self.get_or_create_furnace(x, y, z)
+        if getattr(self, "fluid", None) is not None:
+            self.fluid.schedule(x, y, z)
+        if getattr(self, "leaf_decay", None) is not None and old_block:
+            from server.tags import has_block_tag
+            if has_block_tag(old_block.id, "logs") or "log" in old_block.id:
+                self.leaf_decay.schedule_neighbors(x, y, z, radius=5)
+            elif has_block_tag(old_block.id, "leaves") or "leaves" in old_block.id:
+                self.leaf_decay.schedule_neighbors(x, y, z, radius=2)
         if getattr(self, "saplings", None) is not None:
             self.saplings.on_block_set(x, y, z, block_id if block_id not in ("", None) else AIR)
         self.notify_neighbors_falling(x, y, z)

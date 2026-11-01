@@ -18,6 +18,7 @@ import numpy as np
 
 from server.blocks import CHUNK_SIZE, LOAD_RADIUS, VERTICAL_RADIUS, SECTION_COUNT
 from server.commands import CommandContext, CommandHandler
+from server.damage import DEFAULT_MAX_HEALTH
 from server.player import Player
 from server.profile import SKIN_SIZE
 from server.stacks import normalize_stack, stack_count, stack_id
@@ -179,6 +180,13 @@ class MultiplayerServer:
     def _save_player_data(self, client):
         if not client or not client.uuid:
             return
+        existing = self.players_data.get(client.uuid) or {}
+        player = self.world.players.get(client.uuid) if self.world is not None else None
+        spawn = getattr(player, "spawn_point", None) or existing.get("spawn")
+        health = getattr(player, "health", None)
+        if health is None:
+            health = existing.get("health", DEFAULT_MAX_HEALTH)
+        max_health = getattr(player, "max_health", None) or existing.get("max_health", DEFAULT_MAX_HEALTH)
         data = {
             "uuid": client.uuid,
             "username": client.username,
@@ -186,6 +194,9 @@ class MultiplayerServer:
             "yaw": float(client.yaw),
             "pitch": float(client.pitch),
             "held": str(client.held_item),
+            "spawn": [float(v) for v in spawn] if spawn else None,
+            "health": float(health),
+            "max_health": float(max_health),
             "last_played": time.time(),
         }
         self.players_data[client.uuid] = data
@@ -197,6 +208,39 @@ class MultiplayerServer:
                 os.replace(tmp, path)
             except OSError:
                 pass
+
+    def set_player_spawn(self, uuid, spawn):
+        """Store a player's personal spawn point, persisting it immediately."""
+        uuid = str(uuid or "")
+        if not uuid:
+            return None
+        data = self._load_player_data(uuid) or {"uuid": uuid}
+        client = self.clients.get(uuid)
+        if client is not None:
+            player = self.world.players.get(uuid) if self.world is not None else None
+            data.update(
+                {
+                    "username": client.username,
+                    "pos": [float(v) for v in client.pos],
+                    "yaw": float(client.yaw),
+                    "pitch": float(client.pitch),
+                    "held": str(client.held_item),
+                    "health": float(getattr(player, "health", data.get("health", DEFAULT_MAX_HEALTH))),
+                    "max_health": float(getattr(player, "max_health", data.get("max_health", DEFAULT_MAX_HEALTH))),
+                    "last_played": time.time(),
+                }
+            )
+        data["spawn"] = [float(v) for v in spawn] if spawn else None
+        self.players_data[uuid] = data
+        path = self._player_file(uuid)
+        if path:
+            try:
+                tmp = path.with_suffix(".json.tmp")
+                tmp.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+                os.replace(tmp, path)
+            except OSError:
+                pass
+        return data.get("spawn")
 
     def start(self):
         """Start the server on a background daemon thread."""
@@ -492,6 +536,9 @@ class MultiplayerServer:
                         }
                     )
 
+        # Survival health (the server is authoritative in multiplayer).
+        self._update_player_health(0.02)
+
         # Autosave world and players
         now = time.monotonic()
         if now - self._last_save > 10.0:
@@ -504,6 +551,57 @@ class MultiplayerServer:
                     self.catalog.write(self.world_info)
             for client in list(self.clients.values()):
                 self._save_player_data(client)
+
+    def _send_player_health(self, client, player):
+        client.send(
+            {
+                "type": "health",
+                "health": float(player.health),
+                "max_health": float(player.max_health),
+                "hurt_time": float(player.hurt_time),
+                "dead": bool(player.dead),
+            }
+        )
+
+    def _respawn_client_player(self, client, player, cause=""):
+        had_spawn = player.get_spawn_point() is not None
+        pos = player.respawn()
+        client.pos = list(pos)
+        client.vel = [0.0, 0.0, 0.0]
+        client.send({"type": "teleport", "pos": list(pos), "vel": [0.0, 0.0, 0.0]})
+        self._send_player_health(client, player)
+        where = "your spawn point" if had_spawn else "the world spawn"
+        text = "You died" + (f": {cause}" if cause else "") + f". You respawned at {where}."
+        client.send({"type": "chat", "sender": "", "text": text, "color": [255, 100, 100, 255]})
+        self._save_player_data(client)
+
+    def _update_player_health(self, dt):
+        if self.world is None:
+            return
+        for uuid, client in list(self.clients.items()):
+            if not getattr(client, "alive", True):
+                continue
+            player = self.world.players.get(uuid)
+            if player is None:
+                continue
+            vel = getattr(client, "vel", None) or [0.0, 0.0, 0.0]
+            try:
+                grounded = abs(float(vel[1])) < 1e-3
+            except (IndexError, TypeError, ValueError):
+                grounded = True
+            try:
+                in_water = player.in_water()
+            except Exception:
+                in_water = False
+            events = player.update_health(dt, grounded=grounded, in_water=in_water)
+            if player.dead:
+                cause = ""
+                for event in events:
+                    if event.fatal and event.message:
+                        cause = event.message
+                self._respawn_client_player(client, player, cause)
+            elif events:
+                self._send_player_health(client, player)
 
     def _handle_packet(self, client, packet):
         p_type = packet.get("type")
@@ -526,9 +624,27 @@ class MultiplayerServer:
             player.gamemode = str(getattr(self, "gamemode", "survival") or "survival").lower()
             self.world.register_player(player)
 
-            # Determine spawn position: load saved position or calculate default spawn
+            # Determine spawn position: personal spawn point, then saved position,
+            # then the world spawn point.
             saved = self._load_player_data(uuid)
-            if saved and "pos" in saved:
+            personal = None
+            if saved:
+                raw_spawn = saved.get("spawn")
+                if isinstance(raw_spawn, (list, tuple)) and len(raw_spawn) >= 3:
+                    try:
+                        personal = [float(raw_spawn[0]), float(raw_spawn[1]), float(raw_spawn[2])]
+                    except (TypeError, ValueError):
+                        personal = None
+            if personal is not None:
+                player.spawn_point = list(personal)
+                client.pos = list(personal)
+                client.yaw = float(saved.get("yaw", 0.0))
+                client.pitch = float(saved.get("pitch", 0.0))
+                client.held_item = str(saved.get("held", ""))
+                player.pos = list(client.pos)
+                player.yaw = client.yaw
+                player.pitch = client.pitch
+            elif saved and "pos" in saved:
                 client.pos = [float(v) for v in saved["pos"]]
                 client.yaw = float(saved.get("yaw", 0.0))
                 client.pitch = float(saved.get("pitch", 0.0))
@@ -541,6 +657,23 @@ class MultiplayerServer:
                 ground = self.world.column_top(int(math.floor(sp_x)), int(math.floor(sp_z)))
                 client.pos = [float(sp_x), float(max(sp_y, ground + 1.0)), float(sp_z)]
                 player.pos = list(client.pos)
+
+            # Restore health; a saved fatal value means the player respawns.
+            try:
+                player.max_health = float(saved.get("max_health", DEFAULT_MAX_HEALTH)) if saved else DEFAULT_MAX_HEALTH
+            except (TypeError, ValueError):
+                player.max_health = DEFAULT_MAX_HEALTH
+            saved_health = saved.get("health") if saved else None
+            try:
+                saved_health = float(saved_health) if saved_health is not None else None
+            except (TypeError, ValueError):
+                saved_health = None
+            if saved_health is None or saved_health <= 0.0:
+                player.health = player.max_health
+                player.dead = False
+            else:
+                player.set_health(saved_health)
+            player.reset_damage_state()
 
             # Build list of already-connected players
             existing_players = []
@@ -571,6 +704,9 @@ class MultiplayerServer:
                     "players": existing_players,
                     "entities": [e.to_dict() for e in self.world.entities] if self.world else [],
                     "day_time": self.world.day_time if self.world else 1000.0,
+                    "health": float(player.health),
+                    "max_health": float(player.max_health),
+                    "hurt_time": float(player.hurt_time),
                 }
             )
 
@@ -613,6 +749,7 @@ class MultiplayerServer:
                 player.pitch = client.pitch
 
             # Keep in-memory player record up to date
+            previous = self.players_data.get(client.uuid) or {}
             self.players_data[client.uuid] = {
                 "uuid": client.uuid,
                 "username": client.username,
@@ -620,6 +757,9 @@ class MultiplayerServer:
                 "yaw": client.yaw,
                 "pitch": client.pitch,
                 "held": client.held_item,
+                "spawn": previous.get("spawn"),
+                "health": previous.get("health", DEFAULT_MAX_HEALTH),
+                "max_health": previous.get("max_health", DEFAULT_MAX_HEALTH),
                 "last_played": time.time(),
             }
 
@@ -686,6 +826,7 @@ class MultiplayerServer:
                                     "pickup_delay": entity.pickup_delay,
                                 }
                             )
+
 
         elif p_type == "drop_item":
             item = str(packet.get("item", ""))

@@ -550,3 +550,51 @@ Defines subterranean ore vein placement.
 }
 ```
 
+---
+
+## 12. Damage Types (`assets/damage/`)
+
+Defines environmental damage applied to survival players. Each `.json` or `.lua`
+file describes one damage type. Health is a 20 HP pool and creative-mode players
+are immune.
+
+### Fields
+- `id` (string, required): Unique lowercase identifier (also the filename).
+- `name` (string): Display name. Defaults to the id with words capitalized.
+- `kind` (string, required): Engine hook. Currently `fall` or `suffocation`.
+- `damage` (float): Hit points dealt per trigger. Default `1.0`.
+- `message` (string): Death message shown when this damage kills the player.
+- `min_distance` (float, `fall` only): Safe fall distance in blocks. Default `3.0`.
+- `per_block` (bool, `fall` only): When true, damage is `damage` multiplied by
+  the number of blocks fallen beyond `min_distance`. Default `true`.
+- `interval` (float, `suffocation` only): Seconds between damage ticks while the
+  player's head is inside a solid block. Default `0.5`.
+
+Landing in water never causes fall damage. At 0 HP the player dies and respawns
+at their personal spawn point (`/spawnpoint`), then the world spawn.
+
+### Example (`fall.json`)
+```json
+{
+  "id": "fall",
+  "name": "Fall",
+  "kind": "fall",
+  "damage": 1.0,
+  "min_distance": 3.0,
+  "per_block": true,
+  "message": "fell from a high place"
+}
+```
+
+### Example (`suffocation.json`)
+```json
+{
+  "id": "suffocation",
+  "name": "Suffocation",
+  "kind": "suffocation",
+  "damage": 1.0,
+  "interval": 0.5,
+  "message": "suffocated in a block"
+}
+```
+

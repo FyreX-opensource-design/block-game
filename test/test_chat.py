@@ -223,6 +223,60 @@ class CommandHandlerTests(unittest.TestCase):
         self.assertTrue(handled)
         self.assertTrue(any("Usage: /gamemode" in r[0] for r in ctx.responses))
 
+    def test_spawnpoint_command_sets_current_position(self):
+        ctx = CommandContext(player=self.player, world=self.world)
+        handled = self.handler.execute(ctx, "/spawnpoint")
+        self.assertTrue(handled)
+        self.assertEqual(self.player.get_spawn_point(), [10.5, 64.0, -20.5])
+        self.assertTrue(any("Personal spawn point set to (10.5, 64.0, -20.5)" in r[0] for r in ctx.responses))
+
+    def test_spawnpoint_command_accepts_coordinates(self):
+        ctx = CommandContext(player=self.player, world=self.world)
+        handled = self.handler.execute(ctx, "/spawnpoint 100 70 -50")
+        self.assertTrue(handled)
+        self.assertEqual(self.player.get_spawn_point(), [100.0, 70.0, -50.0])
+
+    def test_sethome_alias(self):
+        ctx = CommandContext(player=self.player, world=self.world)
+        handled = self.handler.execute(ctx, "/sethome 12 34 56")
+        self.assertTrue(handled)
+        self.assertEqual(self.player.get_spawn_point(), [12.0, 34.0, 56.0])
+
+    def test_spawnpoint_clear(self):
+        self.player.set_spawn_point(1.0, 2.0, 3.0)
+        ctx = CommandContext(player=self.player, world=self.world)
+        handled = self.handler.execute(ctx, "/spawnpoint clear")
+        self.assertTrue(handled)
+        self.assertIsNone(self.player.get_spawn_point())
+        self.assertTrue(any("cleared" in r[0].lower() for r in ctx.responses))
+
+    def test_home_command_teleports_to_spawn_point(self):
+        self.player.set_spawn_point(200.0, 80.0, 300.0)
+        ctx = CommandContext(player=self.player, world=self.world)
+        handled = self.handler.execute(ctx, "/home")
+        self.assertTrue(handled)
+        self.assertEqual(self.player.pos, [200.0, 80.0, 300.0])
+        self.assertEqual(self.player.vel, [0.0, 0.0, 0.0])
+
+    def test_home_command_requires_spawn_point(self):
+        ctx = CommandContext(player=self.player, world=self.world)
+        handled = self.handler.execute(ctx, "/home")
+        self.assertTrue(handled)
+        self.assertTrue(any("No personal spawn point set" in r[0] for r in ctx.responses))
+
+    def test_delhome_clears_spawn_point(self):
+        self.player.set_spawn_point(1.0, 2.0, 3.0)
+        ctx = CommandContext(player=self.player, world=self.world)
+        handled = self.handler.execute(ctx, "/delhome")
+        self.assertTrue(handled)
+        self.assertIsNone(self.player.get_spawn_point())
+
+    def test_spawnpoint_rejects_non_numeric(self):
+        ctx = CommandContext(player=self.player, world=self.world)
+        self.handler.execute(ctx, "/spawnpoint a b c")
+        self.assertIsNone(self.player.get_spawn_point())
+        self.assertTrue(any("must be numbers" in r[0] for r in ctx.responses))
+
     def test_gamemode_command_targets_other_player(self):
         class FakeClient:
             def __init__(self, uuid, username):
