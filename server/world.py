@@ -367,6 +367,10 @@ class World:
         self.column_max = {}
         self.players = {}
         self.entities = []
+        # Optional hook so a host (the multiplayer server) can announce new
+        # entities as soon as they are created, regardless of which phase of
+        # the tick spawned them.
+        self.on_entity_spawn = None
         self.furnaces = {}
         self._spawn_point = None
         if spawn_point is not None:
@@ -484,11 +488,17 @@ class World:
             return self.saplings.update(dt)
         return []
 
+    def _notify_entity_spawn(self, entity):
+        callback = getattr(self, "on_entity_spawn", None)
+        if callback is not None:
+            callback(entity)
+
     def spawn_item(self, item, count=1, pos=None, vel=None, despawn_timer=300.0, pickup_delay=0.0):
         from server.entity import ItemEntity
 
         entity = ItemEntity(item, count=count, pos=pos, vel=vel, despawn_timer=despawn_timer, pickup_delay=pickup_delay)
         self.entities.append(entity)
+        self._notify_entity_spawn(entity)
         return entity
 
     def spawn_falling_block(self, block_id, pos=None, vel=None):
@@ -496,6 +506,7 @@ class World:
 
         entity = FallingBlockEntity(block_id, pos=pos, vel=vel)
         self.entities.append(entity)
+        self._notify_entity_spawn(entity)
         return entity
 
     def spawn_mob(self, mob_or_type, pos=None, vel=None, yaw=0.0, pitch=0.0):
@@ -513,6 +524,7 @@ class World:
             mob = Mob(mob_type=str(mob_or_type), pos=pos, vel=vel, yaw=yaw, pitch=pitch)
         mob.world = self
         self.entities.append(mob)
+        self._notify_entity_spawn(mob)
         return mob
 
     def hit_block_with_item(self, x, y, z, item_id, rng=None):

@@ -139,6 +139,7 @@ class MultiplayerServer:
             self.world.on_block_set = lambda bx, by, bz, b: self.broadcast(
                 {"type": "block_change", "x": bx, "y": by, "z": bz, "block": b}
             )
+            self.world.on_entity_spawn = self._broadcast_entity_spawn
         self.world_info = None
         self.world_dir = None
         self.player_dir = None
@@ -267,6 +268,7 @@ class MultiplayerServer:
             self.world.on_block_set = lambda bx, by, bz, b: self.broadcast(
                 {"type": "block_change", "x": bx, "y": by, "z": bz, "block": b}
             )
+            self.world.on_entity_spawn = self._broadcast_entity_spawn
             self.world_info = info
             self.world_dir = self.catalog._folder(info.id)
         elif self.world.store is not None and hasattr(self.world.store, "folder"):
@@ -411,14 +413,8 @@ class MultiplayerServer:
                     self.broadcast({"type": "time_update", "day_time": float(self.world.day_time)})
             self.world.update_entities(0.02)
             curr_entities = {e.id: e for e in self.world.entities}
-            for eid, e in curr_entities.items():
-                if eid not in prev_entities:
-                    if getattr(e, "is_falling_block", False):
-                        self.broadcast({"type": "spawn_falling_block", "id": e.id, "block": e.block_id, "pos": e.pos, "vel": e.vel})
-                    elif getattr(e, "is_mob", False):
-                        self.broadcast({"type": "spawn_mob", "id": e.id, "mob_type": e.mob_type, "pos": e.pos, "vel": e.vel, "yaw": e.yaw, "pitch": e.pitch, "health": e.health})
-                    elif hasattr(e, "item") and not getattr(e, "is_falling_block", False):
-                        self.broadcast({"type": "spawn_item", "id": e.id, "item": e.item, "count": e.count, "pos": e.pos, "vel": e.vel, "pickup_delay": e.pickup_delay})
+            # New entities are announced by World.on_entity_spawn as they are
+            # created. Only removals need diffing here.
             for eid in prev_entities:
                 if eid not in curr_entities:
                     self.broadcast({"type": "remove_entity", "id": eid})
@@ -814,18 +810,7 @@ class MultiplayerServer:
                     for drop_id, count in drops:
                         if count > 0:
                             pos = [x + 0.5, y + 0.8, z + 0.5]
-                            entity = self.world.spawn_item(drop_id, count=count, pos=pos)
-                            self.broadcast(
-                                {
-                                    "type": "spawn_item",
-                                    "id": entity.id,
-                                    "item": entity.item,
-                                    "count": entity.count,
-                                    "pos": entity.pos,
-                                    "vel": entity.vel,
-                                    "pickup_delay": entity.pickup_delay,
-                                }
-                            )
+                            self.world.spawn_item(drop_id, count=count, pos=pos)
 
 
         elif p_type == "drop_item":
@@ -835,18 +820,7 @@ class MultiplayerServer:
             vel = list(packet.get("vel", [0.0, 0.0, 0.0]))
             delay = float(packet.get("pickup_delay", 0.0))
             if self.world is not None and item:
-                entity = self.world.spawn_item(item, count, pos=pos, vel=vel, pickup_delay=delay)
-                self.broadcast(
-                    {
-                        "type": "spawn_item",
-                        "id": entity.id,
-                        "item": entity.item,
-                        "count": entity.count,
-                        "pos": entity.pos,
-                        "vel": entity.vel,
-                        "pickup_delay": entity.pickup_delay,
-                    }
-                )
+                self.world.spawn_item(item, count, pos=pos, vel=vel, pickup_delay=delay)
 
         elif p_type == "pickup_item":
             entity_id = int(packet.get("id", 0))
@@ -932,20 +906,8 @@ class MultiplayerServer:
                     if dist <= 6.0:
                         if getattr(entity, "mob_type", "") == "sheep":
                             if item_id in ("shears", ""):
-                                prev_ids = {e.id for e in self.world.entities}
                                 drops = entity.shear(world=self.world)
                                 if drops:
-                                    for e in self.world.entities:
-                                        if e.id not in prev_ids and hasattr(e, "item"):
-                                            self.broadcast({
-                                                "type": "spawn_item",
-                                                "id": e.id,
-                                                "item": e.item,
-                                                "count": e.count,
-                                                "pos": e.pos,
-                                                "vel": e.vel,
-                                                "pickup_delay": e.pickup_delay,
-                                            })
                                     self.broadcast({"type": "mobs_update", "mobs": [entity.to_dict()]})
                             elif hasattr(entity, "dye") and entity.dye(item_id):
                                 self.broadcast({"type": "mobs_update", "mobs": [entity.to_dict()]})
@@ -1043,6 +1005,54 @@ class MultiplayerServer:
                         }
                     )
                     client.sent_chunks.add(key)
+
+    def _broadcast_entity_spawn(self, entity):
+        """Announce a newly spawned entity to every client.
+
+        Called by :class:`~server.world.World` the moment an entity is added.
+        Announcing at spawn time (rather than diffing the entity list once per
+        tick) matters because entities can be created while handling packets or
+        during fluid updates, i.e. outside the narrow window the old diff saw.
+        Falling blocks were the visible symptom: the sand fell on the server but
+        no client ever received ``spawn_falling_block``.
+        """
+        if not getattr(self, "clients", None):
+            return
+        if getattr(entity, "is_falling_block", False):
+            self.broadcast(
+                {
+                    "type": "spawn_falling_block",
+                    "id": entity.id,
+                    "block": entity.block_id,
+                    "pos": entity.pos,
+                    "vel": entity.vel,
+                }
+            )
+        elif getattr(entity, "is_mob", False):
+            self.broadcast(
+                {
+                    "type": "spawn_mob",
+                    "id": entity.id,
+                    "mob_type": entity.mob_type,
+                    "pos": entity.pos,
+                    "vel": entity.vel,
+                    "yaw": entity.yaw,
+                    "pitch": entity.pitch,
+                    "health": entity.health,
+                }
+            )
+        elif hasattr(entity, "item"):
+            self.broadcast(
+                {
+                    "type": "spawn_item",
+                    "id": entity.id,
+                    "item": entity.item,
+                    "count": entity.count,
+                    "pos": entity.pos,
+                    "vel": entity.vel,
+                    "pickup_delay": entity.pickup_delay,
+                }
+            )
 
     def broadcast(self, packet, exclude=None):
         for uuid, client in self.clients.items():

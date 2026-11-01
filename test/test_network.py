@@ -1016,6 +1016,42 @@ class RemoteItemDropTests(unittest.TestCase):
         self.assertEqual(drops[0].pickup_delay, 0.5)
 
 
+class FallingBlockSyncTests(unittest.TestCase):
+    def test_falling_block_from_block_break_is_broadcast(self):
+        from unittest.mock import MagicMock
+
+        from server.network import MultiplayerServer, RemoteClient
+
+        with tempfile.TemporaryDirectory() as tmp:
+            world = World(seed=12)
+            server = MultiplayerServer(host="127.0.0.1", port=0, saves_dir=tmp, world=world)
+            world.chunks[(0, 0, 0)] = Chunk(0, 0, 0)
+            world.set_block(2, 4, 2, "stone", simulate=False)
+            world.set_block(2, 5, 2, "sand", simulate=False)
+
+            client = MagicMock(spec=RemoteClient)
+            client.alive = True
+            client.uuid = "p1"
+            client.pos = [2.5, 10.0, 2.5]
+            client.sent_chunks = set()
+            client.out_queue = []
+            pkts = []
+            client.send = lambda pkt: pkts.append(pkt)
+            server.clients["p1"] = client
+
+            # Breaking the supporting stone makes the sand above start falling
+            # while the packet is handled, i.e. before the tick snapshots the
+            # entity list. Clients must still be told about the new entity.
+            server._handle_packet(
+                client, {"type": "set_block", "x": 2, "y": 4, "z": 2, "block": ""}
+            )
+            server.tick()
+
+            spawns = [p for p in pkts if p.get("type") == "spawn_falling_block"]
+            self.assertEqual(len(spawns), 1)
+            self.assertEqual(spawns[0]["block"], "sand")
+
+
 class ItemPickupTests(unittest.TestCase):
     """Only one side may grant an item when a drop is at the player's feet."""
 
