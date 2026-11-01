@@ -919,5 +919,78 @@ class RemoteBlockChangeTests(unittest.TestCase):
         self.assertEqual(uploaded, [])
 
 
+class RemoteItemDropTests(unittest.TestCase):
+    """Breaking blocks must not create local drops in multiplayer.
+
+    The server spawns the item and broadcasts ``spawn_item``. If the client also
+    spawns one locally the breaker ends up with two entities for one block.
+    """
+
+    def _game(self, network_client=None):
+        from client.app import Game
+        from server.stacks import make_stack
+
+        world = World(seed=1)
+        world.chunks[(0, 0, 0)] = Chunk(0, 0, 0)
+        world.set_block(2, 2, 2, "stone")
+        game = Game.__new__(Game)
+        game.world = world
+        game.gamemode = "survival"
+        game.selected = 0
+        game.hotbar = [make_stack("wood_pickaxe", 1)]
+        game.network_client = network_client
+        game.target = {"x": 2, "y": 2, "z": 2, "local_y": 0.5}
+        game._aim = lambda: None
+        game._upload_block_change = lambda x, y, z: None
+        return game, world
+
+    def _item_drops(self, world):
+        from server.entity import ItemEntity
+
+        return [e for e in world.entities if isinstance(e, ItemEntity)]
+
+    def test_multiplayer_break_does_not_spawn_local_drop(self):
+        from unittest.mock import MagicMock
+
+        client = MagicMock()
+        game, world = self._game(client)
+
+        game._break_block()
+
+        self.assertEqual(self._item_drops(world), [])
+        client.send_drop_item.assert_called_once()
+        client.send_set_block.assert_called_once_with(2, 2, 2, AIR)
+        self.assertEqual(world.get_block(2, 2, 2), AIR)
+
+    def test_singleplayer_break_spawns_local_drop(self):
+        game, world = self._game(None)
+
+        game._break_block()
+
+        drops = self._item_drops(world)
+        self.assertEqual(len(drops), 1)
+        self.assertEqual(drops[0].item, "cobble")
+        self.assertEqual(world.get_block(2, 2, 2), AIR)
+
+    def test_multiplayer_drop_held_item_does_not_spawn_local_drop(self):
+        from unittest.mock import MagicMock
+
+        from server.player import Player
+        from server.stacks import make_stack, stack_count
+
+        client = MagicMock()
+        game, world = self._game(client)
+        game.player = Player(world)
+        game.player.pos = [2.5, 3.0, 2.5]
+        game.forward = (1.0, 0.0, 0.0)
+        game.hotbar = [make_stack("stone", 2)]
+
+        game._drop_held_item()
+
+        self.assertEqual(self._item_drops(world), [])
+        client.send_drop_item.assert_called_once()
+        self.assertEqual(stack_count(game.hotbar[0]), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

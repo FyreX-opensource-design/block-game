@@ -173,6 +173,7 @@ class TestSlabs(unittest.TestCase):
                 pass
 
         MockGame._break_block = Game._break_block
+        MockGame._spawn_break_drops = Game._spawn_break_drops
         MockGame._aim = lambda self: None
 
         game = MockGame(self.world)
@@ -213,6 +214,7 @@ class TestSlabs(unittest.TestCase):
                 pass
 
         MockGame._break_block = Game._break_block
+        MockGame._spawn_break_drops = Game._spawn_break_drops
         MockGame._aim = lambda self: None
 
         # 1. Source waterlogged slab leaves water source
@@ -632,6 +634,7 @@ class TestSlabs(unittest.TestCase):
                 pass
 
         MockGame._break_block = Game._break_block
+        MockGame._spawn_break_drops = Game._spawn_break_drops
         MockGame._aim = lambda self: None
 
         game = MockGame(self.world)
@@ -775,6 +778,7 @@ class TestSlabs(unittest.TestCase):
 
         MockGame._place_block = Game._place_block
         MockGame._break_block = Game._break_block
+        MockGame._spawn_break_drops = Game._spawn_break_drops
         MockGame._aim = lambda self: None
 
         # Place bottom slab at (4, 80, 4)

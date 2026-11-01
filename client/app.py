@@ -1013,14 +1013,7 @@ class Game(pyglet.window.Window):
                 held_id = stack_id(self.hotbar[self.selected]) if self.selected < len(self.hotbar) else ""
                 held_item = ITEMS.get(held_id)
                 drops = get_block_drops(broken_item, held_item)
-                for drop_id, count in drops:
-                    vx = random.uniform(-0.8, 0.8)
-                    vy = random.uniform(2.2, 3.8)
-                    vz = random.uniform(-0.8, 0.8)
-                    pos = [x + 0.5, drop_y, z + 0.5]
-                    self.world.spawn_item(drop_id, count=count, pos=pos, vel=[vx, vy, vz], pickup_delay=0.3)
-                    if self.network_client is not None:
-                        self.network_client.send_drop_item(drop_id, count, pos, [vx, vy, vz], pickup_delay=0.3)
+                self._spawn_break_drops(drops, x, drop_y, z)
 
             if self.network_client is not None:
                 self.network_client.send_set_block(x, y, z, remaining_block)
@@ -1046,14 +1039,7 @@ class Game(pyglet.window.Window):
                 held_id = stack_id(self.hotbar[self.selected]) if self.selected < len(self.hotbar) else ""
                 held_item = ITEMS.get(held_id)
                 drops = get_block_drops(broken_item, held_item)
-                for drop_id, count in drops:
-                    vx = random.uniform(-0.8, 0.8)
-                    vy = random.uniform(2.2, 3.8)
-                    vz = random.uniform(-0.8, 0.8)
-                    pos = [x + 0.5, drop_y, z + 0.5]
-                    self.world.spawn_item(drop_id, count=count, pos=pos, vel=[vx, vy, vz], pickup_delay=0.3)
-                    if self.network_client is not None:
-                        self.network_client.send_drop_item(drop_id, count, pos, [vx, vy, vz], pickup_delay=0.3)
+                self._spawn_break_drops(drops, x, drop_y, z)
 
             if self.network_client is not None:
                 self.network_client.send_set_block(x, y, z, remaining_block)
@@ -1083,19 +1069,34 @@ class Game(pyglet.window.Window):
             held_id = stack_id(self.hotbar[self.selected]) if self.selected < len(self.hotbar) else ""
             held_item = ITEMS.get(held_id)
             drops = get_block_drops(broken_id, held_item)
-            for drop_id, count in drops:
-                vx = random.uniform(-0.8, 0.8)
-                vy = random.uniform(2.2, 3.8)
-                vz = random.uniform(-0.8, 0.8)
-                pos = [x + 0.5, y + 0.3, z + 0.5]
-                self.world.spawn_item(drop_id, count=count, pos=pos, vel=[vx, vy, vz], pickup_delay=0.3)
-                if self.network_client is not None:
-                    self.network_client.send_drop_item(drop_id, count, pos, [vx, vy, vz], pickup_delay=0.3)
+            self._spawn_break_drops(drops, x, y + 0.3, z)
 
         if self.network_client is not None:
             self.network_client.send_set_block(x, y, z, next_block)
         if self.world.set_block(x, y, z, next_block):
             self._upload_block_change(x, y, z)
+
+    def _spawn_break_drops(self, drops, x, drop_y, z):
+        """Spawn the items dropped by a broken block.
+
+        In singleplayer the client owns the world, so it spawns the items
+        itself. In multiplayer the server is authoritative: it spawns the
+        item and broadcasts ``spawn_item`` to every client. Spawning a local
+        copy as well would leave the breaker with two entities (the local one
+        and the server's), which is the duplicate-drop bug.
+        """
+        for drop_id, count in drops:
+            if count <= 0:
+                continue
+            vx = random.uniform(-0.8, 0.8)
+            vy = random.uniform(2.2, 3.8)
+            vz = random.uniform(-0.8, 0.8)
+            pos = [x + 0.5, drop_y, z + 0.5]
+            vel = [vx, vy, vz]
+            if self.network_client is not None:
+                self.network_client.send_drop_item(drop_id, count, pos, vel, pickup_delay=0.3)
+            else:
+                self.world.spawn_item(drop_id, count=count, pos=pos, vel=vel, pickup_delay=0.3)
 
     def _drop_held_item(self):
         if self.player is None or self.world is None:
@@ -1122,9 +1123,11 @@ class Game(pyglet.window.Window):
         vz = fz * 5.5 + self.player.vel[2] * 0.4
         pos = [px, py, pz]
         vel = [vx, vy, vz]
-        self.world.spawn_item(item_id, count=1, pos=pos, vel=vel, pickup_delay=1.0)
         if self.network_client is not None:
+            # Server-authoritative: it spawns the entity and broadcasts it.
             self.network_client.send_drop_item(item_id, 1, pos, vel, pickup_delay=1.0)
+        else:
+            self.world.spawn_item(item_id, count=1, pos=pos, vel=vel, pickup_delay=1.0)
 
     def _place_block(self):
         self._aim()
