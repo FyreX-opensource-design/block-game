@@ -9,7 +9,25 @@ SETTINGS_NAME = "settings.json"
 DEFAULT_SETTINGS = {
     "web_ui_enabled": False,
     "web_ui_port": 5000,
+    "arrow_key_camera": False,
+    # Accepted spellings for the same option.
+    "arrow_keys_camera": False,
+    "arrow_camera": False,
+    "camera_arrow_keys": False,
+    "arrow_key_look": False,
+    "arrow_keys_look": False,
+    "arrow_look": False,
 }
+
+ARROW_CAMERA_SETTINGS = (
+    "arrow_key_camera",
+    "arrow_keys_camera",
+    "arrow_camera",
+    "camera_arrow_keys",
+    "arrow_key_look",
+    "arrow_keys_look",
+    "arrow_look",
+)
 
 
 def get_local_ips():
@@ -77,6 +95,9 @@ def load_settings(folder=None):
                             settings[k] = int(v)
                         else:
                             settings[k] = v
+                enabled = any(settings.get(name, False) for name in ARROW_CAMERA_SETTINGS)
+                for name in ARROW_CAMERA_SETTINGS:
+                    settings[name] = enabled
         except Exception:
             pass
     return settings
@@ -87,9 +108,11 @@ def save_settings(settings, folder=None):
     try:
         root.mkdir(parents=True, exist_ok=True)
         path = root / SETTINGS_NAME
+        arrow_camera = any(bool(settings.get(name, False)) for name in ARROW_CAMERA_SETTINGS)
         data = {
             "web_ui_enabled": bool(settings.get("web_ui_enabled", False)),
             "web_ui_port": int(settings.get("web_ui_port", 5000)),
+            "arrow_key_camera": arrow_camera,
         }
         path.write_text(json.dumps(data, indent=2))
     except Exception:

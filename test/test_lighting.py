@@ -60,6 +60,40 @@ class LightingTests(unittest.TestCase):
         self.assertLess(shadow_level, 15)
         self.assertGreaterEqual(shadow_level, 0)
 
+    def test_vertical_slabs_do_not_block_light(self):
+        from server.blocks import BLOCKS, is_vertical_slab
+        from server.lighting import get_block_opacity
+
+        vertical_slabs = [b for b in BLOCKS.values() if is_vertical_slab(b)]
+        self.assertTrue(vertical_slabs)
+        for slab in vertical_slabs:
+            # Like horizontal half slabs, vertical slabs leave half of the
+            # cell open and therefore must not extinguish light.
+            self.assertEqual(get_block_opacity(slab), 0, slab.id)
+
+        world = World()
+        chunk = Chunk(0, 0, 0)
+        world.chunks[(0, 0, 0)] = chunk
+        chunk.data[8, 8, 8] = block_index("stone_vertical_slab")
+        world.lighting.compute_chunk_lighting(0, 0, 0)
+
+        # Sunlight passes through the slab cell and reaches the block below.
+        self.assertEqual(world.get_skylight(8, 8, 8), 15)
+        self.assertEqual(world.get_skylight(8, 7, 8), 15)
+
+        # The long face that opens into the slab's empty half must not be black.
+        mesh = build_chunk_mesh(world, 0, 0, 0)
+        inner_face_light = None
+        for i in range(0, len(mesh.vertices), 4):
+            v = mesh.vertices[i]
+            normal = (round(float(v[3])), round(float(v[4])), round(float(v[5])))
+            position = (round(float(v[0]), 2), round(float(v[1]), 2), round(float(v[2]), 2))
+            if normal == (0, 0, -1) and position[2] == 8.5:
+                inner_face_light = mesh.lights[i][0]
+                break
+        self.assertIsNotNone(inner_face_light)
+        self.assertGreaterEqual(inner_face_light, 0.9)
+
     def test_blocklight_5_channels_propagation(self):
         world = World()
         chunk = Chunk(0, 0, 0)

@@ -321,7 +321,11 @@ def build_chunk_mesh(world, cx, cy, cz):
         block_id
         for block_id in present
         if (block := block_from_index(block_id)) is not None
-        and (not block.full_cube or block.properties.get("double_slab"))
+        and (
+            not block.full_cube
+            or block.properties.get("double_slab")
+            or block.properties.get("double_vertical_slab")
+        )
         and (not block.properties.get("fluid") or block.properties.get("waterlogged"))
     ]
     own = occ[1:-1, 1:-1, 1:-1].copy()

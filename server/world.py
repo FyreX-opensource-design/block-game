@@ -22,6 +22,11 @@ from server.blocks import (
     WORLD_HEIGHT,
     block_from_index,
     block_index,
+    get_double_vertical_slab_info,
+    get_vertical_slab_info,
+    get_vertical_slab_torch_info,
+    is_vertical_slab,
+    vertical_slab_bounds,
 )
 from server.caves import load_caves
 from server.ores import load_ores
@@ -704,8 +709,12 @@ class World:
         if base_id.endswith("_waterlogged") or str(block.properties.get("fluid", "")) == "water":
             return True
 
+        # A double vertical slab fills the cell and blocks water everywhere.
+        if get_double_vertical_slab_info(block) is not None:
+            return True
+
         # Special handling for vertical slabs
-        if base_id == "vertical_slab" or base_id.startswith("cobble_vertical_slab"):
+        if is_vertical_slab(block):
             # Get the slab's facing direction from its properties
             facing = block.properties.get("facing", None)
             if facing in ("north", "south", "east", "west"):
@@ -791,6 +800,10 @@ class World:
                 return [(float(x), float(y) + 0.5, float(z), float(x + 1), float(y + 1), float(z + 1))]
             else:
                 return [(float(x), float(y), float(z), float(x + 1), float(y + 1), float(z + 1))]
+
+        v_info = get_vertical_slab_info(b_obj)
+        if v_info is not None:
+            return [vertical_slab_bounds(x, y, z, v_info["facing"])]
 
         return [(float(x), float(y), float(z), float(x + 1), float(y + 1), float(z + 1))]
 
@@ -1660,7 +1673,16 @@ class World:
         limit = int(max_dist * 4) + 2
         for _ in range(limit):
             from server.fluid import is_fluid
-            from server.blocks import get_offset_info, get_offset_torch_info, get_slab_info, is_offset_block, is_offset_torch, is_slab
+            from server.blocks import (
+                get_double_vertical_slab_info,
+                get_offset_info,
+                get_offset_torch_info,
+                get_slab_info,
+                get_vertical_slab_torch_info,
+                is_offset_block,
+                is_offset_torch,
+                is_slab,
+            )
 
             blk = self.get_block(x, y, z)
             above_blk = self.get_block(x, y + 1, z) if y + 1 < WORLD_HEIGHT else AIR
@@ -1675,6 +1697,9 @@ class World:
                     s_info = get_slab_info(blk)
                     o_info = get_offset_info(blk)
                     t_info = get_offset_torch_info(blk)
+                    v_info = get_vertical_slab_info(blk)
+                    dv_info = get_double_vertical_slab_info(blk)
+                    bt_info = get_vertical_slab_torch_info(blk)
 
                     if is_s or (fluids and is_f) or (not solid_only and not is_f):
                         b_obj = BLOCKS.get(blk)
@@ -1729,6 +1754,25 @@ class World:
                                         (float(x), float(y) + 0.5, float(z), float(x + 1), float(y + 1), float(z + 1)),
                                     )
                                 )
+                        elif dv_info is not None:
+                            boxes.append(
+                                (
+                                    x,
+                                    y,
+                                    z,
+                                    "vertical_positive",
+                                    vertical_slab_bounds(x, y, z, dv_info["positive_facing"]),
+                                )
+                            )
+                            boxes.append(
+                                (
+                                    x,
+                                    y,
+                                    z,
+                                    "vertical_negative",
+                                    vertical_slab_bounds(x, y, z, dv_info["negative_facing"]),
+                                )
+                            )
                         elif s_info is not None:
                             if s_info["double"]:
                                 boxes.append(
@@ -1769,6 +1813,53 @@ class World:
                                         (float(x), float(y) + 0.5, float(z), float(x + 1), float(y + 1), float(z + 1)),
                                     )
                                 )
+                        elif bt_info is not None:
+                            boxes.append(
+                                (
+                                    x,
+                                    y,
+                                    z,
+                                    "vertical",
+                                    vertical_slab_bounds(x, y, z, bt_info["facing"]),
+                                )
+                            )
+                            torch_element = next(
+                                (
+                                    element
+                                    for element in (b_obj.elements if b_obj is not None else ())
+                                    if element.get("part") == "torch"
+                                ),
+                                None,
+                            )
+                            if torch_element is not None:
+                                fx0, fy0, fz0 = torch_element["from"]
+                                fx1, fy1, fz1 = torch_element["to"]
+                                boxes.append(
+                                    (
+                                        x,
+                                        y,
+                                        z,
+                                        "torch_back",
+                                        (
+                                            float(x) + float(fx0) / 16.0,
+                                            float(y) + float(fy0) / 16.0,
+                                            float(z) + float(fz0) / 16.0,
+                                            float(x) + float(fx1) / 16.0,
+                                            float(y) + float(fy1) / 16.0,
+                                            float(z) + float(fz1) / 16.0,
+                                        ),
+                                    )
+                                )
+                        elif v_info is not None:
+                            boxes.append(
+                                (
+                                    x,
+                                    y,
+                                    z,
+                                    "vertical",
+                                    vertical_slab_bounds(x, y, z, v_info["facing"]),
+                                )
+                            )
                         elif b_obj is not None and b_obj.properties.get("torch") and b_obj.elements:
                             el = b_obj.elements[0]
                             fx0, fy0, fz0 = el["from"]
@@ -1857,7 +1948,15 @@ class World:
                     if closest_hit is not None:
                         t_hit, hx, hy, hz, b_norm, tx, ty, tz, box_part, part_box = closest_hit
                         loc_y = hy - ty
-                        if box_part in ("bottom", "top", "offset", "offset_torch"):
+                        if box_part in (
+                            "bottom",
+                            "top",
+                            "offset",
+                            "offset_torch",
+                            "vertical_positive",
+                            "vertical_negative",
+                            "torch_back",
+                        ):
                             slab_half = box_part
                         else:
                             slab_half = "bottom" if loc_y < 0.5 else "top"

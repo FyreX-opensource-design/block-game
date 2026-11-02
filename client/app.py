@@ -152,6 +152,8 @@ class Game(pyglet.window.Window):
         self.settings = load_settings(profile_dir)
         self.menu.web_ui_enabled = self.settings.get("web_ui_enabled", False)
         self.menu.web_ui_port = self.settings.get("web_ui_port", 5000)
+        self.menu.arrow_key_camera = self.settings.get("arrow_key_camera", False)
+        self.arrow_key_camera = self.menu.arrow_key_camera
         self.web_companion = None
         if self.settings.get("web_ui_enabled", False):
             self._start_web_companion()
@@ -246,6 +248,7 @@ class Game(pyglet.window.Window):
             return
         if self.mode == "play":
             self._apply_input()
+            self._apply_arrow_look(min(dt, 0.05))
             self.player.update(min(dt, 0.05))
             if self.network_client is None:
                 self._update_local_health(min(dt, 0.05))
@@ -792,6 +795,28 @@ class Game(pyglet.window.Window):
         )
         inp.down = inp.sneak
 
+    def _apply_arrow_look(self, dt):
+        """Rotate the camera with the arrow keys when the option is enabled."""
+        if not getattr(self, "arrow_key_camera", False):
+            return
+        if self.player is None or getattr(self.chat, "open", False):
+            return
+        speed = 2.0 * dt
+        yaw = 0.0
+        pitch = 0.0
+        if key.LEFT in self.keys:
+            yaw += speed
+        if key.RIGHT in self.keys:
+            yaw -= speed
+        if key.UP in self.keys:
+            pitch += speed
+        if key.DOWN in self.keys:
+            pitch -= speed
+        if yaw:
+            self.player.yaw += yaw
+        if pitch:
+            self.player.pitch = max(-1.45, min(1.45, self.player.pitch + pitch))
+
     def _clear_input(self):
         self.keys.clear()
         if self.player is not None and self.mode == "play":
@@ -931,15 +956,18 @@ class Game(pyglet.window.Window):
                 best_block = block_id
         if best_block is not None:
             return best_block
-        # Landed fallen blocks become world blocks; treat a solid block at the
-        # player's head height as the fallen block taking over the view.
+        # Landed fallen blocks become world blocks; treat a full solid block at
+        # the player's head height as the fallen block taking over the view.
+        # Partial blocks (slabs, vertical slabs, etc.) never fall and only
+        # occupy part of the cell, so they must not trigger the overlay.
         head_y = top - 0.2
         head_block = ""
         try:
             head_block = str(world.get_block(int(math.floor(px)), int(math.floor(head_y)), int(math.floor(pz))) or "")
         except Exception:
             return None
-        if head_block and head_block != "" and head_block != AIR and head_block in BLOCKS and BLOCKS[head_block].solid:
+        head_obj = BLOCKS.get(head_block)
+        if head_obj is not None and head_obj.solid and head_obj.full_cube:
             return head_block
         return None
 
@@ -962,11 +990,20 @@ class Game(pyglet.window.Window):
             self._reset_breaking()
             return
 
-        from server.blocks import get_offset_info, get_offset_torch_info, get_slab_info, is_slab
+        from server.blocks import (
+            get_double_vertical_slab_info,
+            get_offset_info,
+            get_offset_torch_info,
+            get_slab_info,
+            get_vertical_slab_torch_info,
+            is_slab,
+        )
 
         o_info = get_offset_info(block_id)
         t_info = get_offset_torch_info(block_id)
         s_info = get_slab_info(block_id)
+        dv_info = get_double_vertical_slab_info(block_id)
+        bt_info = get_vertical_slab_torch_info(block_id)
         if o_info is not None and o_info.get("capped"):
             half = target_half or ("top" if target.get("local_y", 0.5) >= 0.5 else "offset")
             sub_id = o_info["top_slab"] if half == "top" else o_info["base_id"]
@@ -974,6 +1011,20 @@ class Game(pyglet.window.Window):
         elif t_info is not None and t_info.get("capped"):
             half = target_half or ("top" if target.get("local_y", 0.5) >= 0.5 else "offset_torch")
             sub_id = t_info["top_slab"] if half == "top" else t_info["base_id"]
+            block = BLOCKS.get(sub_id) or BLOCKS.get(block_id)
+        elif dv_info is not None:
+            sub_id = (
+                dv_info["positive_block"]
+                if target_half != "vertical_negative"
+                else dv_info["negative_block"]
+            )
+            block = BLOCKS.get(sub_id) or BLOCKS.get(block_id)
+        elif bt_info is not None:
+            sub_id = (
+                bt_info["torch_block"]
+                if target_half == "torch_back"
+                else bt_info["slab_block"]
+            )
             block = BLOCKS.get(sub_id) or BLOCKS.get(block_id)
         elif s_info is not None and s_info.get("double"):
             half = target_half or ("top" if target.get("local_y", 0.5) >= 0.5 else "bottom")
@@ -1004,10 +1055,72 @@ class Game(pyglet.window.Window):
         if not block_id or block_id == AIR:
             return
 
-        from server.blocks import get_offset_info, get_offset_torch_info, get_slab_info, is_slab
+        from server.blocks import (
+            get_double_vertical_slab_info,
+            get_offset_info,
+            get_offset_torch_info,
+            get_slab_info,
+            get_vertical_slab_torch_info,
+            is_slab,
+            rotation_variant,
+        )
 
         o_info = get_offset_info(block_id)
         t_info = get_offset_torch_info(block_id)
+        dv_info = get_double_vertical_slab_info(block_id)
+        bt_info = get_vertical_slab_torch_info(block_id)
+        if dv_info is not None:
+            target_half = hit.get("slab_half") or "vertical_positive"
+            held_id = stack_id(self.hotbar[self.selected]) if self.selected < len(self.hotbar) else ""
+            held_item = ITEMS.get(held_id)
+            if target_half == "vertical_negative":
+                broken_item = dv_info["negative"]
+                remaining_block = rotation_variant(
+                    dv_info["positive"], dv_info["positive_facing"]
+                )
+                drop_y = y + 0.75
+            else:
+                broken_item = dv_info["positive"]
+                remaining_block = rotation_variant(
+                    dv_info["negative"], dv_info["negative_facing"]
+                )
+                drop_y = y + 0.25
+
+            if self.gamemode == "survival":
+                drops = get_block_drops(broken_item, held_item)
+                self._spawn_break_drops(drops, x, drop_y, z)
+
+            if self.network_client is not None:
+                self.network_client.send_set_block(x, y, z, remaining_block)
+            if self.world.set_block(x, y, z, remaining_block):
+                self._upload_block_change(x, y, z)
+            return
+
+        if bt_info is not None:
+            target_half = hit.get("slab_half") or "vertical"
+            held_id = stack_id(self.hotbar[self.selected]) if self.selected < len(self.hotbar) else ""
+            held_item = ITEMS.get(held_id)
+            if target_half == "torch_back":
+                broken_item = bt_info["torch_block"]
+                remaining_block = bt_info["slab_block"]
+                drop_y = y + 0.6
+                drops = get_block_drops(broken_item, held_item)
+            else:
+                remaining_block = AIR
+                drop_y = y + 0.3
+                drops = []
+                for item_id in (bt_info["slab_block"], bt_info["torch_block"]):
+                    drops.extend(get_block_drops(item_id, held_item))
+
+            if self.gamemode == "survival":
+                self._spawn_break_drops(drops, x, drop_y, z)
+
+            if self.network_client is not None:
+                self.network_client.send_set_block(x, y, z, remaining_block)
+            if self.world.set_block(x, y, z, remaining_block):
+                self._upload_block_change(x, y, z)
+            return
+
         if (o_info is not None and o_info.get("capped")) or (t_info is not None and t_info.get("capped")):
             cap_info = o_info if (o_info is not None and o_info.get("capped")) else t_info
             target_half = hit.get("slab_half") or ("top" if hit.get("local_y", 0.5) >= 0.5 else "offset")
@@ -1154,21 +1267,30 @@ class Game(pyglet.window.Window):
             return
 
         from server.blocks import (
+            FACING_NORMALS,
+            OPPOSITE_FACING,
             can_place_block,
+            facing_from_normal,
             get_capped_offset_block,
             get_capped_offset_torch,
             get_double_slab,
+            get_double_vertical_slab,
             get_offset_block,
             get_offset_info,
             get_offset_torch,
             get_offset_torch_info,
             get_slab_info,
+            get_vertical_slab_info,
+            get_vertical_slab_torch,
+            get_vertical_slab_torch_info,
             has_half_offset_top,
             is_offset_block,
             is_offset_torch,
             is_slab,
             is_torch,
             placement_block,
+            rotation_variant,
+            vertical_slab_bounds,
         )
         from server.fluid import is_water
 
@@ -1179,6 +1301,60 @@ class Game(pyglet.window.Window):
         target_block = self.world.get_block(*target_pos)
         target_slab_info = get_slab_info(target_block)
         target_offset_info = get_offset_info(target_block)
+        target_v_info = get_vertical_slab_info(target_block)
+        target_back_torch_info = get_vertical_slab_torch_info(target_block)
+        held_v_info = get_vertical_slab_info(held.block)
+        hit_normal = (hit["nx"], hit["ny"], hit["nz"])
+
+        # Fill the open half of a targeted vertical slab, making a full cell.
+        if (
+            held_v_info is not None
+            and target_v_info is not None
+            and target_back_torch_info is None
+            and hit_normal == FACING_NORMALS[OPPOSITE_FACING[target_v_info["facing"]]]
+        ):
+            tx, ty, tz = target_pos
+            new_facing = OPPOSITE_FACING[target_v_info["facing"]]
+            held_oriented = rotation_variant(held.block, new_facing)
+            double_id = get_double_vertical_slab(target_block, held_oriented)
+            if double_id is not None:
+                if self.player is not None and self.player.overlaps_block(tx, ty, tz):
+                    return
+                if self.network_client is not None:
+                    self.network_client.send_set_block(tx, ty, tz, double_id)
+                if self.world.set_block(tx, ty, tz, double_id):
+                    self._upload_block_change(tx, ty, tz)
+                    if self.gamemode == "survival":
+                        cur_slot = self.hotbar[self.selected]
+                        c = stack_count(cur_slot)
+                        if c > 1:
+                            self.hotbar[self.selected] = make_stack(stack_id(cur_slot), c - 1)
+                        else:
+                            self.hotbar[self.selected] = empty_stack()
+                    return
+
+        # A torch on the back long face sits in the empty half of the same cell.
+        if (
+            is_torch(held.block)
+            and target_v_info is not None
+            and target_back_torch_info is None
+            and hit_normal == FACING_NORMALS[OPPOSITE_FACING[target_v_info["facing"]]]
+        ):
+            tx, ty, tz = target_pos
+            combined_id = get_vertical_slab_torch(target_block, held.block)
+            if combined_id is not None:
+                if self.network_client is not None:
+                    self.network_client.send_set_block(tx, ty, tz, combined_id)
+                if self.world.set_block(tx, ty, tz, combined_id):
+                    self._upload_block_change(tx, ty, tz)
+                    if self.gamemode == "survival":
+                        cur_slot = self.hotbar[self.selected]
+                        c = stack_count(cur_slot)
+                        if c > 1:
+                            self.hotbar[self.selected] = make_stack(stack_id(cur_slot), c - 1)
+                        else:
+                            self.hotbar[self.selected] = empty_stack()
+                    return
 
         if held_is_slab and target_offset_info is not None and not target_offset_info["capped"]:
             tx, ty, tz = target_pos
@@ -1254,6 +1430,35 @@ class Game(pyglet.window.Window):
         adj_block = self.world.get_block(x, y, z)
         adj_slab_info = get_slab_info(adj_block)
         adj_offset_info = get_offset_info(adj_block)
+        adj_v_info = get_vertical_slab_info(adj_block)
+        adjacent_facing = facing_from_normal(hit_normal)
+
+        # If the destination cell already holds a vertical slab whose solid
+        # half is away from the clicked face, fill its open half.
+        if (
+            held_v_info is not None
+            and adj_v_info is not None
+            and get_vertical_slab_torch_info(adj_block) is None
+            and adjacent_facing == adj_v_info["facing"]
+        ):
+            new_facing = OPPOSITE_FACING[adj_v_info["facing"]]
+            held_oriented = rotation_variant(held.block, new_facing)
+            double_id = get_double_vertical_slab(adj_block, held_oriented)
+            if double_id is not None:
+                if self.player is not None and self.player.overlaps_block(x, y, z):
+                    return
+                if self.network_client is not None:
+                    self.network_client.send_set_block(x, y, z, double_id)
+                if self.world.set_block(x, y, z, double_id):
+                    self._upload_block_change(x, y, z)
+                    if self.gamemode == "survival":
+                        cur_slot = self.hotbar[self.selected]
+                        c = stack_count(cur_slot)
+                        if c > 1:
+                            self.hotbar[self.selected] = make_stack(stack_id(cur_slot), c - 1)
+                        else:
+                            self.hotbar[self.selected] = empty_stack()
+                    return
 
         if held_is_slab and adj_offset_info is not None and not adj_offset_info["capped"]:
             above_adj = self.world.get_block(x, y + 1, z)
@@ -1387,10 +1592,13 @@ class Game(pyglet.window.Window):
                 slab_info = get_slab_info(block_to_place)
                 offset_info = get_offset_info(block_to_place)
                 torch_info = get_offset_torch_info(block_to_place)
+                v_info = get_vertical_slab_info(block_to_place)
                 if torch_info is not None and torch_info["capped"]:
                     b_boxes = [(float(x), float(y) + 0.5, float(z), float(x + 1), float(y) + 1.0, float(z + 1))]
                 elif offset_info is not None:
                     b_boxes = [(float(x), float(y) - 0.5, float(z), float(x + 1), float(y) + 0.5, float(z + 1))]
+                elif v_info is not None:
+                    b_boxes = [vertical_slab_bounds(x, y, z, v_info["facing"])]
                 elif slab_info is not None and slab_info["half"] == "bottom":
                     b_boxes = [(float(x), float(y), float(z), float(x + 1), float(y) + 0.5, float(z + 1))]
                 elif slab_info is not None and slab_info["half"] == "top":
@@ -1717,6 +1925,7 @@ class Game(pyglet.window.Window):
             self.mode = "options"
             self.menu.screen = "options"
             self.menu.local_ips = get_local_ips()
+            self.menu.arrow_key_camera = bool(getattr(self, "arrow_key_camera", False))
             self.menu.focus = ""
         elif action == "toggle-web-ui":
             self.settings["web_ui_enabled"] = self.menu.web_ui_enabled
@@ -1726,9 +1935,15 @@ class Game(pyglet.window.Window):
                 self._start_web_companion()
             else:
                 self._stop_web_companion()
+        elif action == "toggle-arrow-camera":
+            self.arrow_key_camera = bool(self.menu.arrow_key_camera)
+            self.settings["arrow_key_camera"] = self.arrow_key_camera
+            self._save_settings()
         elif action == "back-options":
             self.mode = self.menu.screen
             self.settings["web_ui_port"] = self.menu.web_ui_port
+            self.settings["arrow_key_camera"] = bool(self.menu.arrow_key_camera)
+            self.arrow_key_camera = bool(self.menu.arrow_key_camera)
             self._save_settings()
             if self.menu.web_ui_enabled:
                 self._start_web_companion()

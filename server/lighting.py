@@ -71,6 +71,20 @@ def get_block_opacity(block_obj):
     if not getattr(block_obj, "solid", True):
         return 0
     props = getattr(block_obj, "properties", None) or {}
+    if (
+        (
+            getattr(block_obj, "vertical_slab", False)
+            or props.get("vertical_slab")
+            or base == "vertical_slab"
+            or "_vertical_slab" in str(base)
+        )
+        and not props.get("double_vertical_slab")
+    ):
+        # Vertical slabs only occupy half of a block, so (like horizontal
+        # half slabs) they must not extinguish light in the whole cell.
+        if props.get("waterlogged") or getattr(block_obj, "waterlogged", False):
+            return 2
+        return 0
     if props.get("offset_block"):
         if not props.get("capped"):
             return 0

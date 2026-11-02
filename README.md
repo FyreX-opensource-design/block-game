@@ -54,6 +54,8 @@ pytest
 | `V` or `L` | Cycle Vision Mode (Normal → UV → Thermal/IR → Full Spectrum) |
 | `Esc` | Pause Menu / Resume Game |
 
+The arrow keys can also rotate the camera when **Options → Arrow Key Camera** is enabled.
+
 ---
 
 ## Detailed Documentation
