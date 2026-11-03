@@ -763,6 +763,78 @@ class TestFluidDefinitionsAndInteractions(unittest.TestCase):
         # The salt_water source block at x=3 turns into brackish_water!
         self.assertEqual(self.world.get_block(3, 81, 5), "brackish_water")
 
+    def test_vertical_slab_fluid_flow_front_sides_and_back(self):
+        # Floor at y=80
+        for x in range(3, 8):
+            for z in range(3, 8):
+                self.world.set_block(x, 80, z, STONE)
+
+        # Place vertical slab facing West at (5, 81, 5)
+        # Facing West means solid back is West (-X), open front is East (+X), open sides North/South
+        self.world.set_block(5, 81, 5, "smooth_sandstone_vertical_slab_west")
+
+        # Put a water source at (7, 81, 5) with walls so it flows west into (6, 81, 5) and into (5, 81, 5)
+        self.world.set_block(7, 81, 4, STONE)
+        self.world.set_block(7, 81, 6, STONE)
+        self.world.set_block(8, 81, 5, STONE)
+        self.world.set_block(6, 81, 4, STONE)
+        self.world.set_block(6, 81, 6, STONE)
+        self.world.set_block(7, 81, 5, "water")
+
+        # Tick fluids
+        for _ in range(10):
+            self.world.update_fluids(0.2)
+
+        # At (6, 81, 5) water is level 7
+        self.assertEqual(self.world.get_block(6, 81, 5), "water_7")
+
+        # Water flows into front (+X) of vertical slab at (5, 81, 5), waterlogging it to level 6
+        v_slab = self.world.get_block(5, 81, 5)
+        self.assertEqual(v_slab, "smooth_sandstone_vertical_slab_west_waterlogged_6")
+
+        # Water can flow out the open sides: North (5, 81, 4) and South (5, 81, 6) get level 5
+        self.assertEqual(self.world.get_block(5, 81, 4), "water_5")
+        self.assertEqual(self.world.get_block(5, 81, 6), "water_5")
+
+        # Water CANNOT flow out the solid back: West (4, 81, 5) remains AIR!
+        self.assertEqual(self.world.get_block(4, 81, 5), AIR)
+
+    def test_vertical_slab_channel_flow_not_into_back(self):
+        # Floor at y=80
+        for x in range(3, 7):
+            for z in range(1, 8):
+                self.world.set_block(x, 80, z, STONE)
+
+        # Water channel along Z at x=4 from z=1 to z=6
+        # Left wall at x=3, right wall at x=5 EXCEPT at (5, 81, 4) where a vertical slab sits
+        for z in range(1, 7):
+            self.world.set_block(3, 81, z, STONE)
+            if z != 4:
+                self.world.set_block(5, 81, z, STONE)
+
+        # At (5, 81, 4), vertical slab facing West (-X)
+        # Its solid back is facing the channel at x=4!
+        self.world.set_block(5, 81, 4, "smooth_sandstone_vertical_slab_west")
+        # Behind the slab at x=6, air
+        self.world.set_block(6, 81, 4, AIR)
+
+        # Place water source at (4, 81, 1)
+        self.world.set_block(4, 81, 0, STONE)
+        self.world.set_block(4, 81, 1, "water")
+
+        for _ in range(15):
+            self.world.update_fluids(0.2)
+
+        # Water flows straight along channel at x=4
+        self.assertTrue(self.world.get_block(4, 81, 2).startswith("water"))
+        self.assertTrue(self.world.get_block(4, 81, 3).startswith("water"))
+        self.assertTrue(self.world.get_block(4, 81, 4).startswith("water"))
+        self.assertTrue(self.world.get_block(4, 81, 5).startswith("water"))
+
+        # Water MUST NOT flow through the solid back into (5, 81, 4) or behind it at (6, 81, 4)
+        self.assertEqual(self.world.get_block(5, 81, 4), "smooth_sandstone_vertical_slab_west")
+        self.assertEqual(self.world.get_block(6, 81, 4), AIR)
+
 
 if __name__ == "__main__":
     unittest.main()

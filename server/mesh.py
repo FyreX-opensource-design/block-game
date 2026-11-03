@@ -8,6 +8,7 @@ from server.blocks import (
     get_offset_info,
     has_half_offset_top,
     is_offset_block,
+    is_vertical_slab_offset,
 )
 from server.noise import hash2, hash2_grid
 
@@ -198,6 +199,9 @@ def _fluid_height_grid(data):
         if block.properties.get("waterlogged"):
             level = block.properties.get("level", 8)
             h = int(level * 2)
+            if block.properties.get("vertical_slab"):
+                grid[data == value] = h
+                continue
             half = block.properties.get("half", getattr(block, "slab_half", "bottom"))
             if half == "top":
                 h = min(8, h)
@@ -289,7 +293,7 @@ def _exposed(cells, occ, see=None):
 
 
 def _is_opaque_offset(block_id):
-    if not block_id:
+    if not block_id or is_vertical_slab_offset(block_id):
         return False
     o_info = get_offset_info(block_id)
     if o_info is None:
@@ -419,7 +423,11 @@ def build_chunk_mesh(world, cx, cy, cz):
     cursor_cutout = len(cutout[0]) if cutout is not None else 0
     cursor_translucent = 0
 
-    from server.blocks import has_half_offset_top, is_offset_block
+    from server.blocks import (
+        has_half_offset_top,
+        is_offset_block,
+        is_vertical_slab_offset,
+    )
 
     for y, z, x in partial_cells:
         block = block_from_index(data[int(y), int(z), int(x)])
@@ -441,7 +449,7 @@ def build_chunk_mesh(world, cx, cy, cz):
                     pt_color = (1.0, 1.0, 1.0)
 
                 el_cutout = element.get("cutout", block.cutout)
-                if from_y < -1e-3 and float(element["from"][0]) == 0.0 and float(element["to"][0]) == 16.0:
+                if from_y < -1e-3:
                     nx = int(NORMALS[normal_i, 0])
                     nz = int(NORMALS[normal_i, 2])
                     if normal_i == 2:
@@ -460,21 +468,29 @@ def build_chunk_mesh(world, cx, cy, cz):
                             continue
                         l_sample = tuple(l_grid[int(y), int(z) + 1, int(x) + 1])
                     else:
-                        nbr_b = world.get_block(wx + nx, wy, wz + nz) if world is not None else None
-                        if _is_opaque_offset(nbr_b) or (el_cutout and is_offset_block(nbr_b) and normal_i in (1, 5)):
-                            continue
-                        if (
-                            _neighbor_solid(occ, int(y), int(z), int(x), normal_i)
-                            and int(y) > 0
-                            and _neighbor_solid(occ, int(y) - 1, int(z), int(x), normal_i)
-                        ):
-                            continue
-                        l_sample = tuple(
-                            np.maximum(
-                                l_grid[int(y) + 1, int(z) + 1 + nz, int(x) + 1 + nx],
-                                l_grid[int(y), int(z) + 1 + nz, int(x) + 1 + nx],
+                        if not _boundary(element, normal_i):
+                            l_sample = tuple(
+                                np.maximum(
+                                    l_grid[int(y) + 1, int(z) + 1, int(x) + 1],
+                                    l_grid[int(y), int(z) + 1, int(x) + 1],
+                                )
                             )
-                        )
+                        else:
+                            nbr_b = world.get_block(wx + nx, wy, wz + nz) if world is not None else None
+                            if _is_opaque_offset(nbr_b) or (el_cutout and is_offset_block(nbr_b) and not is_vertical_slab_offset(nbr_b) and normal_i in (1, 5)):
+                                continue
+                            if (
+                                _neighbor_solid(occ, int(y), int(z), int(x), normal_i)
+                                and int(y) > 0
+                                and _neighbor_solid(occ, int(y) - 1, int(z), int(x), normal_i)
+                            ):
+                                continue
+                            l_sample = tuple(
+                                np.maximum(
+                                    l_grid[int(y) + 1, int(z) + 1 + nz, int(x) + 1 + nx],
+                                    l_grid[int(y), int(z) + 1 + nz, int(x) + 1 + nx],
+                                )
+                            )
                 else:
                     if normal_i == 2 and abs(to_y - 8.0) <= 1e-3:
                         above_b = world.get_block(wx, wy + 1, wz) if world is not None else None
@@ -549,7 +565,11 @@ def build_chunk_mesh(world, cx, cy, cz):
         if block is None:
             continue
         shade = 0.92 + 0.08 * hash2(x0 + int(x), z0 + int(z))
-        is_slab = bool(block.properties.get("slab") or getattr(block, "slab", False))
+        is_slab = bool(
+            block.properties.get("slab")
+            or getattr(block, "slab", False)
+            or block.properties.get("waterlogged")
+        )
         fluid_uvs = (water_block.face_uvs if (is_slab and water_block is not None) else block.face_uvs)
         slab_half = block.properties.get("half", getattr(block, "slab_half", None)) if is_slab else None
 

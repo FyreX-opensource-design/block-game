@@ -996,6 +996,7 @@ class Game(pyglet.window.Window):
             get_offset_torch_info,
             get_slab_info,
             get_vertical_slab_torch_info,
+            is_offset_block,
             is_slab,
         )
 
@@ -1015,7 +1016,7 @@ class Game(pyglet.window.Window):
         elif dv_info is not None:
             sub_id = (
                 dv_info["positive_block"]
-                if target_half != "vertical_negative"
+                if target_half not in ("vertical_negative", "vertical_offset_negative")
                 else dv_info["negative_block"]
             )
             block = BLOCKS.get(sub_id) or BLOCKS.get(block_id)
@@ -1060,7 +1061,11 @@ class Game(pyglet.window.Window):
             get_offset_info,
             get_offset_torch_info,
             get_slab_info,
+            get_vertical_slab_info,
+            get_vertical_slab_offset_block,
+            get_vertical_slab_offset_info,
             get_vertical_slab_torch_info,
+            is_offset_block,
             is_slab,
             rotation_variant,
         )
@@ -1073,7 +1078,7 @@ class Game(pyglet.window.Window):
             target_half = hit.get("slab_half") or "vertical_positive"
             held_id = stack_id(self.hotbar[self.selected]) if self.selected < len(self.hotbar) else ""
             held_item = ITEMS.get(held_id)
-            if target_half == "vertical_negative":
+            if target_half in ("vertical_negative", "vertical_offset_negative"):
                 broken_item = dv_info["negative"]
                 remaining_block = rotation_variant(
                     dv_info["positive"], dv_info["positive_facing"]
@@ -1085,6 +1090,12 @@ class Game(pyglet.window.Window):
                     dv_info["negative"], dv_info["negative_facing"]
                 )
                 drop_y = y + 0.25
+
+            if is_offset_block(block_id):
+                remaining_block = get_vertical_slab_offset_block(remaining_block)
+                if o_info is not None and o_info.get("capped") and o_info.get("top_slab"):
+                    from server.blocks import get_capped_vertical_slab_offset
+                    remaining_block = get_capped_vertical_slab_offset(remaining_block, o_info["top_slab"])
 
             if self.gamemode == "survival":
                 drops = get_block_drops(broken_item, held_item)
@@ -1113,6 +1124,32 @@ class Game(pyglet.window.Window):
                     drops.extend(get_block_drops(item_id, held_item))
 
             if self.gamemode == "survival":
+                self._spawn_break_drops(drops, x, drop_y, z)
+
+            if self.network_client is not None:
+                self.network_client.send_set_block(x, y, z, remaining_block)
+            if self.world.set_block(x, y, z, remaining_block):
+                self._upload_block_change(x, y, z)
+            return
+
+        v_off_info = get_vertical_slab_offset_info(block_id)
+        if v_off_info is not None and v_off_info.get("capped"):
+            target_half = hit.get("slab_half") or ("top" if hit.get("local_y", 0.5) >= 0.5 else "offset")
+            base_id = v_off_info["base_id"]
+            top_slab = v_off_info["top_slab"]
+            if target_half == "top":
+                broken_item = top_slab
+                remaining_block = get_vertical_slab_offset_block(block_id)
+                drop_y = y + 0.75
+            else:
+                broken_item = base_id
+                remaining_block = f"{top_slab}_top"
+                drop_y = y + 0.0
+
+            if self.gamemode == "survival":
+                held_id = stack_id(self.hotbar[self.selected]) if self.selected < len(self.hotbar) else ""
+                held_item = ITEMS.get(held_id)
+                drops = get_block_drops(broken_item, held_item)
                 self._spawn_break_drops(drops, x, drop_y, z)
 
             if self.network_client is not None:
@@ -1174,6 +1211,7 @@ class Game(pyglet.window.Window):
             return
 
         next_block = AIR
+        v_info = get_vertical_slab_info(block_id)
         if o_info is not None:
             broken_id = o_info["base_id"]
         elif s_info is not None:
@@ -1182,6 +1220,18 @@ class Game(pyglet.window.Window):
                 from server.fluid import WATER_LEVEL_BLOCKS
 
                 lvl = s_info.get("level", 8)
+                if lvl >= 8:
+                    next_block = "water"
+                elif lvl in WATER_LEVEL_BLOCKS:
+                    next_block = WATER_LEVEL_BLOCKS[lvl]
+                else:
+                    next_block = AIR
+        elif v_info is not None:
+            broken_id = v_info["base_id"]
+            if v_info.get("waterlogged"):
+                from server.fluid import WATER_LEVEL_BLOCKS
+
+                lvl = v_info.get("level", 8)
                 if lvl >= 8:
                     next_block = "water"
                 elif lvl in WATER_LEVEL_BLOCKS:
@@ -1267,12 +1317,15 @@ class Game(pyglet.window.Window):
             return
 
         from server.blocks import (
+            FACING_DIRECTIONS,
             FACING_NORMALS,
             OPPOSITE_FACING,
             can_place_block,
+            can_support_torch,
             facing_from_normal,
             get_capped_offset_block,
             get_capped_offset_torch,
+            get_capped_vertical_slab_offset,
             get_double_slab,
             get_double_vertical_slab,
             get_offset_block,
@@ -1281,16 +1334,23 @@ class Game(pyglet.window.Window):
             get_offset_torch_info,
             get_slab_info,
             get_vertical_slab_info,
+            get_vertical_slab_info,
+            get_vertical_slab_offset_block,
+            get_vertical_slab_offset_info,
             get_vertical_slab_torch,
             get_vertical_slab_torch_info,
             has_half_offset_top,
+            is_vertical_slab,
+            is_vertical_slab_offset,
             is_offset_block,
             is_offset_torch,
             is_slab,
             is_torch,
             placement_block,
+            player_facing_from_yaw,
             rotation_variant,
             vertical_slab_bounds,
+            vertical_slab_offset_bounds,
         )
         from server.fluid import is_water
 
@@ -1303,23 +1363,45 @@ class Game(pyglet.window.Window):
         target_offset_info = get_offset_info(target_block)
         target_v_info = get_vertical_slab_info(target_block)
         target_back_torch_info = get_vertical_slab_torch_info(target_block)
+        target_v_offset_info = get_vertical_slab_offset_info(target_block)
         held_v_info = get_vertical_slab_info(held.block)
+        held_v_offset_info = get_vertical_slab_offset_info(held.block)
         hit_normal = (hit["nx"], hit["ny"], hit["nz"])
 
         # Fill the open half of a targeted vertical slab, making a full cell.
+        t_v_info = target_v_info or target_v_offset_info
         if (
             held_v_info is not None
-            and target_v_info is not None
+            and t_v_info is not None
             and target_back_torch_info is None
-            and hit_normal == FACING_NORMALS[OPPOSITE_FACING[target_v_info["facing"]]]
+            and (
+                hit_normal == FACING_NORMALS[OPPOSITE_FACING[t_v_info["facing"]]]
+                or (hit["ny"] == -1 and t_v_info.get("capped", False))
+            )
         ):
             tx, ty, tz = target_pos
-            new_facing = OPPOSITE_FACING[target_v_info["facing"]]
+            new_facing = OPPOSITE_FACING[t_v_info["facing"]]
             held_oriented = rotation_variant(held.block, new_facing)
             double_id = get_double_vertical_slab(target_block, held_oriented)
             if double_id is not None:
-                if self.player is not None and self.player.overlaps_block(tx, ty, tz):
-                    return
+                new_box = (
+                    vertical_slab_offset_bounds(tx, ty, tz, new_facing)
+                    if is_vertical_slab_offset(target_block)
+                    else vertical_slab_bounds(tx, ty, tz, new_facing)
+                )
+                if self.player is not None:
+                    px, py, pz = self.player.pos
+                    rad, hgt = self.player.radius, self.player.height
+                    bx0, by0, bz0, bx1, by1, bz1 = new_box
+                    if (
+                        px + rad > bx0
+                        and px - rad < bx1
+                        and py + hgt > by0
+                        and py < by1
+                        and pz + rad > bz0
+                        and pz - rad < bz1
+                    ):
+                        return
                 if self.network_client is not None:
                     self.network_client.send_set_block(tx, ty, tz, double_id)
                 if self.world.set_block(tx, ty, tz, double_id):
@@ -1332,6 +1414,104 @@ class Game(pyglet.window.Window):
                         else:
                             self.hotbar[self.selected] = empty_stack()
                     return
+
+        # Placing a vertical slab into a targeted top slab to make a capped offset vertical slab
+        if (
+            held_v_info is not None
+            and target_slab_info is not None
+            and not target_slab_info["double"]
+            and target_slab_info["half"] == "top"
+        ):
+            tx, ty, tz = target_pos
+            player_yaw = self.player.yaw if self.player is not None else None
+            new_facing = player_facing_from_yaw(player_yaw)
+            off_id = get_vertical_slab_offset_block(rotation_variant(held.block, new_facing))
+            if off_id is not None:
+                capped_id = get_capped_vertical_slab_offset(off_id, target_block)
+                if capped_id is not None:
+                    below_target = self.world.get_block(tx, ty - 1, tz)
+                    below_v_off = get_vertical_slab_offset_info(below_target)
+                    below_t_info = get_offset_torch_info(below_target)
+                    if (
+                        below_target in ("", AIR, None)
+                        or has_half_offset_top(below_target)
+                        or (below_v_off is not None and not below_v_off["capped"])
+                        or (below_t_info is not None and not below_t_info["capped"])
+                    ):
+                        new_box = vertical_slab_offset_bounds(tx, ty, tz, new_facing)
+                        if self.player is not None:
+                            px, py, pz = self.player.pos
+                            rad, hgt = self.player.radius, self.player.height
+                            bx0, by0, bz0, bx1, by1, bz1 = new_box
+                            if (
+                                px + rad > bx0
+                                and px - rad < bx1
+                                and py + hgt > by0
+                                and py < by1
+                                and pz + rad > bz0
+                                and pz - rad < bz1
+                            ):
+                                return
+                        if self.network_client is not None:
+                            self.network_client.send_set_block(tx, ty, tz, capped_id)
+                        if self.world.set_block(tx, ty, tz, capped_id):
+                            self._upload_block_change(tx, ty, tz)
+                            if self.gamemode == "survival":
+                                cur_slot = self.hotbar[self.selected]
+                                c = stack_count(cur_slot)
+                                if c > 1:
+                                    self.hotbar[self.selected] = make_stack(stack_id(cur_slot), c - 1)
+                                else:
+                                    self.hotbar[self.selected] = empty_stack()
+                            return
+
+        # Placing a full block into a targeted top slab to make a capped offset block
+        if (
+            not held_is_slab
+            and held_v_info is None
+            and target_slab_info is not None
+            and not target_slab_info["double"]
+            and target_slab_info["half"] == "top"
+        ):
+            tx, ty, tz = target_pos
+            off_candidate = get_offset_block(held.block)
+            if off_candidate is not None:
+                capped_id = get_capped_offset_block(off_candidate, target_block)
+                if capped_id is not None:
+                    below_target = self.world.get_block(tx, ty - 1, tz)
+                    below_v_off = get_vertical_slab_offset_info(below_target)
+                    below_t_info = get_offset_torch_info(below_target)
+                    if (
+                        below_target in ("", AIR, None)
+                        or has_half_offset_top(below_target)
+                        or (below_v_off is not None and not below_v_off["capped"])
+                        or (below_t_info is not None and not below_t_info["capped"])
+                    ):
+                        if self.player is not None:
+                            px, py, pz = self.player.pos
+                            rad, hgt = self.player.radius, self.player.height
+                            bx0, by0, bz0, bx1, by1, bz1 = (float(tx), float(ty) - 0.5, float(tz), float(tx + 1), float(ty) + 0.5, float(tz + 1))
+                            if (
+                                px + rad > bx0
+                                and px - rad < bx1
+                                and py + hgt > by0
+                                and py < by1
+                                and pz + rad > bz0
+                                and pz - rad < bz1
+                            ):
+                                return
+                        if self.network_client is not None:
+                            self.network_client.send_set_block(tx, ty, tz, capped_id)
+                        if self.world.set_block(tx, ty, tz, capped_id):
+                            self._upload_block_change(tx, ty, tz)
+                            if self.gamemode == "survival":
+                                cur_slot = self.hotbar[self.selected]
+                                c = stack_count(cur_slot)
+                                if c > 1:
+                                    self.hotbar[self.selected] = make_stack(stack_id(cur_slot), c - 1)
+                                else:
+                                    self.hotbar[self.selected] = empty_stack()
+                            return
 
         # A torch on the back long face sits in the empty half of the same cell.
         if (
@@ -1403,8 +1583,20 @@ class Game(pyglet.window.Window):
                         can_combine = True
 
                 if can_combine and double_id is not None:
-                    if self.player is not None and self.player.overlaps_block(tx, ty, tz):
-                        return
+                    if self.player is not None:
+                        px, py, pz = self.player.pos
+                        rad, hgt = self.player.radius, self.player.height
+                        new_y0 = ty + 0.5 if target_slab_info["half"] == "bottom" else ty
+                        new_y1 = ty + 1.0 if target_slab_info["half"] == "bottom" else ty + 0.5
+                        if (
+                            px + rad > tx
+                            and px - rad < tx + 1
+                            and py + hgt > new_y0
+                            and py < new_y1
+                            and pz + rad > tz
+                            and pz - rad < tz + 1
+                        ):
+                            return
                     if self.network_client is not None:
                         self.network_client.send_set_block(tx, ty, tz, double_id)
                     if self.world.set_block(tx, ty, tz, double_id):
@@ -1435,18 +1627,38 @@ class Game(pyglet.window.Window):
 
         # If the destination cell already holds a vertical slab whose solid
         # half is away from the clicked face, fill its open half.
+        a_v_info = adj_v_info or get_vertical_slab_offset_info(adj_block)
         if (
             held_v_info is not None
-            and adj_v_info is not None
+            and a_v_info is not None
             and get_vertical_slab_torch_info(adj_block) is None
-            and adjacent_facing == adj_v_info["facing"]
+            and (
+                adjacent_facing == a_v_info["facing"]
+                or (hit["ny"] in (-1, 1) and is_vertical_slab_offset(adj_block))
+            )
         ):
-            new_facing = OPPOSITE_FACING[adj_v_info["facing"]]
+            new_facing = OPPOSITE_FACING[a_v_info["facing"]]
             held_oriented = rotation_variant(held.block, new_facing)
             double_id = get_double_vertical_slab(adj_block, held_oriented)
             if double_id is not None:
-                if self.player is not None and self.player.overlaps_block(x, y, z):
-                    return
+                new_box = (
+                    vertical_slab_offset_bounds(x, y, z, new_facing)
+                    if is_vertical_slab_offset(adj_block)
+                    else vertical_slab_bounds(x, y, z, new_facing)
+                )
+                if self.player is not None:
+                    px, py, pz = self.player.pos
+                    rad, hgt = self.player.radius, self.player.height
+                    bx0, by0, bz0, bx1, by1, bz1 = new_box
+                    if (
+                        px + rad > bx0
+                        and px - rad < bx1
+                        and py + hgt > by0
+                        and py < by1
+                        and pz + rad > bz0
+                        and pz - rad < bz1
+                    ):
+                        return
                 if self.network_client is not None:
                     self.network_client.send_set_block(x, y, z, double_id)
                 if self.world.set_block(x, y, z, double_id):
@@ -1459,6 +1671,102 @@ class Game(pyglet.window.Window):
                         else:
                             self.hotbar[self.selected] = empty_stack()
                     return
+
+        # Placing a vertical slab into an adjacent top slab to make a capped offset vertical slab
+        if (
+            held_v_info is not None
+            and adj_slab_info is not None
+            and not adj_slab_info["double"]
+            and adj_slab_info["half"] == "top"
+        ):
+            player_yaw = self.player.yaw if self.player is not None else None
+            new_facing = player_facing_from_yaw(player_yaw)
+            off_id = get_vertical_slab_offset_block(rotation_variant(held.block, new_facing))
+            if off_id is not None:
+                capped_id = get_capped_vertical_slab_offset(off_id, adj_block)
+                if capped_id is not None:
+                    below_adj = self.world.get_block(x, y - 1, z)
+                    below_v_off = get_vertical_slab_offset_info(below_adj)
+                    below_t_info = get_offset_torch_info(below_adj)
+                    if (
+                        below_adj in ("", AIR, None)
+                        or has_half_offset_top(below_adj)
+                        or (below_v_off is not None and not below_v_off["capped"])
+                        or (below_t_info is not None and not below_t_info["capped"])
+                    ):
+                        new_box = vertical_slab_offset_bounds(x, y, z, new_facing)
+                        if self.player is not None:
+                            px, py, pz = self.player.pos
+                            rad, hgt = self.player.radius, self.player.height
+                            bx0, by0, bz0, bx1, by1, bz1 = new_box
+                            if (
+                                px + rad > bx0
+                                and px - rad < bx1
+                                and py + hgt > by0
+                                and py < by1
+                                and pz + rad > bz0
+                                and pz - rad < bz1
+                            ):
+                                return
+                        if self.network_client is not None:
+                            self.network_client.send_set_block(x, y, z, capped_id)
+                        if self.world.set_block(x, y, z, capped_id):
+                            self._upload_block_change(x, y, z)
+                            if self.gamemode == "survival":
+                                cur_slot = self.hotbar[self.selected]
+                                c = stack_count(cur_slot)
+                                if c > 1:
+                                    self.hotbar[self.selected] = make_stack(stack_id(cur_slot), c - 1)
+                                else:
+                                    self.hotbar[self.selected] = empty_stack()
+                            return
+
+        # Placing a full block into an adjacent top slab to make a capped offset block
+        if (
+            not held_is_slab
+            and held_v_info is None
+            and adj_slab_info is not None
+            and not adj_slab_info["double"]
+            and adj_slab_info["half"] == "top"
+        ):
+            off_candidate = get_offset_block(held.block)
+            if off_candidate is not None:
+                capped_id = get_capped_offset_block(off_candidate, adj_block)
+                if capped_id is not None:
+                    below_adj = self.world.get_block(x, y - 1, z)
+                    below_v_off = get_vertical_slab_offset_info(below_adj)
+                    below_t_info = get_offset_torch_info(below_adj)
+                    if (
+                        below_adj in ("", AIR, None)
+                        or has_half_offset_top(below_adj)
+                        or (below_v_off is not None and not below_v_off["capped"])
+                        or (below_t_info is not None and not below_t_info["capped"])
+                    ):
+                        if self.player is not None:
+                            px, py, pz = self.player.pos
+                            rad, hgt = self.player.radius, self.player.height
+                            bx0, by0, bz0, bx1, by1, bz1 = (float(x), float(y) - 0.5, float(z), float(x + 1), float(y) + 0.5, float(z + 1))
+                            if (
+                                px + rad > bx0
+                                and px - rad < bx1
+                                and py + hgt > by0
+                                and py < by1
+                                and pz + rad > bz0
+                                and pz - rad < bz1
+                            ):
+                                return
+                        if self.network_client is not None:
+                            self.network_client.send_set_block(x, y, z, capped_id)
+                        if self.world.set_block(x, y, z, capped_id):
+                            self._upload_block_change(x, y, z)
+                            if self.gamemode == "survival":
+                                cur_slot = self.hotbar[self.selected]
+                                c = stack_count(cur_slot)
+                                if c > 1:
+                                    self.hotbar[self.selected] = make_stack(stack_id(cur_slot), c - 1)
+                                else:
+                                    self.hotbar[self.selected] = empty_stack()
+                            return
 
         if held_is_slab and adj_offset_info is not None and not adj_offset_info["capped"]:
             above_adj = self.world.get_block(x, y + 1, z)
@@ -1499,8 +1807,20 @@ class Game(pyglet.window.Window):
                 elif adj_slab_info["half"] == "top":
                     double_id = get_double_slab(held.block, adj_slab_info["base_id"])
                 if double_id is not None:
-                    if self.player is not None and self.player.overlaps_block(x, y, z):
-                        return
+                    if self.player is not None:
+                        px, py, pz = self.player.pos
+                        rad, hgt = self.player.radius, self.player.height
+                        new_y0 = y + 0.5 if adj_slab_info["half"] == "bottom" else y
+                        new_y1 = y + 1.0 if adj_slab_info["half"] == "bottom" else y + 0.5
+                        if (
+                            px + rad > x
+                            and px - rad < x + 1
+                            and py + hgt > new_y0
+                            and py < new_y1
+                            and pz + rad > z
+                            and pz - rad < z + 1
+                        ):
+                            return
                     if self.network_client is not None:
                         self.network_client.send_set_block(x, y, z, double_id)
                     if self.world.set_block(x, y, z, double_id):
@@ -1557,13 +1877,15 @@ class Game(pyglet.window.Window):
             if offset_candidate is not None:
                 below_block = self.world.get_block(x, y - 1, z)
                 should_offset = False
-                if hit["ny"] == 1 and has_half_offset_top(target_block):
+                target_v_off = get_vertical_slab_offset_info(target_block)
+                below_v_off = get_vertical_slab_offset_info(below_block)
+                if hit["ny"] == 1 and (has_half_offset_top(target_block) or (target_v_off is not None and not target_v_off["capped"])):
                     should_offset = True
-                elif has_half_offset_top(below_block):
+                elif has_half_offset_top(below_block) or (below_v_off is not None and not below_v_off["capped"]):
                     should_offset = True
                 elif (
                     hit["ny"] == 0
-                    and hit.get("slab_half") == "offset"
+                    and hit.get("slab_half") in ("offset", "vertical_offset")
                     and (below_block in ("", AIR, None) or not self.world.is_solid(x, y - 1, z))
                 ):
                     should_offset = True
@@ -1571,12 +1893,38 @@ class Game(pyglet.window.Window):
                     block_to_place = offset_candidate
 
         # Check waterlogging if placing into water
-        if held_is_slab and is_water(adj_block):
-            if block_to_place.endswith("_top"):
-                base_b = block_to_place[:-4]
-                block_to_place = f"{base_b}_top_waterlogged"
-            else:
-                block_to_place = f"{block_to_place}_waterlogged"
+        if (held_is_slab or is_vertical_slab(held.block)) and is_water(adj_block):
+            from server.fluid import get_fluid_level, is_fluid_source
+            from server.blocks import (
+                get_slab_info,
+                get_waterlogged_slab,
+                get_vertical_slab_info,
+                get_waterlogged_vertical_slab,
+            )
+            f_level = get_fluid_level(adj_block)
+            is_src = is_fluid_source(adj_block) or f_level >= 8
+            target_level = 8 if is_src else f_level
+
+            v_info = get_vertical_slab_info(block_to_place)
+            s_info = get_slab_info(block_to_place)
+            if v_info is not None:
+                wl_v = get_waterlogged_vertical_slab(block_to_place, level=target_level)
+                if wl_v:
+                    block_to_place = wl_v
+            elif s_info is not None:
+                half = s_info["half"]
+                if half == "bottom":
+                    if is_src or f_level > 4:
+                        wl_s = get_waterlogged_slab(s_info["base_id"], half="bottom", level=target_level)
+                        if wl_s:
+                            block_to_place = wl_s
+                    else:
+                        # f_level <= 4: bottom slab displaces shallow flowing water -> remains dry
+                        pass
+                elif half == "top":
+                    wl_s = get_waterlogged_slab(s_info["base_id"], half="top", level=target_level)
+                    if wl_s:
+                        block_to_place = wl_s
 
         b_obj = BLOCKS.get(block_to_place)
         is_solid = b_obj is not None and b_obj.solid
@@ -1590,11 +1938,18 @@ class Game(pyglet.window.Window):
                 p_min_z, p_max_z = pz - rad, pz + rad
 
                 slab_info = get_slab_info(block_to_place)
+                v_off_info = get_vertical_slab_offset_info(block_to_place)
                 offset_info = get_offset_info(block_to_place)
                 torch_info = get_offset_torch_info(block_to_place)
                 v_info = get_vertical_slab_info(block_to_place)
                 if torch_info is not None and torch_info["capped"]:
                     b_boxes = [(float(x), float(y) + 0.5, float(z), float(x + 1), float(y) + 1.0, float(z + 1))]
+                elif v_off_info is not None:
+                    v_box = vertical_slab_offset_bounds(x, y, z, v_off_info["facing"])
+                    if v_off_info["capped"]:
+                        b_boxes = [v_box, (float(x), float(y) + 0.5, float(z), float(x + 1), float(y) + 1.0, float(z + 1))]
+                    else:
+                        b_boxes = [v_box]
                 elif offset_info is not None:
                     b_boxes = [(float(x), float(y) - 0.5, float(z), float(x + 1), float(y) + 0.5, float(z + 1))]
                 elif v_info is not None:
@@ -2692,12 +3047,39 @@ class Game(pyglet.window.Window):
             if fluid_hit is not None:
                 fx, fy, fz = fluid_hit["x"], fluid_hit["y"], fluid_hit["z"]
                 target_block = self.world.get_block(fx, fy, fz)
-                from server.blocks import is_waterlogged_slab, get_slab_info
+                from server.blocks import (
+                    get_slab_info,
+                    get_unwaterlogged_vertical_slab,
+                    get_vertical_slab_info,
+                    is_waterlogged_slab,
+                    is_waterlogged_vertical_slab,
+                )
                 from server.fluid import get_fluid_type, is_water_source
 
                 if is_waterlogged_slab(target_block) and is_water_source(target_block):
                     s_info = get_slab_info(target_block)
                     unlogged_id = s_info["base_id"] if s_info["half"] == "bottom" else f"{s_info['base_id']}_top"
+                    filled_id = get_filled_bucket(held_id, "water")
+                    if filled_id:
+                        if self.network_client is not None:
+                            self.network_client.send_set_block(fx, fy, fz, unlogged_id)
+                        self.world.set_block(fx, fy, fz, unlogged_id)
+                        self._upload_block_change(fx, fy, fz)
+
+                        if self.gamemode == "creative":
+                            self.hotbar[self.selected] = make_stack(filled_id, 1)
+                        else:
+                            cnt = stack_count(held_slot)
+                            if cnt <= 1:
+                                self.hotbar[self.selected] = make_stack(filled_id, 1)
+                            else:
+                                self.hotbar[self.selected] = make_stack(held_id, cnt - 1)
+                                leftover = add_to_inventory([self.hotbar, self.storage], filled_id, 1)
+                                if leftover > 0:
+                                    self._spawn_loose_item(filled_id, leftover, list(self.player.pos), pickup_delay=0.5)
+                        return True
+                elif is_waterlogged_vertical_slab(target_block) and is_water_source(target_block):
+                    unlogged_id = get_unwaterlogged_vertical_slab(target_block)
                     filled_id = get_filled_bucket(held_id, "water")
                     if filled_id:
                         if self.network_client is not None:
@@ -2752,10 +3134,17 @@ class Game(pyglet.window.Window):
 
             hx, hy, hz = hit["x"], hit["y"], hit["z"]
             cur_target = self.world.get_block(hx, hy, hz)
-            from server.blocks import is_slab, get_slab_info
+            from server.blocks import (
+                get_slab_info,
+                get_vertical_slab_info,
+                get_waterlogged_vertical_slab,
+                is_slab,
+                is_vertical_slab,
+            )
             from server.fluid import is_water_source
 
             s_info = get_slab_info(cur_target)
+            vs_info = get_vertical_slab_info(cur_target)
             if s_info is not None and not s_info["double"] and not is_water_source(cur_target):
                 logged_id = (
                     f"{s_info['base_id']}_waterlogged"
@@ -2777,6 +3166,25 @@ class Game(pyglet.window.Window):
                         if leftover > 0:
                             self._spawn_loose_item(empty_id, leftover, list(self.player.pos), pickup_delay=0.5)
                 return True
+            elif vs_info is not None and not is_water_source(cur_target):
+                logged_id = get_waterlogged_vertical_slab(cur_target, level=8)
+                if logged_id:
+                    if self.network_client is not None:
+                        self.network_client.send_set_block(hx, hy, hz, logged_id)
+                    self.world.set_block(hx, hy, hz, logged_id)
+                    self._upload_block_change(hx, hy, hz)
+
+                    if self.gamemode != "creative":
+                        cnt = stack_count(held_slot)
+                        if cnt <= 1:
+                            self.hotbar[self.selected] = make_stack(empty_id, 1)
+                        else:
+                            self.hotbar[self.selected] = make_stack(held_id, cnt - 1)
+                            leftover = add_to_inventory([self.hotbar, self.storage], empty_id, 1)
+                            if leftover > 0:
+                                self._spawn_loose_item(empty_id, leftover, list(self.player.pos), pickup_delay=0.5)
+                    return True
+
             target_obj = BLOCKS.get(cur_target)
             is_plant_or_breakable = (
                 target_obj is not None
@@ -2797,70 +3205,8 @@ class Game(pyglet.window.Window):
             if py < 0 or py >= WORLD_HEIGHT:
                 return False
 
-            # For vertical slabs, check if water can flow through based on facing direction
-            from server.blocks import is_vertical_slab, get_slab_info
-            target_block = self.world.get_block(px, py, pz)
-            vslab_info = get_slab_info(target_block)
-            if vslab_info is not None:
-                base_id = vslab_info.get("base_id", str(target_block))
-                if base_id == "vertical_slab" or base_id.startswith("cobble_vertical_slab"):
-                    # Get the player's facing direction (yaw normalized to 0-360)
-                    if self.player is not None:
-                        yaw = self.player.yaw
-                        # Convert yaw to cardinal direction
-                        # yaw=0 is looking south, yaw=90 is looking west, etc.
-                        direction = int(math.floor(yaw / 45)) % 4
-                        # Map to cardinal directions (yaw=0 = south)
-                        yaw_dir = ["south", "west", "north", "east"]
-                        facing = yaw_dir[direction] if direction < 4 else None
-                    else:
-                        facing = None
-                    
-                    # Map hit direction to cardinal
-                    nx, ny, nz = hit["nx"], hit["ny"], hit["nz"]
-                    if nx == 1:
-                        hit_face = "east"
-                    elif nx == -1:
-                        hit_face = "west"
-                    elif nz == 1:
-                        hit_face = "south"
-                    elif nz == -1:
-                        hit_face = "north"
-                    else:
-                        hit_face = None
-                    
-                    # If hitting the back face, allow water through (set facing to opposite)
-                    if hit_face and facing and hit_face != facing:
-                        # Set vertical slab facing to the direction we're hitting from
-                        opposite = {
-                            "east": "west",
-                            "west": "east",
-                            "south": "north",
-                            "north": "south",
-                        }
-                        new_facing = opposite.get(hit_face)
-                        if new_facing:
-                            # Update the slab's facing property
-                            vslab_info["facing"] = new_facing
-                            # Place water on the other side
-                            px = px + (1 if hit_face == "east" else -1 if hit_face == "west" else 0)
-                            pz = pz + (1 if hit_face == "south" else -1 if hit_face == "north" else 0)
-                            if py < 0 or py >= WORLD_HEIGHT or self.world.is_solid(px, py, pz):
-                                return False
-                        else:
-                            return False
-                    elif facing and hit_face == facing:
-                        # Hitting the back face - allow through
-                        px = px + (1 if hit_face == "east" else -1 if hit_face == "west" else 0)
-                        pz = pz + (1 if hit_face == "south" else -1 if hit_face == "north" else 0)
-                        if py < 0 or py >= WORLD_HEIGHT or self.world.is_solid(px, py, pz):
-                            return False
-                    else:
-                        # Normal case - blocked by the slab
-                        return False
-            else:
-                if self.world.is_solid(px, py, pz):
-                    return False
+            if self.world.is_solid(px, py, pz):
+                return False
 
             if self.network_client is not None:
                 self.network_client.send_set_block(px, py, pz, fluid_id)

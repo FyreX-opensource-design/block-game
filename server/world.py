@@ -24,9 +24,12 @@ from server.blocks import (
     block_index,
     get_double_vertical_slab_info,
     get_vertical_slab_info,
+    get_vertical_slab_offset_info,
     get_vertical_slab_torch_info,
     is_vertical_slab,
+    is_vertical_slab_offset,
     vertical_slab_bounds,
+    vertical_slab_offset_bounds,
 )
 from server.caves import load_caves
 from server.ores import load_ores
@@ -76,12 +79,29 @@ def _intersect_ray_box(ox, oy, oz, dx, dy, dz, bx0, by0, bz0, bx1, by1, bz1):
         hit_x = ox + dx * t_hit
         hit_y = oy + dy * t_hit
         hit_z = oz + dz * t_hit
-        if abs(tmin - tx0) < 1e-5:
-            normal = (-1 if dx > 0 else 1, 0, 0)
-        elif abs(tmin - ty0) < 1e-5:
-            normal = (0, -1 if dy > 0 else 1, 0)
+        # Determine the normal at the actual hit point by checking
+        # which boundary the hit coordinate lies on.
+        tol = 1e-5
+        if abs(hit_x - bx0) < tol:
+            normal = (-1, 0, 0)
+        elif abs(hit_x - bx1) < tol:
+            normal = (1, 0, 0)
+        elif abs(hit_y - by0) < tol:
+            normal = (0, -1, 0)
+        elif abs(hit_y - by1) < tol:
+            normal = (0, 1, 0)
+        elif abs(hit_z - bz0) < tol:
+            normal = (0, 0, -1)
+        elif abs(hit_z - bz1) < tol:
+            normal = (0, 0, 1)
         else:
-            normal = (0, 0, -1 if dz > 0 else 1)
+            # Fallback to the original entry-point logic
+            if abs(tmin - tx0) < 1e-5:
+                normal = (-1 if dx > 0 else 1, 0, 0)
+            elif abs(tmin - ty0) < 1e-5:
+                normal = (0, -1 if dy > 0 else 1, 0)
+            else:
+                normal = (0, 0, -1 if dz > 0 else 1)
 
     return t_hit, hit_x, hit_y, hit_z, normal
 
@@ -696,18 +716,13 @@ class World:
     def is_solid_for_water_flow(self, x, y, z, flow_dir):
         """Check if a block is solid for water flow, considering facing direction on vertical slabs.
 
-        flow_dir: tuple (nx, ny, nz) of the water's approach direction.
+        flow_dir: tuple (nx, ny, nz) of the water's approach direction into the block.
         Returns True if water is blocked, False if water can flow through.
-        For vertical slabs, water hitting the "back" long face passes through.
+        For vertical slabs, water approaching the solid back face (facing) is blocked.
         """
         block = BLOCKS.get(self.get_block(x, y, z))
         if block is None or not block.solid:
             return False
-
-        # Check for vertical slab waterlogged variants
-        base_id = getattr(block, "base_id", str(block.id))
-        if base_id.endswith("_waterlogged") or str(block.properties.get("fluid", "")) == "water":
-            return True
 
         # A double vertical slab fills the cell and blocks water everywhere.
         if get_double_vertical_slab_info(block) is not None:
@@ -718,9 +733,6 @@ class World:
             # Get the slab's facing direction from its properties
             facing = block.properties.get("facing", None)
             if facing in ("north", "south", "east", "west"):
-                # Map water approach direction to cardinal directions
-                # flow_dir is (nx, ny, nz) - the direction water is moving
-                # We want to know which face of the block the water is hitting
                 nx, ny, nz = flow_dir
                 if nx == 1:
                     hit_face = "east"
@@ -737,12 +749,12 @@ class World:
                 else:
                     hit_face = None
 
-                # If hitting the back face (opposite to facing), water passes through
-                if hit_face and hit_face != facing:
-                    return False
+                # Approaching from the solid back face is blocked
+                if hit_face == facing:
+                    return True
 
-                # Otherwise, water is blocked by the slab
-                return True
+                # Open front and sides allow water flow
+                return False
 
         return True
 
@@ -778,13 +790,31 @@ class World:
         if b_obj is None or not b_obj.solid:
             return []
 
-        from server.blocks import get_offset_info, get_offset_torch_info, get_slab_info
+        from server.blocks import (
+            get_offset_info,
+            get_offset_torch_info,
+            get_slab_info,
+            get_vertical_slab_info,
+            get_vertical_slab_offset_info,
+            vertical_slab_bounds,
+            vertical_slab_offset_bounds,
+        )
 
         t_info = get_offset_torch_info(b_obj)
         if t_info is not None:
             if t_info["capped"]:
                 return [(float(x), float(y) + 0.5, float(z), float(x + 1), float(y + 1), float(z + 1))]
             return []
+
+        v_off_info = get_vertical_slab_offset_info(b_obj) if b_obj is not None else None
+        if v_off_info is not None:
+            v_box = vertical_slab_offset_bounds(x, y, z, v_off_info["facing"])
+            if v_off_info["capped"]:
+                return [
+                    v_box,
+                    (float(x), float(y) + 0.5, float(z), float(x + 1), float(y) + 1.0, float(z + 1)),
+                ]
+            return [v_box]
 
         o_info = get_offset_info(b_obj)
         if o_info is not None:
@@ -1678,18 +1708,22 @@ class World:
                 get_offset_info,
                 get_offset_torch_info,
                 get_slab_info,
+                get_vertical_slab_offset_info,
                 get_vertical_slab_torch_info,
                 is_offset_block,
                 is_offset_torch,
                 is_slab,
+                is_vertical_slab_offset,
+                vertical_slab_bounds,
             )
 
             blk = self.get_block(x, y, z)
             above_blk = self.get_block(x, y + 1, z) if y + 1 < WORLD_HEIGHT else AIR
-            above_is_offset = is_offset_block(above_blk)
+            above_is_v_offset = is_vertical_slab_offset(above_blk)
+            above_is_offset = is_offset_block(above_blk) and not above_is_v_offset
             above_is_offset_torch = not solid_only and is_offset_torch(above_blk)
 
-            if blk not in ("", AIR) or above_is_offset or above_is_offset_torch:
+            if blk not in ("", AIR) or above_is_offset or above_is_v_offset or above_is_offset_torch:
                 boxes = []
                 if blk not in ("", AIR):
                     is_f = is_fluid(blk)
@@ -1698,6 +1732,7 @@ class World:
                     o_info = get_offset_info(blk)
                     t_info = get_offset_torch_info(blk)
                     v_info = get_vertical_slab_info(blk)
+                    v_off_info = get_vertical_slab_offset_info(blk)
                     dv_info = get_double_vertical_slab_info(blk)
                     bt_info = get_vertical_slab_torch_info(blk)
 
@@ -1734,6 +1769,68 @@ class World:
                                         (float(x), float(y) + 0.5, float(z), float(x + 1), float(y + 1), float(z + 1)),
                                     )
                                 )
+                        elif v_off_info is not None:
+                            v_box = vertical_slab_offset_bounds(x, y, z, v_off_info["facing"])
+                            boxes.append((x, y, z, "vertical_offset", v_box))
+                            if v_off_info["capped"]:
+                                boxes.append(
+                                    (
+                                        x,
+                                        y,
+                                        z,
+                                        "top",
+                                        (float(x), float(y) + 0.5, float(z), float(x + 1), float(y + 1), float(z + 1)),
+                                    )
+                                )
+                        elif dv_info is not None:
+                            if o_info is not None:
+                                boxes.append(
+                                    (
+                                        x,
+                                        y,
+                                        z,
+                                        "vertical_positive",
+                                        vertical_slab_offset_bounds(x, y, z, dv_info["positive_facing"]),
+                                    )
+                                )
+                                boxes.append(
+                                    (
+                                        x,
+                                        y,
+                                        z,
+                                        "vertical_negative",
+                                        vertical_slab_offset_bounds(x, y, z, dv_info["negative_facing"]),
+                                    )
+                                )
+                                if o_info["capped"]:
+                                    boxes.append(
+                                        (
+                                            x,
+                                            y,
+                                            z,
+                                            "top",
+                                            (float(x), float(y) + 0.5, float(z), float(x + 1), float(y + 1), float(z + 1)),
+                                        )
+                                    )
+                            else:
+                                boxes.append(
+                                    (
+                                        x,
+                                        y,
+                                        z,
+                                        "vertical_positive",
+                                        vertical_slab_bounds(x, y, z, dv_info["positive_facing"]),
+                                    )
+                                )
+                                boxes.append(
+                                    (
+                                        x,
+                                        y,
+                                        z,
+                                        "vertical_negative",
+                                        vertical_slab_bounds(x, y, z, dv_info["negative_facing"]),
+                                    )
+                                )
                         elif o_info is not None:
                             boxes.append(
                                 (
@@ -1754,25 +1851,6 @@ class World:
                                         (float(x), float(y) + 0.5, float(z), float(x + 1), float(y + 1), float(z + 1)),
                                     )
                                 )
-                        elif dv_info is not None:
-                            boxes.append(
-                                (
-                                    x,
-                                    y,
-                                    z,
-                                    "vertical_positive",
-                                    vertical_slab_bounds(x, y, z, dv_info["positive_facing"]),
-                                )
-                            )
-                            boxes.append(
-                                (
-                                    x,
-                                    y,
-                                    z,
-                                    "vertical_negative",
-                                    vertical_slab_bounds(x, y, z, dv_info["negative_facing"]),
-                                )
-                            )
                         elif s_info is not None:
                             if s_info["double"]:
                                 boxes.append(
@@ -1891,16 +1969,26 @@ class World:
                                 )
                             )
 
-                if above_is_offset:
-                    boxes.append(
-                        (
-                            x,
-                            y + 1,
-                            z,
-                            "offset",
-                            (float(x), float(y) + 0.5, float(z), float(x + 1), float(y) + 1.5, float(z + 1)),
+                if above_is_v_offset:
+                    v_off_above = get_vertical_slab_offset_info(above_blk)
+                    if v_off_above is not None:
+                        v_box_above = vertical_slab_offset_bounds(x, y + 1, z, v_off_above["facing"])
+                        boxes.append((x, y + 1, z, "vertical_offset", v_box_above))
+                elif above_is_offset:
+                    above_dv = get_double_vertical_slab_info(above_blk)
+                    if above_dv is not None:
+                        boxes.append((x, y + 1, z, "vertical_positive", vertical_slab_offset_bounds(x, y + 1, z, above_dv["positive_facing"])))
+                        boxes.append((x, y + 1, z, "vertical_negative", vertical_slab_offset_bounds(x, y + 1, z, above_dv["negative_facing"])))
+                    else:
+                        boxes.append(
+                            (
+                                x,
+                                y + 1,
+                                z,
+                                "offset",
+                                (float(x), float(y) + 0.5, float(z), float(x + 1), float(y) + 1.5, float(z + 1)),
+                            )
                         )
-                    )
                 elif above_is_offset_torch:
                     above_obj = BLOCKS.get(above_blk)
                     if above_obj is not None and above_obj.elements:

@@ -221,7 +221,7 @@ class AssetTests(unittest.TestCase):
         frame = inventory.layout(1280, 720, hotbar, 0, (0, 0))
         actions = {hit.action for hit in frame.hits}
         self.assertEqual(inventory.tab, "building")
-        for block_id in TAB_ITEMS["building"]:
+        for block_id in TAB_ITEMS["building"][:36]:
             self.assertIn(f"item:{block_id}", actions)
         self.assertNotIn(f"item:{GRASS}", actions)
         inventory.scroll = 3

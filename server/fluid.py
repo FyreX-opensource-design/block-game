@@ -16,6 +16,12 @@ BRACKISH_WATER_SOURCE = "brackish_water"
 BRACKISH_WATER_FALLING = "brackish_water_falling"
 
 CARDINALS = ((1, 0), (-1, 0), (0, 1), (0, -1))
+CARDINAL_FOR_FACING = {
+    "north": (0, -1),
+    "south": (0, 1),
+    "west": (-1, 0),
+    "east": (1, 0),
+}
 DROPOFF_MAX_DIST = 4
 
 
@@ -232,9 +238,9 @@ def get_fluid_type(block_id):
             if block_id.endswith(suffix):
                 return block_id[: -len(suffix)]
         return block_id
-    from server.blocks import is_waterlogged_slab
+    from server.blocks import is_waterlogged_slab, is_waterlogged_vertical_slab
 
-    if is_waterlogged_slab(block_id):
+    if is_waterlogged_slab(block_id) or is_waterlogged_vertical_slab(block_id):
         return "water"
     return None
 
@@ -254,9 +260,9 @@ def is_fluid(block_id):
     b_obj = BLOCKS.get(block_id)
     if b_obj is not None and (getattr(b_obj, "properties", None) or {}).get("fluid"):
         return True
-    from server.blocks import is_waterlogged_slab
+    from server.blocks import is_waterlogged_slab, is_waterlogged_vertical_slab
 
-    return is_waterlogged_slab(block_id)
+    return is_waterlogged_slab(block_id) or is_waterlogged_vertical_slab(block_id)
 
 
 def is_water(block_id):
@@ -274,11 +280,14 @@ def is_fluid_source(block_id):
         if props.get("fluid") and not props.get("waterlogged") and not props.get("falling", False):
             if int(props.get("level", 8)) == 8:
                 return True
-    from server.blocks import get_slab_info
+    from server.blocks import get_slab_info, get_vertical_slab_info
 
     s_info = get_slab_info(block_id)
     if s_info is not None and s_info["waterlogged"]:
         return s_info.get("level", 8) == 8
+    vs_info = get_vertical_slab_info(block_id)
+    if vs_info is not None and vs_info["waterlogged"]:
+        return vs_info.get("level", 8) == 8
     return False
 
 
@@ -307,11 +316,14 @@ def get_fluid_level(block_id):
         props = getattr(b_obj, "properties", None) or {}
         if props.get("fluid") and not props.get("waterlogged"):
             return int(props.get("level", 8))
-    from server.blocks import get_slab_info
+    from server.blocks import get_slab_info, get_vertical_slab_info
 
     s_info = get_slab_info(block_id)
     if s_info is not None and s_info["waterlogged"]:
         return s_info.get("level", 8)
+    vs_info = get_vertical_slab_info(block_id)
+    if vs_info is not None and vs_info["waterlogged"]:
+        return vs_info.get("level", 8)
     return 0
 
 
@@ -342,12 +354,13 @@ def _step_down_level(nbr_block, nbr_level, fluid_def):
     return min(nbr_level - 1, max_flow)
 
 
-def can_flow_into(world, x, y, z, from_level=None, from_y=None, fluid_type=None):
+def can_flow_into(world, x, y, z, from_level=None, from_y=None, fluid_type=None, flow_dx=None, flow_dz=None, from_x=None, from_z=None):
     """Check if fluid can flow into (x, y, z).
     Must be in world vertical bounds and in a currently loaded chunk.
     Non-solid blocks (air, non-source fluid of the same type, or fluid_breakable) can be flowed into.
     Dry bottom slabs can be flowed into if from above or from level > 4 (over half height).
     Dry top slabs can be flowed into underneath.
+    Vertical slabs can be flowed into from open front, sides, or above, but not through their solid back.
     """
     if y < 0 or y >= WORLD_HEIGHT:
         return False
@@ -362,17 +375,35 @@ def can_flow_into(world, x, y, z, from_level=None, from_y=None, fluid_type=None)
     block = world.get_block(x, y, z)
     if block == AIR:
         return True
-    if is_fluid(block) and not is_fluid_source(block):
-        if fluid_type is not None:
-            cur_type = get_fluid_type(block)
-            if cur_type and cur_type != fluid_type:
-                return False
-        return True
     b_obj = BLOCKS.get(block)
     if b_obj is not None and getattr(b_obj, "fluid_breakable", False):
         return True
 
-    from server.blocks import get_slab_info
+    from server.blocks import (
+        get_slab_info,
+        get_vertical_slab_info,
+        get_double_vertical_slab_info,
+    )
+
+    if get_double_vertical_slab_info(block) is not None:
+        return False
+
+    if from_x is not None:
+        flow_dx = x - from_x
+    if from_z is not None:
+        flow_dz = z - from_z
+
+    vs_info = get_vertical_slab_info(block)
+    if vs_info is not None:
+        if is_fluid_source(block):
+            return False
+        if from_y is not None and from_y == y + 1:
+            return True
+        if flow_dx is not None and flow_dz is not None and (flow_dx != 0 or flow_dz != 0):
+            if (-flow_dx, -flow_dz) == CARDINAL_FOR_FACING.get(vs_info["facing"]):
+                return False
+            return True
+        return True
 
     s_info = get_slab_info(block)
     if s_info is not None:
@@ -396,10 +427,17 @@ def can_flow_into(world, x, y, z, from_level=None, from_y=None, fluid_type=None)
                 return False
             return True
 
+    if is_fluid(block) and not is_fluid_source(block):
+        if fluid_type is not None:
+            cur_type = get_fluid_type(block)
+            if cur_type and cur_type != fluid_type:
+                return False
+        return True
+
     return False
 
 
-def is_blocking(world, x, y, z, from_level=None, from_y=None):
+def is_blocking(world, x, y, z, from_level=None, from_y=None, flow_dx=None, flow_dz=None, from_x=None, from_z=None):
     """Check if (x, y, z) blocks fluid flow (solid or unloaded)."""
     if y < 0 or y >= WORLD_HEIGHT:
         return True
@@ -407,13 +445,33 @@ def is_blocking(world, x, y, z, from_level=None, from_y=None):
     if (cx, cy, cz) not in world.chunks:
         return True
     block = world.get_block(x, y, z)
-    if block == AIR or is_fluid(block):
+    if block == AIR:
         return False
     b_obj = BLOCKS.get(block)
     if b_obj is not None and getattr(b_obj, "fluid_breakable", False):
         return False
 
-    from server.blocks import get_slab_info
+    from server.blocks import (
+        get_slab_info,
+        get_vertical_slab_info,
+        get_double_vertical_slab_info,
+    )
+
+    if get_double_vertical_slab_info(block) is not None:
+        return True
+
+    if from_x is not None:
+        flow_dx = x - from_x
+    if from_z is not None:
+        flow_dz = z - from_z
+
+    vs_info = get_vertical_slab_info(block)
+    if vs_info is not None:
+        if flow_dx is not None and flow_dz is not None and (flow_dx != 0 or flow_dz != 0):
+            if (-flow_dx, -flow_dz) == CARDINAL_FOR_FACING.get(vs_info["facing"]):
+                return True
+            return False
+        return False
 
     s_info = get_slab_info(block)
     if s_info is not None:
@@ -430,6 +488,9 @@ def is_blocking(world, x, y, z, from_level=None, from_y=None):
                 return True
             return False
 
+    if is_fluid(block):
+        return False
+
     return world.is_solid(x, y, z)
 
 
@@ -443,33 +504,41 @@ def get_fluid_flow(world, x, y, z):
     if not is_fluid(block):
         return (0.0, 0.0, 0.0)
 
+    from server.blocks import get_vertical_slab_info
+
     cur_level = get_fluid_level(block)
     is_falling = is_falling_fluid(block)
+    cur_vs = get_vertical_slab_info(block)
 
     fy = 0.0
     if is_falling or (y + 1 < WORLD_HEIGHT and is_falling_fluid(world.get_block(x, y + 1, z))):
         fy = -1.0
-    elif y > 0 and can_flow_into(world, x, y - 1, z):
+    elif y > 0 and can_flow_into(world, x, y - 1, z, from_y=y):
         fy = -0.5
 
     vx = 0.0
     vz = 0.0
 
     for dx, dz in CARDINALS:
+        if cur_vs is not None and (dx, dz) == CARDINAL_FOR_FACING.get(cur_vs["facing"]):
+            continue
         nx, nz = x + dx, z + dz
         nbr = world.get_block(nx, y, nz)
+        nbr_vs = get_vertical_slab_info(nbr)
+        if nbr_vs is not None and (-dx, -dz) == CARDINAL_FOR_FACING.get(nbr_vs["facing"]):
+            continue
 
         if is_fluid(nbr):
             nbr_level = get_fluid_level(nbr)
             if is_falling_fluid(nbr):
                 nbr_level = 0
-            elif y > 0 and (can_flow_into(world, nx, y - 1, nz) or is_falling_fluid(world.get_block(nx, y - 1, nz))):
+            elif y > 0 and (can_flow_into(world, nx, y - 1, nz, from_y=y) or is_falling_fluid(world.get_block(nx, y - 1, nz))):
                 nbr_level = 0
             diff = cur_level - nbr_level
             vx += dx * diff
             vz += dz * diff
-        elif can_flow_into(world, nx, y, nz):
-            if y > 0 and (can_flow_into(world, nx, y - 1, nz) or is_fluid(world.get_block(nx, y - 1, nz))):
+        elif can_flow_into(world, nx, y, nz, flow_dx=dx, flow_dz=dz, from_y=y):
+            if y > 0 and (can_flow_into(world, nx, y - 1, nz, from_y=y) or is_fluid(world.get_block(nx, y - 1, nz))):
                 diff = cur_level + 1
             else:
                 diff = cur_level
@@ -529,7 +598,10 @@ def find_dropoff_directions(world, x, y, z, max_dist=None):
     fall down) in the fewest number of steps. If no dropoff exists within max_dist,
     returns all valid passable horizontal directions.
     """
+    from server.blocks import get_vertical_slab_info
+
     src_block = world.get_block(x, y, z)
+    src_vs = get_vertical_slab_info(src_block)
     fluid_type = get_fluid_type(src_block)
     if max_dist is None:
         fluid_def = get_fluid_def(fluid_type) if fluid_type else None
@@ -537,9 +609,15 @@ def find_dropoff_directions(world, x, y, z, max_dist=None):
 
     valid_dirs = []
     for dx, dz in CARDINALS:
+        if src_vs is not None and (dx, dz) == CARDINAL_FOR_FACING.get(src_vs["facing"]):
+            continue
         nx = x + dx
         nz = z + dz
-        if can_flow_into(world, nx, y, nz, fluid_type=fluid_type):
+        nbr = world.get_block(nx, y, nz)
+        nbr_vs = get_vertical_slab_info(nbr)
+        if nbr_vs is not None and (-dx, -dz) == CARDINAL_FOR_FACING.get(nbr_vs["facing"]):
+            continue
+        if can_flow_into(world, nx, y, nz, fluid_type=fluid_type, flow_dx=dx, flow_dz=dz, from_y=y):
             valid_dirs.append((dx, dz))
 
     if not valid_dirs:
@@ -554,7 +632,7 @@ def find_dropoff_directions(world, x, y, z, max_dist=None):
 
         # If immediate dropoff directly under start block
         if y > 0 and (
-            can_flow_into(world, sx, y - 1, sz, fluid_type=fluid_type)
+            can_flow_into(world, sx, y - 1, sz, fluid_type=fluid_type, from_y=y)
             or is_fluid(world.get_block(sx, y - 1, sz))
         ):
             dir_distances[(start_dx, start_dz)] = 1
@@ -570,14 +648,22 @@ def find_dropoff_directions(world, x, y, z, max_dist=None):
             cx, cz, dist = queue.popleft()
             if dist >= max_dist or dist >= best_dist:
                 continue
+            cur_blk = world.get_block(cx, y, cz)
+            cur_vs = get_vertical_slab_info(cur_blk)
             for ddx, ddz in CARDINALS:
+                if cur_vs is not None and (ddx, ddz) == CARDINAL_FOR_FACING.get(cur_vs["facing"]):
+                    continue
                 nnx = cx + ddx
                 nnz = cz + ddz
-                if (nnx, nnz) in visited or is_blocking(world, nnx, y, nnz):
+                if (nnx, nnz) in visited or is_blocking(world, nnx, y, nnz, flow_dx=ddx, flow_dz=ddz, from_y=y):
+                    continue
+                nbr_blk = world.get_block(nnx, y, nnz)
+                nbr_vs = get_vertical_slab_info(nbr_blk)
+                if nbr_vs is not None and (-ddx, -ddz) == CARDINAL_FOR_FACING.get(nbr_vs["facing"]):
                     continue
                 visited.add((nnx, nnz))
                 if y > 0 and (
-                    can_flow_into(world, nnx, y - 1, nnz, fluid_type=fluid_type)
+                    can_flow_into(world, nnx, y - 1, nnz, fluid_type=fluid_type, from_y=y)
                     or is_fluid(world.get_block(nnx, y - 1, nnz))
                 ):
                     found_dist = dist + 1
@@ -601,13 +687,59 @@ def compute_new_fluid_state(world, x, y, z):
         return world.get_block(x, y, z)
 
     cur = world.get_block(x, y, z)
-    from server.blocks import get_slab_info
+    from server.blocks import (
+        get_double_vertical_slab_info,
+        get_slab_info,
+        get_unwaterlogged_vertical_slab,
+        get_vertical_slab_info,
+        get_waterlogged_slab,
+        get_waterlogged_vertical_slab,
+    )
+
+    if get_double_vertical_slab_info(cur) is not None:
+        return cur
+
+    vs_info = get_vertical_slab_info(cur)
+    if vs_info is not None:
+        if is_fluid_source(cur):
+            return cur
+        max_level = 0
+        above = world.get_block(x, y + 1, z) if (y + 1 < WORLD_HEIGHT) else AIR
+        if is_fluid(above):
+            max_level = 7
+        for dx, dz in CARDINALS:
+            if (dx, dz) == CARDINAL_FOR_FACING.get(vs_info["facing"]):
+                continue
+            nx = x + dx
+            nz = z + dz
+            nbr = world.get_block(nx, y, nz)
+            if not is_fluid(nbr):
+                continue
+            nbr_vs = get_vertical_slab_info(nbr)
+            if nbr_vs is not None and (-dx, -dz) == CARDINAL_FOR_FACING.get(nbr_vs["facing"]):
+                continue
+            nbr_type = get_fluid_type(nbr) or "water"
+            nbr_def = get_fluid_def(nbr_type)
+            nbr_level = get_fluid_level(nbr)
+            pot = _step_down_level(nbr, nbr_level, nbr_def)
+            if pot <= 0:
+                continue
+            if y > 0 and (can_flow_into(world, nx, y - 1, nz, fluid_type=nbr_type, from_y=y) or is_fluid(world.get_block(nx, y - 1, nz))):
+                continue
+            dirs = find_dropoff_directions(world, nx, y, nz, max_dist=nbr_def.dropoff_distance)
+            if (-dx, -dz) in dirs:
+                if pot > max_level:
+                    max_level = pot
+        if max_level <= 0:
+            if vs_info["waterlogged"]:
+                return get_unwaterlogged_vertical_slab(cur)
+            return cur
+        return get_waterlogged_vertical_slab(cur, level=max_level)
 
     s_info = get_slab_info(cur)
     if s_info is not None:
         if s_info["double"] or is_fluid_source(cur):
             return cur
-        from server.blocks import get_waterlogged_slab
 
         max_level = 0
         if s_info["half"] == "bottom":
@@ -620,13 +752,16 @@ def compute_new_fluid_state(world, x, y, z):
                 nbr = world.get_block(nx, y, nz)
                 if not is_fluid(nbr):
                     continue
+                nbr_vs = get_vertical_slab_info(nbr)
+                if nbr_vs is not None and (-dx, -dz) == CARDINAL_FOR_FACING.get(nbr_vs["facing"]):
+                    continue
                 nbr_type = get_fluid_type(nbr) or "water"
                 nbr_def = get_fluid_def(nbr_type)
                 nbr_level = get_fluid_level(nbr)
                 pot = _step_down_level(nbr, nbr_level, nbr_def)
                 if pot <= 3:
                     continue
-                if y > 0 and (can_flow_into(world, nx, y - 1, nz, fluid_type=nbr_type) or is_fluid(world.get_block(nx, y - 1, nz))):
+                if y > 0 and (can_flow_into(world, nx, y - 1, nz, fluid_type=nbr_type, from_y=y) or is_fluid(world.get_block(nx, y - 1, nz))):
                     continue
                 dirs = find_dropoff_directions(world, nx, y, nz, max_dist=nbr_def.dropoff_distance)
                 if (-dx, -dz) in dirs:
@@ -639,13 +774,16 @@ def compute_new_fluid_state(world, x, y, z):
                 nbr = world.get_block(nx, y, nz)
                 if not is_fluid(nbr):
                     continue
+                nbr_vs = get_vertical_slab_info(nbr)
+                if nbr_vs is not None and (-dx, -dz) == CARDINAL_FOR_FACING.get(nbr_vs["facing"]):
+                    continue
                 nbr_type = get_fluid_type(nbr) or "water"
                 nbr_def = get_fluid_def(nbr_type)
                 nbr_level = get_fluid_level(nbr)
                 pot = _step_down_level(nbr, nbr_level, nbr_def)
                 if pot <= 0:
                     continue
-                if y > 0 and (can_flow_into(world, nx, y - 1, nz, fluid_type=nbr_type) or is_fluid(world.get_block(nx, y - 1, nz))):
+                if y > 0 and (can_flow_into(world, nx, y - 1, nz, fluid_type=nbr_type, from_y=y) or is_fluid(world.get_block(nx, y - 1, nz))):
                     continue
                 dirs = find_dropoff_directions(world, nx, y, nz, max_dist=nbr_def.dropoff_distance)
                 if (-dx, -dz) in dirs:
@@ -697,16 +835,19 @@ def compute_new_fluid_state(world, x, y, z):
         nbr = world.get_block(nx, y, nz)
         if not is_fluid(nbr):
             continue
+        nbr_vs = get_vertical_slab_info(nbr)
+        if nbr_vs is not None and (-dx, -dz) == CARDINAL_FOR_FACING.get(nbr_vs["facing"]):
+            continue
         nbr_type = get_fluid_type(nbr) or "water"
         nbr_def = get_fluid_def(nbr_type)
         nbr_level = get_fluid_level(nbr)
         pot = _step_down_level(nbr, nbr_level, nbr_def)
         if pot <= 0:
             continue
-        if not can_flow_into(world, x, y, z, from_level=nbr_level, from_y=y, fluid_type=nbr_type):
+        if not can_flow_into(world, x, y, z, from_level=nbr_level, from_y=y, fluid_type=nbr_type, from_x=nx, from_z=nz):
             continue
         # If neighbor can fall down directly below it or is resting on fluid, it doesn't spread horizontally here
-        if y > 0 and (can_flow_into(world, nx, y - 1, nz, fluid_type=nbr_type) or is_fluid(world.get_block(nx, y - 1, nz))):
+        if y > 0 and (can_flow_into(world, nx, y - 1, nz, fluid_type=nbr_type, from_y=y) or is_fluid(world.get_block(nx, y - 1, nz))):
             continue
         dirs = find_dropoff_directions(world, nx, y, nz, max_dist=nbr_def.dropoff_distance)
         if (-dx, -dz) in dirs:
@@ -833,12 +974,25 @@ class FluidSystem:
                     cur_level = get_fluid_level(cur)
                     target_level = _step_down_level(cur, cur_level, cur_def)
                     if target_level > 0:
+                        from server.blocks import get_vertical_slab_info, get_waterlogged_vertical_slab
+
+                        cur_vs = get_vertical_slab_info(cur)
                         flow_dirs = find_dropoff_directions(self.world, x, y, z, max_dist=cur_def.dropoff_distance)
                         for dx, dz in flow_dirs:
+                            if cur_vs is not None and (dx, dz) == CARDINAL_FOR_FACING.get(cur_vs["facing"]):
+                                continue
                             nx = x + dx
                             nz = z + dz
-                            if can_flow_into(self.world, nx, y, nz, from_level=cur_level, from_y=y, fluid_type=cur_type):
-                                expected = _fluid_level_block(cur_type, target_level)
+                            nbr = self.world.get_block(nx, y, nz)
+                            nbr_vs = get_vertical_slab_info(nbr)
+                            if nbr_vs is not None and (-dx, -dz) == CARDINAL_FOR_FACING.get(nbr_vs["facing"]):
+                                continue
+                            if can_flow_into(self.world, nx, y, nz, from_level=cur_level, from_y=y, fluid_type=cur_type, from_x=x, from_z=z):
+                                expected = (
+                                    get_waterlogged_vertical_slab(nbr, level=target_level)
+                                    if nbr_vs is not None
+                                    else _fluid_level_block(cur_type, target_level)
+                                )
                                 if self.world.get_block(nx, y, nz) != expected:
                                     self.queue.add((nx, y, nz))
 

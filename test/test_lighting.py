@@ -69,7 +69,8 @@ class LightingTests(unittest.TestCase):
         for slab in vertical_slabs:
             # Like horizontal half slabs, vertical slabs leave half of the
             # cell open and therefore must not extinguish light.
-            self.assertEqual(get_block_opacity(slab), 0, slab.id)
+            expected = 2 if slab.properties.get("waterlogged") else 0
+            self.assertEqual(get_block_opacity(slab), expected, slab.id)
 
         world = World()
         chunk = Chunk(0, 0, 0)

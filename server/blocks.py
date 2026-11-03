@@ -336,6 +336,8 @@ def is_vertical_slab(block_or_id):
     props = getattr(block, "properties", {})
     if props.get("double_vertical_slab") or getattr(block, "double_vertical_slab", False):
         return False
+    if props.get("offset_block") or getattr(block, "offset_block", False):
+        return False
     if getattr(block, "vertical_slab", False) or props.get("vertical_slab"):
         return True
     base_id = getattr(block, "base_id", str(block.id))
@@ -356,12 +358,48 @@ def get_vertical_slab_info(block_or_id):
     facing = str(props.get("facing", "south")).lower()
     if facing not in FACING_DIRECTIONS:
         facing = "south"
+    waterlogged = bool(props.get("waterlogged", False))
+    level = int(props.get("level", 8 if waterlogged else 0))
     return {
         "id": block.id,
         "vertical_slab": True,
         "facing": facing,
         "base_id": getattr(block, "base_id", block.id),
+        "waterlogged": waterlogged,
+        "level": level,
     }
+
+
+def get_waterlogged_vertical_slab(block_or_id, level=8):
+    """Return the waterlogged vertical slab block ID for the given level (1..8), or None."""
+    info = get_vertical_slab_info(block_or_id)
+    if info is None:
+        return None
+    base = info["base_id"]
+    facing = info["facing"]
+    if level >= 8:
+        cand = f"{base}_waterlogged" if facing == "south" else f"{base}_{facing}_waterlogged"
+    elif level > 0:
+        cand = f"{base}_waterlogged_{level}" if facing == "south" else f"{base}_{facing}_waterlogged_{level}"
+    else:
+        cand = base if facing == "south" else f"{base}_{facing}"
+    return cand if cand in BLOCKS else None
+
+
+def get_unwaterlogged_vertical_slab(block_or_id):
+    """Return the dry vertical slab block ID, or the block ID itself."""
+    info = get_vertical_slab_info(block_or_id)
+    if info is None:
+        return block_or_id if isinstance(block_or_id, str) else getattr(block_or_id, "id", "")
+    base = info["base_id"]
+    facing = info["facing"]
+    cand = base if facing == "south" else f"{base}_{facing}"
+    return cand if cand in BLOCKS else base
+
+
+def is_waterlogged_vertical_slab(block_or_id):
+    info = get_vertical_slab_info(block_or_id)
+    return bool(info and info.get("waterlogged"))
 
 
 def get_double_vertical_slab_info(block_or_id):
@@ -394,8 +432,8 @@ def get_double_vertical_slab_info(block_or_id):
 
 def get_double_vertical_slab(block_a, block_b):
     """Return the full-cell block made by two complementary vertical slabs."""
-    a_info = get_vertical_slab_info(block_a)
-    b_info = get_vertical_slab_info(block_b)
+    a_info = get_vertical_slab_info(block_a) or get_vertical_slab_offset_info(block_a)
+    b_info = get_vertical_slab_info(block_b) or get_vertical_slab_offset_info(block_b)
     if a_info is None or b_info is None:
         return None
     facing_a = a_info["facing"]
@@ -413,6 +451,26 @@ def get_double_vertical_slab(block_a, block_b):
         positive_base, negative_base = a_info["base_id"], b_info["base_id"]
     else:
         positive_base, negative_base = b_info["base_id"], a_info["base_id"]
+
+    is_offset = is_vertical_slab_offset(block_a) or is_vertical_slab_offset(block_b)
+    if is_offset:
+        candidate = f"double_vertical_slab_{axis}_{positive_base}_{negative_base}_offset"
+        top_slab = a_info.get("top_slab") or b_info.get("top_slab")
+        if candidate in BLOCKS:
+            if top_slab:
+                capped_cand = f"{candidate}_{top_slab}"
+                if capped_cand in BLOCKS:
+                    return capped_cand
+            return candidate
+        if positive_base == negative_base:
+            alias = f"double_vertical_slab_{axis}_{positive_base}_offset"
+            if alias in BLOCKS:
+                if top_slab:
+                    capped_alias = f"{alias}_{top_slab}"
+                    if capped_alias in BLOCKS:
+                        return capped_alias
+                return alias
+        return None
 
     candidate = f"double_vertical_slab_{axis}_{positive_base}_{negative_base}"
     if candidate in BLOCKS:
@@ -476,6 +534,12 @@ def vertical_slab_bounds(x, y, z, facing):
         return (x, y, z, x + 0.5, y + 1.0, z + 1.0)
     # South-facing (the default model) occupies the positive-Z half.
     return (x, y, z + 0.5, x + 1.0, y + 1.0, z + 1.0)
+
+
+def vertical_slab_offset_bounds(x, y, z, facing):
+    """World-space AABB for the solid half of an uncapped vertical slab offset block."""
+    vx0, _, vz0, vx1, _, vz1 = vertical_slab_bounds(x, y, z, facing)
+    return (vx0, float(y) - 0.5, vz0, vx1, float(y) + 0.5, vz1)
 
 
 def get_waterlogged_slab(base_id, half="bottom", level=8):
@@ -548,6 +612,9 @@ def get_offset_info(block_or_id):
 def get_offset_block(block_id):
     if not block_id:
         return None
+    vo = get_vertical_slab_offset_block(block_id)
+    if vo is not None:
+        return vo
     if is_offset_block(block_id):
         info = get_offset_info(block_id)
         cand = f"{info['base_id']}_offset"
@@ -557,17 +624,131 @@ def get_offset_block(block_id):
 
 
 def get_capped_offset_block(offset_block_or_id, slab_block_or_id):
+    if is_vertical_slab_offset(offset_block_or_id):
+        return get_capped_vertical_slab_offset(offset_block_or_id, slab_block_or_id)
     o_info = get_offset_info(offset_block_or_id)
     base_id = o_info["base_id"] if o_info is not None else str(offset_block_or_id)
     s_info = get_slab_info(slab_block_or_id)
     slab_base = s_info["base_id"] if s_info is not None else str(slab_block_or_id)
     cand = f"{base_id}_offset_{slab_base}"
-    return cand if cand in BLOCKS else None
+    if cand in BLOCKS:
+        return cand
+    cand2 = f"{offset_block_or_id}_{slab_base}"
+    return cand2 if cand2 in BLOCKS else None
+
+
+def is_vertical_slab_offset(block_or_id):
+    """Return True if block_or_id is a vertical slab offset block (uncapped or capped)."""
+    if not block_or_id:
+        return False
+    block = BLOCKS.get(block_or_id) if isinstance(block_or_id, str) else block_or_id
+    if block is None or not isinstance(block, Block):
+        return False
+    props = block.properties
+    if not props.get("offset_block"):
+        return False
+    if props.get("double_vertical_slab"):
+        return False
+    return bool(props.get("is_vertical_slab_offset") or props.get("vertical_slab"))
+
+
+def get_vertical_slab_offset_info(block_or_id):
+    """Return vertical slab offset metadata dict or None if not a vertical slab offset:
+    {
+        "is_vertical_slab_offset": True,
+        "base_id": str,
+        "canonical_id": str,
+        "capped": bool,
+        "top_slab": str | None,
+        "facing": str,
+    }
+    """
+    if not block_or_id:
+        return None
+    block = BLOCKS.get(block_or_id) if isinstance(block_or_id, str) else block_or_id
+    if block is None or not isinstance(block, Block):
+        return None
+    if not is_vertical_slab_offset(block):
+        return None
+    props = block.properties
+    if props.get("double_vertical_slab"):
+        return None
+    base_id = str(props.get("offset_base", getattr(block, "base_id", block.id)))
+    capped = bool(props.get("capped", False))
+    top_slab = props.get("top_slab") if capped else None
+    facing = str(props.get("facing", "south")).lower()
+    if facing not in FACING_DIRECTIONS:
+        facing = "south"
+    return {
+        "is_vertical_slab_offset": True,
+        "base_id": base_id,
+        "canonical_id": getattr(block, "base_id", base_id),
+        "capped": capped,
+        "top_slab": top_slab,
+        "facing": facing,
+    }
+
+
+def get_vertical_slab_offset_block(v_slab_block_or_id):
+    """Return the uncapped vertical slab offset block ID for a vertical slab, or None."""
+    if not v_slab_block_or_id:
+        return None
+    vo_info = get_vertical_slab_offset_info(v_slab_block_or_id)
+    if vo_info is not None:
+        base = vo_info["base_id"]
+        facing = vo_info["facing"]
+        if facing == "south":
+            cand = f"{base}_offset"
+            if cand in BLOCKS:
+                return cand
+        cand = f"{base}_{facing}_offset"
+        return cand if cand in BLOCKS else getattr(BLOCKS.get(v_slab_block_or_id), "id", str(v_slab_block_or_id))
+    v_info = get_vertical_slab_info(v_slab_block_or_id)
+    if v_info is None:
+        return None
+    facing = v_info["facing"]
+    base = v_info["base_id"]
+    if facing == "south":
+        cand = f"{base}_offset"
+        if cand in BLOCKS:
+            return cand
+    cand = f"{v_info['id']}_offset"
+    if cand in BLOCKS:
+        return cand
+    cand2 = f"{base}_{facing}_offset"
+    return cand2 if cand2 in BLOCKS else None
+
+
+def get_capped_vertical_slab_offset(offset_block_or_id, slab_block_or_id):
+    """Return the capped vertical slab offset block ID, or None.
+    
+    Caps an offset vertical slab with a horizontal slab block.
+    """
+    o_info = get_vertical_slab_offset_info(offset_block_or_id)
+    if o_info is None:
+        return None
+    base_id = o_info["base_id"]
+    facing = o_info["facing"]
+    s_info = get_slab_info(slab_block_or_id)
+    if s_info is None:
+        return None
+    slab_base = s_info["base_id"]
+    if facing == "south":
+        cand = f"{base_id}_offset_{slab_base}"
+        if cand in BLOCKS:
+            return cand
+        cand_s = f"{base_id}_south_offset_{slab_base}"
+        if cand_s in BLOCKS:
+            return cand_s
+    cand = f"{base_id}_{facing}_offset_{slab_base}"
+    if cand in BLOCKS:
+        return cand
+    return None
 
 
 def has_half_offset_top(block_or_id):
     """Returns True if `block_or_id` has its top solid surface at y + 0.5 (bottom single slab or uncapped offset block)."""
-    if not block_or_id:
+    if not block_or_id or is_vertical_slab_offset(block_or_id):
         return False
     s_info = get_slab_info(block_or_id)
     if s_info is not None:
@@ -663,7 +844,10 @@ def get_capped_offset_torch(torch_block_or_id, slab_block_or_id):
     s_info = get_slab_info(slab_block_or_id)
     slab_base = s_info["base_id"] if s_info is not None else str(slab_block_or_id)
     cand = f"{base_id}_offset_{slab_base}"
-    return cand if cand in BLOCKS else None
+    if cand in BLOCKS:
+        return cand
+    cand2 = f"{offset_block_or_id}_{slab_base}"
+    return cand2 if cand2 in BLOCKS else None
 
 
 def get_offset_torch(block_or_id):
@@ -697,6 +881,11 @@ def can_support_torch(block_or_id, mount="up"):
     if o_info is not None:
         if mount == "up":
             return bool(o_info["capped"])
+        return True
+    v_off_info = get_vertical_slab_offset_info(block)
+    if v_off_info is not None:
+        if mount == "up":
+            return bool(v_off_info["capped"])
         return True
     s_info = get_slab_info(block)
     if s_info is not None:
@@ -759,6 +948,19 @@ def placement_block(block_id, normal, yaw=None, local_y=None):
         if abs(nz) > 0:
             return rotation_variant(block.base_id, "z")
         return rotation_variant(block.base_id, "y")
+    if is_vertical_slab(block) or is_vertical_slab_offset(block):
+        if yaw is not None:
+            facing = player_facing_from_yaw(yaw)
+            return rotation_variant(block.base_id, facing)
+        else:
+            nx, ny, nz = normal
+            if abs(nx) > 0:
+                facing = "east" if nx > 0 else "west"
+            elif abs(nz) > 0:
+                facing = "south" if nz > 0 else "north"
+            else:
+                facing = "north"
+            return rotation_variant(block.base_id, facing)
     if rot in ("horizontal", "cardinal", "facing") or "facing" in block.properties:
         if yaw is not None:
             facing = block_facing_from_yaw(yaw)
@@ -1929,10 +2131,117 @@ def _load_registry():
         and not b.properties.get("back_torch")
     ]
 
+    # Register south-facing aliases for all vertical slabs (e.g., stone_vertical_slab_south → stone_vertical_slab)
+    for vs_base in vertical_base_slabs:
+        south_alias_id = f"{vs_base.id}_south"
+        if south_alias_id not in blocks:
+            south_alias_props = dict(vs_base.properties)
+            south_alias_props["vertical_slab"] = True
+            south_alias_block = Block(
+                south_alias_id,
+                vs_base.name + " (South)",
+                vs_base.solid,
+                vs_base.properties.get("can_place_as_wall"),
+                list(vs_base.face_uvs),
+                [dict(el) for el in vs_base.elements],
+                cutout=vs_base.cutout,
+                opacity=vs_base.opacity,
+                properties=south_alias_props,
+                base_id=vs_base.id,
+                is_variant=True,
+                hardness=vs_base.hardness,
+                tool=vs_base.tool,
+                mining_level=vs_base.mining_level,
+                loot_table=vs_base.loot_table,
+                light=vs_base.light,
+                emission=vs_base.emission,
+                gravity=vs_base.gravity,
+                fluid_breakable=vs_base.fluid_breakable,
+                soil=vs_base.soil,
+                plant=vs_base.plant,
+                requires_soil=vs_base.requires_soil,
+                valid_ground=vs_base.valid_ground,
+                tint=vs_base.tint,
+                station=vs_base.station,
+                recipe_types=vs_base.recipe_types,
+                cook_speed=vs_base.cook_speed,
+            )
+            blocks[south_alias_id] = south_alias_block
+            by_index.append(south_alias_block)
+            index_of[south_alias_id] = len(by_index) - 1
+
     def _vertical_facing_block(base_block, facing):
         if facing == "south":
             return base_block
         return blocks.get(f"{base_block.id}_{facing}", base_block)
+
+    # Register waterlogged vertical slabs (source lvl=8 and flowing lvl=1..7) for all facings
+    for vs_base in vertical_base_slabs:
+        for v_facing in ("south", "north", "east", "west"):
+            v_block = _vertical_facing_block(vs_base, v_facing)
+            v_facing_name = v_facing.capitalize()
+            for lvl in range(8, 0, -1):
+                if v_facing == "south":
+                    wl_id = f"{vs_base.id}_waterlogged" if lvl == 8 else f"{vs_base.id}_waterlogged_{lvl}"
+                else:
+                    wl_id = f"{vs_base.id}_{v_facing}_waterlogged" if lvl == 8 else f"{vs_base.id}_{v_facing}_waterlogged_{lvl}"
+
+                wl_name = (
+                    f"{vs_base.name} ({v_facing_name}, Waterlogged)"
+                    if lvl == 8
+                    else f"{vs_base.name} ({v_facing_name}, Waterlogged {lvl})"
+                )
+                wl_props = dict(v_block.properties)
+                wl_props["vertical_slab"] = True
+                wl_props["facing"] = v_facing
+                wl_props["waterlogged"] = True
+                wl_props["fluid"] = "water"
+                wl_props["level"] = lvl
+
+                wl_block = Block(
+                    wl_id,
+                    wl_name,
+                    True,
+                    False,
+                    list(v_block.face_uvs),
+                    [dict(el) for el in v_block.elements],
+                    cutout=v_block.cutout,
+                    opacity=v_block.opacity,
+                    properties=wl_props,
+                    base_id=vs_base.id,
+                    is_variant=True,
+                    hardness=vs_base.hardness,
+                    tool=vs_base.tool,
+                    mining_level=vs_base.mining_level,
+                    loot_table=vs_base.loot_table,
+                    emission=vs_base.emission,
+                    gravity=vs_base.gravity,
+                    fluid_breakable=False,
+                    tint=vs_base.tint,
+                    waterlogged=True,
+                )
+                if len(by_index) == 99:
+                    by_index.append(None)
+                blocks[wl_id] = wl_block
+                by_index.append(wl_block)
+                index_of[wl_id] = len(by_index) - 1
+
+                if v_facing == "south":
+                    alias_id = (
+                        f"{vs_base.id}_south_waterlogged"
+                        if lvl == 8
+                        else f"{vs_base.id}_south_waterlogged_{lvl}"
+                    )
+                    blocks[alias_id] = wl_block
+                    index_of[alias_id] = index_of[wl_id]
+
+    horizontal_base_slabs = [
+        b for b in blocks.values()
+        if b.properties.get("slab")
+        and not b.is_variant
+        and not b.properties.get("double_slab")
+        and not getattr(b, "vertical_slab", False)
+    ]
 
     for axis, positive_facing, negative_facing, positive_face, negative_face in (
         ("z", "south", "north", FACE_INDEX["north"], FACE_INDEX["south"]),
@@ -2006,6 +2315,267 @@ def _load_registry():
                     alias_id = f"double_vertical_slab_{axis}_{positive_block.base_id}"
                     blocks[alias_id] = double_block
                     index_of[alias_id] = index_of[double_id]
+
+                # Create offset double vertical slab (occupies y in [-8, 8])
+                off_double_id = f"{double_id}_offset"
+                off_double_elements = []
+                for element in double_elements:
+                    el_c = dict(element)
+                    el_c["from"] = [float(element["from"][0]), float(element["from"][1]) - 8.0, float(element["from"][2])]
+                    el_c["to"] = [float(element["to"][0]), float(element["to"][1]) - 8.0, float(element["to"][2])]
+                    el_c["faces"] = dict(element["faces"])
+                    off_double_elements.append(el_c)
+
+                off_double_props = dict(double_props)
+                off_double_props["offset_block"] = True
+                off_double_props["offset_base"] = double_id
+                off_double_props["capped"] = False
+                off_double_props["top_slab"] = None
+
+                off_double_name = f"{double_name} (Offset)"
+                off_double_block = Block(
+                    off_double_id,
+                    off_double_name,
+                    True,
+                    False,
+                    list(positive_block.face_uvs),
+                    off_double_elements,
+                    cutout=False,
+                    opacity=1.0,
+                    properties=off_double_props,
+                    base_id=positive_block.base_id,
+                    is_variant=True,
+                    hardness=max(positive_block.hardness, negative_block.hardness),
+                    tool=positive_block.tool or negative_block.tool,
+                    mining_level=max(positive_block.mining_level, negative_block.mining_level),
+                    gravity=False,
+                    fluid_breakable=False,
+                    tint=positive_block.tint,
+                )
+                if len(by_index) == 99:
+                    by_index.append(None)
+                blocks[off_double_id] = off_double_block
+                by_index.append(off_double_block)
+                index_of[off_double_id] = len(by_index) - 1
+
+                if same_material:
+                    alias_off_id = f"double_vertical_slab_{axis}_{positive_block.base_id}_offset"
+                    blocks[alias_off_id] = off_double_block
+                    index_of[alias_off_id] = index_of[off_double_id]
+
+                # Capped variants with horizontal slabs
+                for h_slab in horizontal_base_slabs:
+                    capped_double_id = f"{off_double_id}_{h_slab.id}"
+                    capped_double_name = f"{off_double_name} / {h_slab.name}"
+                    h_top_id = f"{h_slab.id}_top"
+                    h_top_block = blocks.get(h_top_id)
+                    if h_top_block is None:
+                        continue
+
+                    bot_els = []
+                    for element in off_double_elements:
+                        b_el = dict(element)
+                        b_el["faces"] = {k: v for k, v in element["faces"].items() if k != 2}
+                        bot_els.append(b_el)
+
+                    top_els = []
+                    for element in h_top_block.elements:
+                        t_faces = {k: v for k, v in element["faces"].items() if k != 3}
+                        top_els.append({
+                            "from": list(element["from"]),
+                            "to": list(element["to"]),
+                            "faces": t_faces,
+                            "tint": h_slab.tint,
+                            "cutout": element.get("cutout", False),
+                        })
+
+                    capped_double_elements = bot_els + top_els
+                    capped_face_uvs = list(positive_block.face_uvs)
+                    if len(h_top_block.face_uvs) > 2 and h_top_block.face_uvs[2] is not None:
+                        capped_face_uvs[2] = h_top_block.face_uvs[2]
+
+                    capped_props = dict(off_double_props)
+                    capped_props["capped"] = True
+                    capped_props["top_slab"] = h_slab.id
+
+                    capped_double_block = Block(
+                        capped_double_id,
+                        capped_double_name,
+                        True,
+                        False,
+                        capped_face_uvs,
+                        capped_double_elements,
+                        cutout=False,
+                        opacity=1.0,
+                        properties=capped_props,
+                        base_id=positive_block.base_id,
+                        is_variant=True,
+                        hardness=max(positive_block.hardness, negative_block.hardness),
+                        tool=positive_block.tool or negative_block.tool,
+                        mining_level=max(positive_block.mining_level, negative_block.mining_level),
+                        gravity=False,
+                        fluid_breakable=False,
+                        tint=positive_block.tint,
+                    )
+                    if len(by_index) == 99:
+                        by_index.append(None)
+                    blocks[capped_double_id] = capped_double_block
+                    by_index.append(capped_double_block)
+                    index_of[capped_double_id] = len(by_index) - 1
+
+                    if same_material:
+                        alias_cap_id = f"double_vertical_slab_{axis}_{positive_block.base_id}_offset_{h_slab.id}"
+                        blocks[alias_cap_id] = capped_double_block
+                        index_of[alias_cap_id] = index_of[capped_double_id]
+
+    # Create vertical slab offset blocks for each vertical slab base and facing.
+    # The offset occupies y in [-8, 8] (world space [y - 0.5, y + 0.5]).
+    for vs in vertical_base_slabs:
+        vs_name = vs.name
+        for v_facing in ("north", "south", "east", "west"):
+            v_block = _vertical_facing_block(vs, v_facing) if v_facing != "south" else vs
+            v_facing_name = v_facing.capitalize()
+            if v_facing == "south":
+                off_id = f"{vs.id}_offset"
+            else:
+                off_id = f"{vs.id}_{v_facing}_offset"
+            off_name = f"{vs_name} ({v_facing_name}, offset)"
+
+            # Shift the vertical slab elements by -8 in Y
+            off_elements = []
+            for element in v_block.elements:
+                el_copy = dict(element)
+                el_copy["from"] = [element["from"][0], element["from"][1] - 8.0, element["from"][2]]
+                el_copy["to"] = [element["to"][0], element["to"][1] - 8.0, element["to"][2]]
+                el_copy["faces"] = dict(element.get("faces", {}))
+                el_copy["tint"] = vs.tint
+                off_elements.append(el_copy)
+
+            off_props = dict(vs.properties)
+            off_props["offset_block"] = True
+            off_props["offset_base"] = vs.id
+            off_props["capped"] = False
+            off_props["top_slab"] = None
+            off_props["vertical_slab"] = True
+            off_props["is_vertical_slab_offset"] = True
+            off_props["facing"] = v_facing
+
+            off_block = Block(
+                off_id,
+                off_name,
+                True,
+                False,
+                list(v_block.face_uvs),
+                off_elements,
+                cutout=vs.cutout,
+                opacity=1.0,
+                properties=off_props,
+                base_id=vs.id,
+                is_variant=True,
+                hardness=vs.hardness,
+                tool=vs.tool,
+                mining_level=vs.mining_level,
+                loot_table=vs.loot_table,
+                emission=vs.emission,
+                gravity=vs.gravity,
+                fluid_breakable=vs.fluid_breakable,
+                soil=vs.soil,
+                plant=vs.plant,
+                requires_soil=vs.requires_soil,
+                valid_ground=vs.valid_ground,
+                tint=vs.tint,
+                station=vs.station,
+                recipe_types=vs.recipe_types,
+                cook_speed=vs.cook_speed,
+            )
+            if len(by_index) == 99:
+                by_index.append(None)
+            blocks[off_id] = off_block
+            by_index.append(off_block)
+            index_of[off_id] = len(by_index) - 1
+
+            if v_facing == "south":
+                # Alias stone_vertical_slab_south_offset -> stone_vertical_slab_offset
+                alias_id = f"{vs.id}_south_offset"
+                blocks[alias_id] = off_block
+                index_of[alias_id] = index_of[off_id]
+
+            # Create capped variants for each vertical slab offset with each horizontal slab
+            for h_slab in horizontal_base_slabs:
+                if v_facing == "south":
+                    capped_id = f"{vs.id}_offset_{h_slab.id}"
+                else:
+                    capped_id = f"{vs.id}_{v_facing}_offset_{h_slab.id}"
+                capped_name = f"{off_name} / {h_slab.name}"
+                h_top_id = f"{h_slab.id}_top"
+                h_top_block = blocks.get(h_top_id)
+                if h_top_block is None:
+                    continue
+
+                # Bottom part: offset vertical slab elements
+                bot_elements = []
+                for el in off_elements:
+                    bot_el = dict(el)
+                    # face 2 (up) at y=8 touches top slab face 3 (down) at y=8
+                    bot_el["faces"] = {k: v for k, v in el["faces"].items() if k != 2 or vs.cutout}
+                    bot_elements.append(bot_el)
+
+                # Top part: horizontal top slab elements at [0, 8, 0] to [16, 16, 16]
+                top_els = []
+                for el in h_top_block.elements:
+                    t_faces = {k: v for k, v in el["faces"].items() if k != 3 or vs.cutout}
+                    top_els.append({
+                        "from": list(el["from"]),
+                        "to": list(el["to"]),
+                        "faces": t_faces,
+                        "tint": h_slab.tint,
+                        "cutout": el.get("cutout", False),
+                    })
+
+                capped_elements = bot_elements + top_els
+                capped_face_uvs = list(v_block.face_uvs)
+                if len(h_top_block.face_uvs) > 2 and h_top_block.face_uvs[2] is not None:
+                    capped_face_uvs[2] = h_top_block.face_uvs[2]
+
+                capped_props = dict(off_props)
+                capped_props["capped"] = True
+                capped_props["top_slab"] = h_slab.id
+
+                capped_block = Block(
+                    capped_id,
+                    capped_name,
+                    True,
+                    False,
+                    capped_face_uvs,
+                    capped_elements,
+                    cutout=vs.cutout or h_slab.cutout,
+                    opacity=1.0,
+                    properties=capped_props,
+                    base_id=vs.id,
+                    is_variant=True,
+                    hardness=max(vs.hardness, h_slab.hardness),
+                    tool=vs.tool or h_slab.tool,
+                    mining_level=max(vs.mining_level, h_slab.mining_level),
+                    loot_table=vs.loot_table,
+                    emission=vs.emission,
+                    gravity=vs.gravity,
+                    fluid_breakable=vs.fluid_breakable,
+                    soil=h_slab.soil,
+                    tint=vs.tint,
+                    station=vs.station,
+                    recipe_types=vs.recipe_types,
+                    cook_speed=vs.cook_speed,
+                )
+                if len(by_index) == 99:
+                    by_index.append(None)
+                blocks[capped_id] = capped_block
+                by_index.append(capped_block)
+                index_of[capped_id] = len(by_index) - 1
+
+                if v_facing == "south":
+                    alias_capped_id = f"{vs.id}_south_offset_{h_slab.id}"
+                    blocks[alias_capped_id] = capped_block
+                    index_of[alias_capped_id] = index_of[capped_id]
 
     # A torch on the back (inner) long face of a vertical slab has to live in
     # the empty half of the same cell, so it needs a combined block.
@@ -2187,10 +2757,12 @@ def can_place_block(world, x, y, z, block_id, hit=None):
         below_blk = world.get_block(x, y - 1, z)
         below_obj = BLOCKS.get(below_blk)
         below_t_info = get_offset_torch_info(below_blk)
+        below_v_info = get_vertical_slab_offset_info(below_blk)
         if not (
             below_blk in ("", AIR, None)
             or (below_obj is not None and bool(below_obj.properties.get("fluid")))
             or has_half_offset_top(below_blk)
+            or (below_v_info is not None and not below_v_info["capped"])
             or (below_t_info is not None and not below_t_info["capped"])
         ):
             return False
@@ -2205,26 +2777,32 @@ def can_place_block(world, x, y, z, block_id, hit=None):
         new_back_torch = get_vertical_slab_torch_info(b_obj)
         cur_single_v = get_vertical_slab_info(cur_blk)
         new_single_v = get_vertical_slab_info(b_obj)
+        cur_v_off = get_vertical_slab_offset_info(cur_blk)
+        new_v_off = get_vertical_slab_offset_info(b_obj)
+        cur_v_any = cur_single_v or cur_v_off
+        new_v_any = new_single_v or new_v_off
 
         # Combine a single vertical slab with a complementary one in the
         # other half of the same cell.
-        if new_double_v is not None and cur_single_v is not None and cur_back_torch is None:
-            if cur_blk in (new_double_v["positive_block"], new_double_v["negative_block"]):
+        if new_double_v is not None and cur_v_any is not None and cur_back_torch is None:
+            cur_base = cur_v_any["base_id"]
+            if cur_base in (new_double_v["positive"], new_double_v["negative"]):
                 return True
         # Attach a torch to the back face of a vertical slab in the same cell.
         if new_back_torch is not None and cur_blk == new_back_torch["slab_block"]:
             return True
         # Break one half of a double vertical slab, leaving the other half.
-        if cur_double_v is not None and new_single_v is not None:
-            if b_obj.id in (
-                cur_double_v["positive_block"],
-                cur_double_v["negative_block"],
+        if cur_double_v is not None and new_v_any is not None:
+            new_base = new_v_any["base_id"]
+            if new_base in (
+                cur_double_v["positive"],
+                cur_double_v["negative"],
             ):
                 return True
         # Remove the torch from a combined back-torch block.
         if cur_back_torch is not None and b_obj.id == cur_back_torch["slab_block"]:
             return True
-
+        
         if cur_off is not None:
             # Capping an uncapped offset block with a top slab
             if not cur_off["capped"] and new_off is not None and new_off["capped"]:
@@ -2236,10 +2814,32 @@ def can_place_block(world, x, y, z, block_id, hit=None):
             new_s = get_slab_info(b_obj)
             if cur_off["capped"] and new_s is not None and not new_s["double"] and new_s["half"] == "top":
                 return True
+        if cur_v_off is not None:
+            new_s = get_slab_info(b_obj)
+            if cur_v_off["capped"] and new_s is not None and not new_s["double"] and new_s["half"] == "top":
+                return True
         if new_t_info is not None and new_t_info["capped"] and is_slab(cur_blk):
             cur_s_info = get_slab_info(cur_blk)
             if cur_s_info is not None and not cur_s_info["double"] and cur_s_info["half"] == "top":
                 return can_support_torch(world.get_block(x, y - 1, z), "up_offset")
+        # Capping an existing top slab with an offset block or offset vertical slab
+        if is_slab(cur_blk):
+            cur_s_info = get_slab_info(cur_blk)
+            if cur_s_info is not None and not cur_s_info["double"] and cur_s_info["half"] == "top":
+                if (new_off is not None and new_off["capped"]) or (new_v_off is not None and new_v_off["capped"]):
+                    if y - 1 >= 0:
+                        below_blk = world.get_block(x, y - 1, z)
+                        below_obj = BLOCKS.get(below_blk)
+                        below_t_info = get_offset_torch_info(below_blk)
+                        below_v_info = get_vertical_slab_offset_info(below_blk)
+                        if (
+                            below_blk in ("", AIR, None)
+                            or (below_obj is not None and bool(below_obj.properties.get("fluid")))
+                            or has_half_offset_top(below_blk)
+                            or (below_v_info is not None and not below_v_info["capped"])
+                            or (below_t_info is not None and not below_t_info["capped"])
+                        ):
+                            return True
         if is_slab(b_obj) and is_slab(cur_blk):
             cur_info = get_slab_info(cur_blk)
             new_info = get_slab_info(b_obj)
