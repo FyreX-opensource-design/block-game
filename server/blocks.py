@@ -168,13 +168,16 @@ class Block:
             self.properties["cook_speed"] = self.cook_speed
         self.emission = parse_light_levels(light if light is not None else emission)
         self.light = self.emission
-        source = face_uvs[FACE_INDEX["up"]] or next(uv for uv in face_uvs if uv is not None)
-        self.icon = (
-            min(point[0] for point in source),
-            min(point[1] for point in source),
-            max(point[0] for point in source),
-            max(point[1] for point in source),
-        )
+        source = (face_uvs[FACE_INDEX["up"]] if face_uvs else None) or next((uv for uv in (face_uvs or ()) if uv is not None), None)
+        if source:
+            self.icon = (
+                min(point[0] for point in source),
+                min(point[1] for point in source),
+                max(point[0] for point in source),
+                max(point[1] for point in source),
+            )
+        else:
+            self.icon = (0.0, 0.0, 1.0, 1.0)
 
 
 def _rotate_uv(uv, turns=1):
@@ -244,6 +247,20 @@ def facing_from_normal(normal):
     if nz < 0:
         return "north"
     return None
+
+
+SUB_CELL_BLOCK = "sub_cell"
+
+
+def is_sub_cell(block_or_id):
+    if not block_or_id:
+        return False
+    if block_or_id == SUB_CELL_BLOCK:
+        return True
+    block = BLOCKS.get(block_or_id) if isinstance(block_or_id, str) else block_or_id
+    if block is None:
+        return False
+    return bool(block.properties.get("sub_cell"))
 
 
 def is_slab(block_or_id):
@@ -2639,6 +2656,24 @@ def _load_registry():
                 blocks[combined_id] = combined_block
                 by_index.append(combined_block)
                 index_of[combined_id] = len(by_index) - 1
+
+    # Register sub_cell sentinel block for cells containing sub-voxels/octants
+    sub_cell_block = Block(
+        "sub_cell",
+        "Sub Cell",
+        solid=True,
+        full_cube=False,
+        face_uvs=list(blocks["stone"].face_uvs) if "stone" in blocks else [None, None, None, None, None, None],
+        elements=[],
+        properties={"sub_cell": True},
+        base_id="sub_cell",
+        is_variant=True,
+    )
+    if len(by_index) == 99:
+        by_index.append(None)
+    blocks["sub_cell"] = sub_cell_block
+    by_index.append(sub_cell_block)
+    index_of["sub_cell"] = len(by_index) - 1
 
     if len(by_index) > 65536:
         raise ValueError("there are more than 65535 blocks")

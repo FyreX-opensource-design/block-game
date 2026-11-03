@@ -12,11 +12,27 @@ import numpy as np
 
 from server.blocks import CHUNK_SIZE, block_from_index, block_index
 
-CHUNK_MAGIC = b"BG03"
+CHUNK_MAGIC = b"BG04"
+BG03_CHUNK_MAGIC = b"BG03"
 LEGACY_CHUNK_MAGIC = b"BG02"
 CHUNK_BYTES = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE
-_HEADER = struct.Struct("<iiiII")
+_HEADER = struct.Struct("<iiiIII")
+_BG03_HEADER = struct.Struct("<iiiII")
 _LEGACY_HEADER = struct.Struct("<iiiI")
+
+
+class ChunkData(np.ndarray):
+    """Subclass of np.ndarray that preserves sub_cells metadata."""
+
+    def __new__(cls, input_array, sub_cells=None):
+        obj = np.asarray(input_array).view(cls)
+        obj.sub_cells = dict(sub_cells or {})
+        return obj
+
+    def __array_finalize__(self, obj):
+        if obj is None:
+            return
+        self.sub_cells = dict(getattr(obj, "sub_cells", {}))
 META_NAME = "meta.json"
 # Blocks introduced after the last BG02 release. BG02 chunks stored global block
 # indices from before these existed, so they are skipped when mapping legacy data.
@@ -35,6 +51,7 @@ _LEGACY_NEW_BLOCKS = frozenset(
         "cracked_stone_bricks",
         "mossy_stone_bricks",
         "chiseled_stone_bricks",
+        "sub_cell",
     }
 )
 # The block registry keeps this index free for compatibility with old saves.
@@ -116,14 +133,14 @@ def _palette_lookup(palette):
 
 def _legacy_lookup():
     """Map BG02 global indices to the current registry (pre-sapling layout)."""
-    from server.blocks import BY_INDEX
+    from server.blocks import BY_INDEX, is_vertical_slab
 
     # Rebuild the registry as it looked before saplings were added. The reserved
     # hole is recreated at its absolute index rather than carried over, because
     # removing saplings shifts every later index.
     palette = [""]
     for index, block in enumerate(BY_INDEX):
-        if index == 0 or block is None or block.id in _LEGACY_NEW_BLOCKS:
+        if index == 0 or block is None or block.id in _LEGACY_NEW_BLOCKS or is_vertical_slab(block):
             continue
         if len(palette) == _LEGACY_RESERVED_INDEX:
             palette.append("")
@@ -175,14 +192,36 @@ class ChunkStore:
         palette, local = _palette_and_local(data)
         raw = local.tobytes()
         palette_bytes = json.dumps(palette, separators=(",", ":")).encode("utf-8")
-        payload = (
-            _HEADER.pack(int(chunk.cx), int(chunk.cy), int(chunk.cz), len(palette_bytes), len(raw))
-            + palette_bytes
-            + zlib.compress(raw, level=1)
-        )
+
+        sub_cells = getattr(chunk, "sub_cells", {})
+        sub_dict = {
+            f"{lx},{ly},{lz}": sub.to_dict()
+            for (lx, ly, lz), sub in sub_cells.items()
+            if not sub.is_empty()
+        }
+        if sub_dict:
+            sub_json = json.dumps(sub_dict, separators=(",", ":")).encode("utf-8")
+            compressed_sub = zlib.compress(sub_json, level=1)
+            sub_len = len(compressed_sub)
+            compressed_raw = zlib.compress(raw, level=1)
+            payload = (
+                _HEADER.pack(int(chunk.cx), int(chunk.cy), int(chunk.cz), len(palette_bytes), len(raw), sub_len)
+                + palette_bytes
+                + compressed_raw
+                + compressed_sub
+            )
+            magic = CHUNK_MAGIC
+        else:
+            compressed_raw = zlib.compress(raw, level=1)
+            payload = (
+                _BG03_HEADER.pack(int(chunk.cx), int(chunk.cy), int(chunk.cz), len(palette_bytes), len(raw))
+                + palette_bytes
+                + compressed_raw
+            )
+            magic = BG03_CHUNK_MAGIC
         path = self.path_for(chunk.cx, chunk.cy, chunk.cz)
         temporary = path.with_suffix(".bin.tmp")
-        temporary.write_bytes(CHUNK_MAGIC + payload)
+        temporary.write_bytes(magic + payload)
         os.replace(temporary, path)
 
     def read_chunk(self, cx, cy, cz):
@@ -192,12 +231,58 @@ class ChunkStore:
         blob = path.read_bytes()
         if blob[:4] == LEGACY_CHUNK_MAGIC:
             return self._read_legacy(blob, cx, cy, cz)
+        if blob[:4] == BG03_CHUNK_MAGIC:
+            return self._read_bg03(blob, cx, cy, cz)
         if len(blob) < 4 + _HEADER.size or blob[:4] != CHUNK_MAGIC:
             return None
-        saved_x, saved_y, saved_z, palette_len, data_len = _HEADER.unpack_from(blob, 4)
+        saved_x, saved_y, saved_z, palette_len, data_len, sub_len = _HEADER.unpack_from(blob, 4)
         if (saved_x, saved_y, saved_z) != (int(cx), int(cy), int(cz)):
             return None
         offset = 4 + _HEADER.size
+        end = offset + palette_len
+        if palette_len <= 0 or end > len(blob) or data_len != CHUNK_BYTES * 2:
+            return None
+        try:
+            palette = json.loads(blob[offset:end].decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return None
+        if not isinstance(palette, list) or not palette:
+            return None
+
+        data_end = len(blob) - sub_len
+        if data_end < end:
+            return None
+        try:
+            raw = zlib.decompress(blob[end:data_end])
+        except zlib.error:
+            return None
+        if len(raw) != data_len:
+            return None
+
+        sub_cells = {}
+        if sub_len > 0:
+            try:
+                sub_bytes = zlib.decompress(blob[data_end:])
+                sub_json = json.loads(sub_bytes.decode("utf-8"))
+                from server.sub_cell import SubCell
+
+                for k, v in sub_json.items():
+                    coord = tuple(int(c) for c in k.split(","))
+                    sub_cells[coord] = SubCell.from_dict(v)
+            except Exception:
+                pass
+
+        local = np.frombuffer(raw, dtype=np.uint16).reshape(CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE)
+        remapped = _remap(local, _palette_lookup(palette))
+        return ChunkData(remapped, sub_cells)
+
+    def _read_bg03(self, blob, cx, cy, cz):
+        if len(blob) < 4 + _BG03_HEADER.size:
+            return None
+        saved_x, saved_y, saved_z, palette_len, data_len = _BG03_HEADER.unpack_from(blob, 4)
+        if (saved_x, saved_y, saved_z) != (int(cx), int(cy), int(cz)):
+            return None
+        offset = 4 + _BG03_HEADER.size
         end = offset + palette_len
         if palette_len <= 0 or end > len(blob) or data_len != CHUNK_BYTES * 2:
             return None
@@ -214,7 +299,7 @@ class ChunkStore:
         if len(raw) != data_len:
             return None
         local = np.frombuffer(raw, dtype=np.uint16).reshape(CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE)
-        return _remap(local, _palette_lookup(palette))
+        return ChunkData(_remap(local, _palette_lookup(palette)), {})
 
     def _read_legacy(self, blob, cx, cy, cz):
         if len(blob) < 4 + _LEGACY_HEADER.size:
@@ -234,7 +319,7 @@ class ChunkStore:
             data = np.frombuffer(raw, dtype=np.uint8).astype(np.uint16)
         else:
             data = np.frombuffer(raw, dtype=np.uint16)
-        return _remap(data.reshape(CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE), _legacy_lookup())
+        return ChunkData(_remap(data.reshape(CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE), _legacy_lookup()), {})
 
 
 class WorldCatalog:

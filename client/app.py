@@ -1031,6 +1031,23 @@ class Game(pyglet.window.Window):
             half = target_half or ("top" if target.get("local_y", 0.5) >= 0.5 else "bottom")
             sub_id = s_info["top"] if half == "top" else s_info["bottom"]
             block = BLOCKS.get(sub_id) or BLOCKS.get(block_id)
+        elif block_id == "sub_cell" or getattr(BLOCKS.get(block_id), "properties", {}).get("sub_cell"):
+            sub = self.world.get_sub_cell(x, y, z)
+            broken_mat = "stone"
+            if sub is not None:
+                octant = target.get("octant")
+                if octant is None:
+                    ox = 1 if target.get("local_x", 0.5) >= 0.5 else 0
+                    oy = 1 if target.get("local_y", 0.5) >= 0.5 else 0
+                    oz = 1 if target.get("local_z", 0.5) >= 0.5 else 0
+                    octant = (ox, oy, oz)
+                broken_mat = sub.get_octant(*octant)
+                if not broken_mat:
+                    for o in sub.octants:
+                        if o:
+                            broken_mat = o
+                            break
+            block = BLOCKS.get(broken_mat) or BLOCKS.get("stone")
         else:
             block = BLOCKS.get(block_id)
 
@@ -1055,6 +1072,124 @@ class Game(pyglet.window.Window):
         block_id = self.world.get_block(x, y, z)
         if not block_id or block_id == AIR:
             return
+
+        from server.sub_cell import SUB_CELL_BLOCK, is_sub_cell
+        sub = self.world.get_sub_cell(x, y, z)
+        if sub is not None:
+            octant = hit.get("octant")
+            if octant is None:
+                hx = 1 if hit.get("local_x", 0.0) >= 0.5 else 0
+                hy = 1 if hit.get("local_y", 0.0) >= 0.5 else 0
+                hz = 1 if hit.get("local_z", 0.0) >= 0.5 else 0
+                octant = (hx, hy, hz)
+            ox, oy, oz = octant
+            broken_mat = sub.get_octant(ox, oy, oz)
+            if not broken_mat:
+                for idx, mat in enumerate(sub.octants):
+                    if mat:
+                        from server.sub_cell import OCTANT_COORDS
+                        ox, oy, oz = OCTANT_COORDS[idx]
+                        broken_mat = mat
+                        break
+
+            if broken_mat:
+                horiz_group = [(cx, oy, cz) for cx in (0, 1) for cz in (0, 1) if sub.get_octant(cx, oy, cz) == broken_mat]
+                vert_z_group = [(cx, cy, oz) for cx in (0, 1) for cy in (0, 1) if sub.get_octant(cx, cy, oz) == broken_mat]
+                vert_x_group = [(ox, cy, cz) for cy in (0, 1) for cz in (0, 1) if sub.get_octant(ox, cy, cz) == broken_mat]
+
+                # Check if this group is paired with 4 octants in an adjacent cell (horizontally or vertically offset full block!)
+                paired_cell_pos = None
+                paired_octants = None
+
+                if len(vert_z_group) == 4:
+                    adj_z = z + (1 if oz == 1 else -1)
+                    target_paired_oz = 0 if oz == 1 else 1
+                    adj_sub = self.world.get_sub_cell(x, y, adj_z)
+                    if adj_sub is not None:
+                        matching = [(cx, cy, target_paired_oz) for cx in (0, 1) for cy in (0, 1) if adj_sub.get_octant(cx, cy, target_paired_oz) == broken_mat]
+                        if len(matching) == 4:
+                            paired_cell_pos = (x, y, adj_z)
+                            paired_octants = matching
+                            group_to_clear = vert_z_group
+                            drop_item = broken_mat  # Full block!
+                if paired_cell_pos is None and len(vert_x_group) == 4:
+                    adj_x = x + (1 if ox == 1 else -1)
+                    target_paired_ox = 0 if ox == 1 else 1
+                    adj_sub = self.world.get_sub_cell(adj_x, y, z)
+                    if adj_sub is not None:
+                        matching = [(target_paired_ox, cy, cz) for cy in (0, 1) for cz in (0, 1) if adj_sub.get_octant(target_paired_ox, cy, cz) == broken_mat]
+                        if len(matching) == 4:
+                            paired_cell_pos = (adj_x, y, z)
+                            paired_octants = matching
+                            group_to_clear = vert_x_group
+                            drop_item = broken_mat  # Full block!
+                if paired_cell_pos is None and len(horiz_group) == 4:
+                    adj_y = y + (1 if oy == 1 else -1)
+                    target_paired_oy = 0 if oy == 1 else 1
+                    adj_sub = self.world.get_sub_cell(x, adj_y, z)
+                    if adj_sub is not None:
+                        matching = [(cx, target_paired_oy, cz) for cx in (0, 1) for cz in (0, 1) if adj_sub.get_octant(cx, target_paired_oy, cz) == broken_mat]
+                        if len(matching) == 4:
+                            paired_cell_pos = (x, adj_y, z)
+                            paired_octants = matching
+                            group_to_clear = horiz_group
+                            drop_item = broken_mat  # Full block!
+
+                if paired_cell_pos is None:
+                    sh = hit.get("slab_half", "")
+                    if all(sub.octants[i] == broken_mat for i in range(8)) and (sh == "sub_full" or not sh):
+                        group_to_clear = [(cx, cy, cz) for cx in (0, 1) for cy in (0, 1) for cz in (0, 1)]
+                        drop_item = broken_mat
+                    elif (sh.startswith("sub_vslabz_") or len(vert_z_group) == 4) and len(vert_z_group) == 4 and not sh.startswith("sub_slaby_"):
+                        group_to_clear = vert_z_group
+                        drop_item = f"{broken_mat}_slab" if f"{broken_mat}_slab" in BLOCKS else broken_mat
+                    elif (sh.startswith("sub_vslabx_") or len(vert_x_group) == 4) and len(vert_x_group) == 4 and not sh.startswith("sub_slaby_"):
+                        group_to_clear = vert_x_group
+                        drop_item = f"{broken_mat}_slab" if f"{broken_mat}_slab" in BLOCKS else broken_mat
+                    elif len(horiz_group) == 4:
+                        group_to_clear = horiz_group
+                        drop_item = f"{broken_mat}_slab" if f"{broken_mat}_slab" in BLOCKS else broken_mat
+                    else:
+                        group_to_clear = [(ox, oy, oz)]
+                        drop_item = f"{broken_mat}_slab" if f"{broken_mat}_slab" in BLOCKS else broken_mat
+
+                for cx, cy, cz in group_to_clear:
+                    sub.set_octant(cx, cy, cz, "")
+
+                if paired_cell_pos is not None and paired_octants is not None:
+                    px, py, pz = paired_cell_pos
+                    p_sub = self.world.get_sub_cell(px, py, pz).copy()
+                    for cx, cy, cz in paired_octants:
+                        p_sub.set_octant(cx, cy, cz, "")
+                    if self.network_client is not None:
+                        if p_sub.is_empty():
+                            self.network_client.send_set_block(px, py, pz, AIR)
+                        elif p_sub.is_full():
+                            self.network_client.send_set_block(px, py, pz, p_sub.octants[0])
+                        else:
+                            self.network_client.send_set_block(px, py, pz, SUB_CELL_BLOCK)
+                    self.world.set_sub_cell(px, py, pz, p_sub)
+                    self._upload_block_change(px, py, pz)
+
+                held_id = stack_id(self.hotbar[self.selected]) if self.selected < len(self.hotbar) else ""
+                held_item = ITEMS.get(held_id)
+                if self.gamemode == "survival":
+                    drops = get_block_drops(BLOCKS.get(drop_item) or BLOCKS.get(broken_mat), held_item)
+                    if drops:
+                        self._spawn_break_drops(drops, x, y + 0.5, z)
+
+                if self.network_client is not None:
+                    if sub.is_empty():
+                        self.network_client.send_set_block(x, y, z, AIR)
+                    elif sub.is_full():
+                        self.network_client.send_set_block(x, y, z, sub.octants[0])
+                    else:
+                        self.network_client.send_set_block(x, y, z, SUB_CELL_BLOCK)
+
+                self.world.set_sub_cell(x, y, z, sub)
+                self._upload_block_change(x, y, z)
+                self._reset_breaking()
+                return
 
         from server.blocks import (
             get_double_vertical_slab_info,
@@ -1367,6 +1502,138 @@ class Game(pyglet.window.Window):
         held_v_info = get_vertical_slab_info(held.block)
         held_v_offset_info = get_vertical_slab_offset_info(held.block)
         hit_normal = (hit["nx"], hit["ny"], hit["nz"])
+
+        from server.sub_cell import (
+            SUB_CELL_BLOCK,
+            calculate_horizontal_offset_placement,
+            calculate_sub_cell_placement,
+            is_sub_cell,
+        )
+
+        target_is_sub = target_block == SUB_CELL_BLOCK or is_sub_cell(target_block) or self.world.get_sub_cell(*target_pos) is not None
+        adj_pos = (hit["x"] + hit["nx"], hit["y"] + hit["ny"], hit["z"] + hit["nz"])
+        adj_is_sub = self.world.get_block(*adj_pos) == SUB_CELL_BLOCK or self.world.get_sub_cell(*adj_pos) is not None
+
+        # Check horizontal offset placement (e.g. full blocks against vertical slabs or sub-cells)
+        if not held_is_slab and held_v_info is None and not is_torch(held.block) and (target_v_info is not None or target_is_sub):
+            player_yaw = self.player.yaw if self.player is not None else 0.0
+            placed_block_id = placement_block(
+                held.block,
+                hit_normal,
+                player_yaw,
+                hit.get("local_y"),
+            )
+            horiz_res = calculate_horizontal_offset_placement(
+                self.world, hit, placed_block_id, player_yaw
+            )
+            if horiz_res is not None:
+                if self.player is not None:
+                    px, py, pz = self.player.pos
+                    rad, hgt = self.player.radius, self.player.height
+                    collision = False
+                    for cx, cy, cz, new_sub in horiz_res:
+                        prev_sub = self.world.get_sub_cell(cx, cy, cz)
+                        for ox in (0, 1):
+                            for oy in (0, 1):
+                                for oz in (0, 1):
+                                    if new_sub.get_octant(ox, oy, oz) and (prev_sub is None or not prev_sub.get_octant(ox, oy, oz)):
+                                        bx0 = cx + ox * 0.5
+                                        by0 = cy + oy * 0.5
+                                        bz0 = cz + oz * 0.5
+                                        bx1, by1, bz1 = bx0 + 0.5, by0 + 0.5, bz0 + 0.5
+                                        if (
+                                            px + rad > bx0
+                                            and px - rad < bx1
+                                            and py + hgt > by0
+                                            and py < by1
+                                            and pz + rad > bz0
+                                            and pz - rad < bz1
+                                        ):
+                                            collision = True
+                                            break
+                                if collision:
+                                    break
+                            if collision:
+                                break
+                        if collision:
+                            break
+                    if collision:
+                        return
+
+                for cx, cy, cz, new_sub in horiz_res:
+                    if self.network_client is not None:
+                        if new_sub.is_full():
+                            self.network_client.send_set_block(cx, cy, cz, new_sub.octants[0])
+                        else:
+                            self.network_client.send_set_block(cx, cy, cz, SUB_CELL_BLOCK)
+                    self.world.set_sub_cell(cx, cy, cz, new_sub)
+                    self._upload_block_change(cx, cy, cz)
+
+                if self.gamemode == "survival":
+                    cur_slot = self.hotbar[self.selected]
+                    c = stack_count(cur_slot)
+                    if c > 1:
+                        self.hotbar[self.selected] = make_stack(stack_id(cur_slot), c - 1)
+                    else:
+                        self.hotbar[self.selected] = empty_stack()
+                return
+        if target_is_sub or adj_is_sub:
+            player_yaw = self.player.yaw if self.player is not None else 0.0
+            placed_block_id = placement_block(
+                held.block,
+                hit_normal,
+                player_yaw,
+                hit.get("local_y"),
+            )
+            sub_res = calculate_sub_cell_placement(self.world, hit, placed_block_id, player_yaw)
+            if sub_res is not None:
+                cx, cy, cz, new_sub = sub_res
+                if self.player is not None:
+                    px, py, pz = self.player.pos
+                    rad, hgt = self.player.radius, self.player.height
+                    collision = False
+                    prev_sub = self.world.get_sub_cell(cx, cy, cz)
+                    for ox in (0, 1):
+                        for oy in (0, 1):
+                            for oz in (0, 1):
+                                if new_sub.get_octant(ox, oy, oz) and (prev_sub is None or not prev_sub.get_octant(ox, oy, oz)):
+                                    bx0 = cx + ox * 0.5
+                                    by0 = cy + oy * 0.5
+                                    bz0 = cz + oz * 0.5
+                                    bx1, by1, bz1 = bx0 + 0.5, by0 + 0.5, bz0 + 0.5
+                                    if (
+                                        px + rad > bx0
+                                        and px - rad < bx1
+                                        and py + hgt > by0
+                                        and py < by1
+                                        and pz + rad > bz0
+                                        and pz - rad < bz1
+                                    ):
+                                        collision = True
+                                        break
+                            if collision:
+                                break
+                        if collision:
+                            break
+                    if collision:
+                        return
+
+                if self.network_client is not None:
+                    if new_sub.is_full():
+                        self.network_client.send_set_block(cx, cy, cz, new_sub.octants[0])
+                    else:
+                        self.network_client.send_set_block(cx, cy, cz, SUB_CELL_BLOCK)
+
+                if self.world.set_sub_cell(cx, cy, cz, new_sub):
+                    self._upload_block_change(cx, cy, cz)
+                    if self.gamemode == "survival":
+                        cur_slot = self.hotbar[self.selected]
+                        c = stack_count(cur_slot)
+                        if c > 1:
+                            self.hotbar[self.selected] = make_stack(stack_id(cur_slot), c - 1)
+                        else:
+                            self.hotbar[self.selected] = empty_stack()
+                    return
 
         # Fill the open half of a targeted vertical slab, making a full cell.
         t_v_info = target_v_info or target_v_offset_info
@@ -1833,6 +2100,61 @@ class Game(pyglet.window.Window):
                             else:
                                 self.hotbar[self.selected] = empty_stack()
                         return
+
+        # Fallback SubCell combination if legacy combination was not registered
+        if (held_is_slab or held_v_info is not None) and (
+            target_slab_info is not None or target_v_info is not None or adj_slab_info is not None or get_vertical_slab_info(adj_block) is not None
+        ):
+            fallback_yaw = self.player.yaw if self.player is not None else 0.0
+            sub_res = calculate_sub_cell_placement(self.world, hit, held.block, fallback_yaw)
+            if sub_res is not None and self.world.get_block(sub_res[0], sub_res[1], sub_res[2]) not in ("", AIR, None):
+                cx, cy, cz, new_sub = sub_res
+                if self.player is not None:
+                    px, py, pz = self.player.pos
+                    rad, hgt = self.player.radius, self.player.height
+                    collision = False
+                    prev_sub = self.world.get_sub_cell(cx, cy, cz)
+                    for ox in (0, 1):
+                        for oy in (0, 1):
+                            for oz in (0, 1):
+                                if new_sub.get_octant(ox, oy, oz) and (prev_sub is None or not prev_sub.get_octant(ox, oy, oz)):
+                                    bx0 = cx + ox * 0.5
+                                    by0 = cy + oy * 0.5
+                                    bz0 = cz + oz * 0.5
+                                    bx1, by1, bz1 = bx0 + 0.5, by0 + 0.5, bz0 + 0.5
+                                    if (
+                                        px + rad > bx0
+                                        and px - rad < bx1
+                                        and py + hgt > by0
+                                        and py < by1
+                                        and pz + rad > bz0
+                                        and pz - rad < bz1
+                                    ):
+                                        collision = True
+                                        break
+                            if collision:
+                                break
+                        if collision:
+                            break
+                    if collision:
+                        return
+
+                if self.network_client is not None:
+                    if new_sub.is_full():
+                        self.network_client.send_set_block(cx, cy, cz, new_sub.octants[0])
+                    else:
+                        self.network_client.send_set_block(cx, cy, cz, SUB_CELL_BLOCK)
+
+                if self.world.set_sub_cell(cx, cy, cz, new_sub):
+                    self._upload_block_change(cx, cy, cz)
+                    if self.gamemode == "survival":
+                        cur_slot = self.hotbar[self.selected]
+                        c = stack_count(cur_slot)
+                        if c > 1:
+                            self.hotbar[self.selected] = make_stack(stack_id(cur_slot), c - 1)
+                        else:
+                            self.hotbar[self.selected] = empty_stack()
+                    return
 
         player_yaw = self.player.yaw if self.player is not None else None
         block_to_place = placement_block(
@@ -2576,7 +2898,21 @@ class Game(pyglet.window.Window):
                         biome_str = f"   {biome_title}"
                 name = ""
                 if self.target is not None:
-                    block = BLOCKS.get(self.world.get_block(self.target["x"], self.target["y"], self.target["z"]))
+                    from server.sub_cell import is_sub_cell
+                    target_b = self.world.get_block(self.target["x"], self.target["y"], self.target["z"])
+                    if target_b == "sub_cell" or is_sub_cell(target_b):
+                        sub = self.world.get_sub_cell(self.target["x"], self.target["y"], self.target["z"])
+                        if sub is not None:
+                            octant = self.target.get("octant", (0, 0, 0))
+                            mat = sub.get_octant(*octant)
+                            if not mat:
+                                for o in sub.octants:
+                                    if o:
+                                        mat = o
+                                        break
+                            if mat:
+                                target_b = mat
+                    block = BLOCKS.get(target_b)
                     name = f"\n{block.name}" if block else ""
                 held_block = ITEMS.get(stack_id(self.hotbar[self.selected]))
                 held = held_block.name if held_block else "Empty"
@@ -2874,7 +3210,37 @@ class Game(pyglet.window.Window):
         if hit is not None:
             is_shift = bool(modifiers & key.MOD_SHIFT) if hasattr(key, "MOD_SHIFT") else False
             if not is_shift and self.world is not None:
+                from server.sub_cell import is_sub_cell
                 target_block = self.world.get_block(hit["x"], hit["y"], hit["z"])
+                furnace_pos = (hit["x"], hit["y"], hit["z"])
+                if target_block == "sub_cell" or is_sub_cell(target_block):
+                    sub = self.world.get_sub_cell(hit["x"], hit["y"], hit["z"])
+                    if sub is not None:
+                        octant = hit.get("octant", (0, 0, 0))
+                        mat = sub.get_octant(*octant)
+                        if not mat:
+                            for o in sub.octants:
+                                if o:
+                                    mat = o
+                                    break
+                        if mat:
+                            target_block = mat
+                            # If this sub-cell is part of an offset pair, canonicalize furnace_pos
+                            ox, oy, oz = octant
+                            hx, hy, hz = hit["x"], hit["y"], hit["z"]
+                            if all(sub.get_octant(cx, cy, oz) == mat for cx in (0, 1) for cy in (0, 1)):
+                                adj_z = hz + (1 if oz == 1 else -1)
+                                adj_sub = self.world.get_sub_cell(hx, hy, adj_z)
+                                target_oz = 0 if oz == 1 else 1
+                                if adj_sub is not None and all(adj_sub.get_octant(cx, cy, target_oz) == mat for cx in (0, 1) for cy in (0, 1)):
+                                    furnace_pos = min((hx, hy, hz), (hx, hy, adj_z))
+                            elif all(sub.get_octant(ox, cy, cz) == mat for cy in (0, 1) for cz in (0, 1)):
+                                adj_x = hx + (1 if ox == 1 else -1)
+                                adj_sub = self.world.get_sub_cell(adj_x, hy, hz)
+                                target_ox = 0 if ox == 1 else 1
+                                if adj_sub is not None and all(adj_sub.get_octant(target_ox, cy, cz) == mat for cy in (0, 1) for cz in (0, 1)):
+                                    furnace_pos = min((hx, hy, hz), (adj_x, hy, hz))
+
                 target_obj = BLOCKS.get(target_block)
                 station = getattr(target_obj, "station", None)
                 base = getattr(target_obj, "base_id", target_block) if target_obj else target_block
@@ -2882,7 +3248,7 @@ class Game(pyglet.window.Window):
                     self._set_inventory(True, container_type="crafting_table", container_block=target_block)
                     return
                 if station == "furnace" or base == "furnace":
-                    self._set_inventory(True, container_type="furnace", furnace_pos=(hit["x"], hit["y"], hit["z"]), container_block=target_block)
+                    self._set_inventory(True, container_type="furnace", furnace_pos=furnace_pos, container_block=target_block)
                     return
 
         if self._handle_bucket_interaction():
@@ -2952,8 +3318,21 @@ class Game(pyglet.window.Window):
 
         hx, hy, hz = hit["x"], hit["y"], hit["z"]
         from server.recipes import find_block_hit_recipe
+        from server.sub_cell import is_sub_cell
 
         target_block = self.world.get_block(hx, hy, hz)
+        if target_block == "sub_cell" or is_sub_cell(target_block):
+            sub = self.world.get_sub_cell(hx, hy, hz)
+            if sub is not None:
+                octant = hit.get("octant", (0, 0, 0))
+                mat = sub.get_octant(*octant)
+                if not mat:
+                    for o in sub.octants:
+                        if o:
+                            mat = o
+                            break
+                if mat:
+                    target_block = mat
         recipe = find_block_hit_recipe(held_id, target_block)
         if recipe is None:
             return False

@@ -163,6 +163,28 @@ class LightingTests(unittest.TestCase):
         adj = world.get_blocklight(5, 6, 5)
         self.assertEqual(adj, (14, 10, 3, 1, 14))
 
+    def test_breaking_lit_offset_furnace_clears_light(self):
+        world = World()
+        chunk = Chunk(0, 0, 0)
+        world.chunks[(0, 0, 0)] = chunk
+        world.set_block(5, 5, 5, "furnace_offset")
+        furnace = world.get_or_create_furnace(5, 5, 5)
+        furnace.burn_time = 10.0
+        self.assertTrue(furnace.is_lit)
+        world.lighting.on_block_changed(5, 5, 5, was_emitter=True)
+
+        self.assertGreater(world.get_blocklight(5, 5, 5)[0], 0)
+        self.assertGreater(world.get_blocklight(5, 6, 5)[0], 0)
+
+        # Break the offset furnace
+        world.set_block(5, 5, 5, AIR)
+
+        # Furnace should be removed from world.furnaces
+        self.assertNotIn((5, 5, 5), world.furnaces)
+        # Blocklight must be completely cleared to 0 (no ghost light)
+        self.assertEqual(world.get_blocklight(5, 5, 5), (0, 0, 0, 0, 0))
+        self.assertEqual(world.get_blocklight(5, 6, 5), (0, 0, 0, 0, 0))
+
     def test_mesh_contains_lighting_data(self):
         world = World()
         chunk = Chunk(0, 0, 0)
