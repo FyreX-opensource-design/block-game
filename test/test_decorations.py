@@ -171,9 +171,13 @@ class DecorationFeatureTests(unittest.TestCase):
         self.assertEqual(hit_solid["y"], 64)  # Hits the solid grass, ignores the rose!
 
     def test_breaking_decorations_drops_item(self):
-        for plant_id in ("tall_grass", "fern", "dandelion", "rose"):
+        for plant_id in ("fern", "dandelion", "rose"):
             drops = get_block_drops(plant_id, None)
             self.assertEqual(drops, [(plant_id, 1)])
+        # Tall grass drops plant fiber
+        grass_drops = dict(get_block_drops("tall_grass", None))
+        self.assertIn("plant_fiber", grass_drops)
+        self.assertGreaterEqual(grass_drops["plant_fiber"], 1)
 
     def test_decorations_do_not_block_movement(self):
         world = World(seed=1, caves=[])

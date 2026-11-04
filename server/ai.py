@@ -401,3 +401,155 @@ class WanderGoal(Goal):
                 self.state = "idle"
                 self.timer = random.uniform(2.0, 5.0)
                 self.mob.desired_speed = 0.0
+
+
+class ZombieAttackGoal(Goal):
+    """Hostile attack goal for Zombie:
+
+    - Detects closest alive survival player within target_range (16 blocks).
+    - Chases the player at mob.run_speed.
+    - Attacks when within melee reach (e.g. 1.5 blocks), applying damage, knockback, and hurt_time.
+    """
+
+    def __init__(self, mob, target_range=16.0, reach=1.5, damage=3.0, cooldown=1.0):
+        super().__init__(mob)
+        self.target_range = float(target_range)
+        self.reach = float(reach)
+        self.damage = float(damage)
+        self.cooldown = float(cooldown)
+        self.attack_timer = 0.0
+        self.target = None
+        self.repath_timer = 0.0
+
+    def _get_target_candidates(self):
+        world = getattr(self.mob, "world", None)
+        if world is None:
+            return []
+        players = []
+        if hasattr(world, "players") and world.players:
+            players.extend(world.players.values())
+        single = getattr(world, "_singleplayer_player", None)
+        if single is not None and single not in players:
+            players.append(single)
+        return players
+
+    def _find_closest_player(self):
+        candidates = self._get_target_candidates()
+        best_p = None
+        best_dist_sq = self.target_range * self.target_range
+        mx, my, mz = self.mob.pos
+        for p in candidates:
+            if not getattr(p, "alive", True) or getattr(p, "dead", False):
+                continue
+            if not getattr(p, "survival", True):
+                continue
+            px, py, pz = p.pos
+            dx = px - mx
+            dy = py - my
+            dz = pz - mz
+            dist_sq = dx * dx + dy * dy + dz * dz
+            if dist_sq <= best_dist_sq:
+                best_dist_sq = dist_sq
+                best_p = p
+        return best_p
+
+    def can_start(self) -> bool:
+        self.target = self._find_closest_player()
+        return self.target is not None
+
+    def can_continue(self) -> bool:
+        if self.target is None:
+            return False
+        if not getattr(self.target, "alive", True) or getattr(self.target, "dead", False):
+            return False
+        if not getattr(self.target, "survival", True):
+            return False
+        mx, my, mz = self.mob.pos
+        px, py, pz = self.target.pos
+        dist_sq = (px - mx) ** 2 + (py - my) ** 2 + (pz - mz) ** 2
+        return dist_sq <= (self.target_range * self.target_range)
+
+    def start(self):
+        self.repath_timer = 0.0
+
+    def stop(self):
+        self.target = None
+        self.mob.desired_speed = 0.0
+
+    def tick(self, dt: float):
+        if self.attack_timer > 0:
+            self.attack_timer = max(0.0, self.attack_timer - dt)
+
+        # Re-evaluate target or track current target
+        if self.target is None or not getattr(self.target, "alive", True):
+            self.target = self._find_closest_player()
+            if self.target is None:
+                self.mob.desired_speed = 0.0
+                return
+
+        mx, my, mz = self.mob.pos
+        px, py, pz = self.target.pos
+        dx = px - mx
+        dy = py - my
+        dz = pz - mz
+        dist_xz = math.hypot(dx, dz)
+        dist_3d = math.sqrt(dx * dx + dy * dy + dz * dz)
+
+        # Chase towards player
+        self.repath_timer -= dt
+        if self.repath_timer <= 0:
+            self.repath_timer = 0.1
+            if dist_xz > 0.05:
+                desired_yaw = math.atan2(-dx, -dz)
+                world = getattr(self.mob, "world", None)
+                safe_yaw = pick_safe_yaw(self.mob, desired_yaw, world=world)
+                if safe_yaw is not None:
+                    self.mob.target_yaw = safe_yaw
+                    self.mob.desired_speed = getattr(self.mob, "run_speed", 2.4)
+                else:
+                    self.mob.target_yaw = desired_yaw
+                    self.mob.desired_speed = 0.0
+
+        # Attack if in melee range
+        if dist_3d <= self.reach or (dist_xz <= self.reach and abs(dy) <= 2.0):
+            if self.attack_timer <= 0:
+                self.attack_timer = self.cooldown
+                self._execute_attack(self.target)
+
+    def _execute_attack(self, target):
+        target.take_damage(self.damage)
+        mx, my, mz = self.mob.pos
+        px, py, pz = target.pos
+        dx = px - mx
+        dz = pz - mz
+        klen = math.hypot(dx, dz) or 1.0
+        kdx = dx / klen
+        kdz = dz / klen
+        kb_speed = 4.5
+        new_vel = [kdx * kb_speed, 3.2, kdz * kb_speed]
+
+        if hasattr(target, "vel"):
+            target.vel = list(new_vel)
+        target.hurt_time = 0.4
+
+        # Multiplayer sync if running on server
+        world = getattr(self.mob, "world", None)
+        server = getattr(world, "server", None)
+        if server is not None:
+            target_uuid = getattr(target, "uuid", None)
+            target_client = server.clients.get(target_uuid)
+            if target_client is not None:
+                target_client.vel = list(new_vel)
+                target_client.send({
+                    "type": "player_knockback",
+                    "vel": new_vel,
+                })
+                server._send_player_health(target_client, target)
+                server.broadcast({
+                    "type": "player_hurt",
+                    "uuid": target_uuid,
+                    "hurt_time": target.hurt_time,
+                })
+                if getattr(target, "dead", False):
+                    server._respawn_client_player(target_client, target, cause="slain by Zombie")
+

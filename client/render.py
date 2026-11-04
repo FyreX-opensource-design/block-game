@@ -514,11 +514,14 @@ class Renderer:
         self.player_meshes = PlayerMeshes()
         from server.pig_model import PigMeshes
         from server.sheep_model import SheepMeshes
+        from server.zombie_model import ZombieMeshes
 
         self.pig_meshes = PigMeshes()
         self.pig_texture = None
         self.sheep_meshes = SheepMeshes()
         self.sheep_texture = None
+        self.zombie_meshes = ZombieMeshes()
+        self.zombie_texture = None
         self._init_mob_textures()
         self.world["atlas"].value = 0
         self.translucent["atlas"].value = 0
@@ -1072,6 +1075,17 @@ class Renderer:
             except Exception:
                 self.sheep_texture = None
 
+        zombie_path = ASSETS / "textures" / "entity" / "zombie.png"
+        if not zombie_path.is_file():
+            zombie_path = ASSETS / "textures" / "zombie.png"
+        if zombie_path.is_file():
+            try:
+                rgba = read_png(zombie_path)
+                image = np.flipud(np.ascontiguousarray(rgba, dtype=np.uint8))
+                self.zombie_texture = self._create_skin_texture(image)
+            except Exception:
+                self.zombie_texture = None
+
     def draw_item_entities(self, vp, camera, entities, time_val, day_time=1000.0):
         if not entities:
             return
@@ -1119,6 +1133,23 @@ class Renderer:
                         vertices,
                         indices,
                         self.sheep_texture,
+                        fog=True,
+                        day_time=day_time,
+                        hurt_flash=hurt,
+                    )
+                elif mob_type == "zombie" and self.zombie_texture is not None:
+                    from server.zombie_model import zombie_pose
+
+                    hspeed = math.hypot(entity.vel[0], entity.vel[2])
+                    poses = zombie_pose(entity.walk_time, hspeed, entity.yaw, pitch=entity.pitch)
+                    vertices, indices = self.zombie_meshes.posed_vertices(entity.pos, entity.yaw, poses)
+                    hurt = 1.0 if getattr(entity, "hurt_time", 0.0) > 0 else 0.0
+                    self._draw_entity(
+                        vp,
+                        camera,
+                        vertices,
+                        indices,
+                        self.zombie_texture,
                         fog=True,
                         day_time=day_time,
                         hurt_flash=hurt,

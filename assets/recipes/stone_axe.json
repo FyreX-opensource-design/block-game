@@ -1,0 +1,18 @@
+{
+  "id": "stone_axe",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "#X",
+    " X"
+  ],
+  "key": {
+    "#": "stone",
+    "X": "stick"
+  },
+  "result": {
+    "item": "stone_axe",
+    "count": 1
+  }
+}
+

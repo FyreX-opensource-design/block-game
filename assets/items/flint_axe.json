@@ -1,0 +1,18 @@
+{
+  "id": "flint_axe",
+  "lang": "item.flint_axe",
+  "tab": "tools",
+  "model": "flat",
+  "texture": "flint_axe",
+  "tool": "axe",
+  "max_stack": 1,
+  "left": "mine",
+  "right": "none",
+  "durability": 50,
+  "mining_level": 1,
+  "mining_speed": 2,
+  "attack": 3,
+  "food": 0,
+  "repair": "knapped_flint"
+}
+

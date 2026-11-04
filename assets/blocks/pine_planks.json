@@ -7,5 +7,6 @@
   "tool": "axe",
   "mining_level": 0,
   "loot_table": "blocks/pine_planks",
+  "sound": "wood",
   "textures": {"top": "pine_planks", "side": "pine_planks", "bottom": "pine_planks"}
 }

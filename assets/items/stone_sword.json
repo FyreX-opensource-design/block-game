@@ -1,0 +1,18 @@
+{
+  "id": "stone_sword",
+  "lang": "item.stone_sword",
+  "tab": "tools",
+  "model": "flat",
+  "texture": "stone_sword",
+  "tool": "sword",
+  "max_stack": 1,
+  "left": "attack",
+  "right": "none",
+  "durability": 131,
+  "mining_level": 0,
+  "mining_speed": 2,
+  "attack": 5,
+  "food": 0,
+  "repair": "stone"
+}
+

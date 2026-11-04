@@ -95,6 +95,8 @@ class Block:
         slab_half=None,
         waterlogged=False,
         double_slab=False,
+        sound=None,
+        sounds=None,
     ):
         from server.lighting import parse_light_levels
 
@@ -126,6 +128,14 @@ class Block:
         self.tint = str(actual_tint).lower() if actual_tint else None
         if self.tint:
             self.properties["tint"] = self.tint
+        sound_val = sound if sound is not None else (self.properties.get("sound") or (properties.get("sound") if properties else None))
+        sounds_val = sounds if sounds is not None else (self.properties.get("sounds") or (properties.get("sounds") if properties else None))
+        self.sound = str(sound_val).lower() if sound_val else None
+        self.sounds = dict(sounds_val) if isinstance(sounds_val, dict) else None
+        if self.sound:
+            self.properties["sound"] = self.sound
+        if self.sounds:
+            self.properties["sounds"] = self.sounds
         self.slab = bool(slab or self.properties.get("slab", False) or self.properties.get("double_slab", False))
         self.slab_half = slab_half or self.properties.get("half", ("bottom" if self.slab else None))
         self.vertical_slab = bool(self.properties.get("vertical_slab", False))
@@ -178,6 +188,21 @@ class Block:
             )
         else:
             self.icon = (0.0, 0.0, 1.0, 1.0)
+
+    def get_walk_sound(self, rng=None):
+        from server.sound import get_block_walk_sound
+
+        return get_block_walk_sound(self, rng=rng)
+
+    def get_breaking_sound(self, rng=None):
+        from server.sound import get_block_breaking_sound
+
+        return get_block_breaking_sound(self, rng=rng)
+
+    def get_break_sound(self, rng=None):
+        from server.sound import get_block_break_sound
+
+        return get_block_break_sound(self, rng=rng)
 
 
 def _rotate_uv(uv, turns=1):
@@ -1358,6 +1383,12 @@ def _load_registry():
         station_val = entry.get("station") or properties.get("station") or entry.get("container") or properties.get("container")
         recipe_types_val = entry.get("recipe_types") or properties.get("recipe_types") or entry.get("recipe_type") or properties.get("recipe_type")
         cook_speed_val = float(entry.get("cook_speed") or properties.get("cook_speed") or 1.0)
+        sound_val = entry.get("sound") or properties.get("sound")
+        sounds_val = entry.get("sounds") or properties.get("sounds")
+        if sound_val:
+            base_props["sound"] = sound_val
+        if sounds_val:
+            base_props["sounds"] = sounds_val
 
         block = Block(
             str(entry["id"]),
@@ -1388,6 +1419,8 @@ def _load_registry():
             cook_speed=cook_speed_val,
             slab=is_slab_type,
             slab_half=("bottom" if is_slab_type else None),
+            sound=sound_val,
+            sounds=sounds_val,
         )
         def _register_block(b_id, b_obj):
             if len(by_index) == 99:

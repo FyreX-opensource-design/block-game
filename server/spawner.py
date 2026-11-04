@@ -73,7 +73,24 @@ class MobSpawner:
                 if y is None:
                     continue
 
-                if self._can_spawn_at(x, y, z):
+                is_night = False
+                if hasattr(self.world, "is_night"):
+                    is_night = self.world.is_night()
+                elif hasattr(self.world, "day_time"):
+                    t = self.world.day_time % 24000.0
+                    is_night = 12000.0 <= t <= 24000.0
+
+                if is_night and self.can_spawn_zombie_at(x, y, z):
+                    group_size = random.randint(1, 2)
+                    for _ in range(group_size):
+                        hx = x + random.randint(-2, 2)
+                        hz = z + random.randint(-2, 2)
+                        hy = self._find_ground_y(hx, hz)
+                        if hy is not None and self.can_spawn_zombie_at(hx, hy, hz):
+                            self.world.spawn_mob("zombie", pos=[hx + 0.5, hy + 1.0, hz + 0.5])
+                    return
+
+                if not is_night and self._can_spawn_at(x, y, z):
                     herd_size = random.randint(1, 3)
                     mob_type = random.choice(("pig", "sheep"))
                     for _ in range(herd_size):
@@ -109,7 +126,10 @@ class MobSpawner:
                     return y
         return None
 
-    def _can_spawn_at(self, x, y, z):
+    def _can_spawn_at(self, x, y, z, mob_type=None):
+        if mob_type == "zombie":
+            return self.can_spawn_zombie_at(x, y, z)
+
         ground = self.world.get_block(x, y, z)
         if ground not in ("grass", "dirt", "muddy_grass"):
             return False
@@ -137,4 +157,83 @@ class MobSpawner:
                 return False
 
         return True
+
+    def can_spawn_zombie_at(self, x, y, z, skylight=None, blocklight=None):
+        """Check if a zombie can spawn at (x, y, z) ground block.
+
+        Conditions:
+        - Solid ground (not air, not fluid, solid block).
+        - Clear headroom at y+1 and y+2 (not solid, not water).
+        - Spawning is prevented if skylight > 7.
+        - Spawning is prevented if block light blue > 7, green > 7, or uv > 7.
+        - Red light (and infrared) does NOT prevent zombie spawning.
+        """
+        ground = self.world.get_block(x, y, z)
+        if not ground or ground == "air":
+            return False
+
+        from server.fluid import is_water
+
+        if is_water(ground):
+            return False
+
+        b_obj = BLOCKS.get(ground)
+        if not b_obj or not getattr(b_obj, "solid", False):
+            return False
+
+        # Above must be clear (2 blocks headroom)
+        b1 = self.world.get_block(x, y + 1, z)
+        b2 = self.world.get_block(x, y + 2, z)
+
+        if is_water(b1) or is_water(b2):
+            return False
+
+        b1_obj = BLOCKS.get(b1)
+        b2_obj = BLOCKS.get(b2)
+        if b1_obj and getattr(b1_obj, "solid", False):
+            return False
+        if b2_obj and getattr(b2_obj, "solid", False):
+            return False
+
+        # Lighting check:
+        # Spawning is prevented by skylight > 7 or blue, green, or UV light > 7.
+        # Red light won't work to prevent zombie spawning.
+        if skylight is None:
+            if hasattr(self.world, "get_current_skylight"):
+                skylight = self.world.get_current_skylight(x, y + 1, z)
+            elif getattr(self.world, "lighting", None) is not None:
+                skylight = self.world.lighting.get_skylight(x, y + 1, z)
+            elif hasattr(self.world, "get_skylight"):
+                skylight = self.world.get_skylight(x, y + 1, z)
+            else:
+                skylight = 0
+
+        if skylight > 7:
+            return False
+
+        if blocklight is None:
+            if hasattr(self.world, "get_blocklight"):
+                blocklight = self.world.get_blocklight(x, y + 1, z)
+            elif getattr(self.world, "lighting", None) is not None:
+                blocklight = self.world.lighting.get_blocklight(x, y + 1, z)
+            else:
+                blocklight = (0, 0, 0, 0, 0)
+
+        if isinstance(blocklight, dict):
+            g = blocklight.get("g", blocklight.get("green", 0))
+            b = blocklight.get("b", blocklight.get("blue", 0))
+            uv = blocklight.get("uv", 0)
+        elif isinstance(blocklight, (list, tuple)):
+            g = blocklight[1] if len(blocklight) > 1 else 0
+            b = blocklight[2] if len(blocklight) > 2 else 0
+            uv = blocklight[3] if len(blocklight) > 3 else 0
+        else:
+            g = b = uv = 0
+
+        if b > 7 or g > 7 or uv > 7:
+            return False
+
+        return True
+
+    can_spawn_at = _can_spawn_at
 

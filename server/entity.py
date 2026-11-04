@@ -1,5 +1,6 @@
 import math
 import random
+import uuid
 
 GRAVITY = 20.0
 TERMINAL_VELOCITY = -25.0
@@ -474,6 +475,7 @@ class Mob:
         health=10.0,
         max_health=10.0,
         entity_id=None,
+        uuid_val=None,
     ):
         if entity_id is None:
             self.id = ItemEntity._next_id
@@ -485,6 +487,10 @@ class Mob:
 
         self.mob_type = str(mob_type)
         self.type = self.mob_type
+        if uuid_val is None:
+            self.uuid = f"{self.mob_type}:{uuid.uuid4()}"
+        else:
+            self.uuid = str(uuid_val)
         self.pos = list(pos) if pos is not None else [0.5, 0.0, 0.5]
         self.vel = list(vel) if vel is not None else [0.0, 0.0, 0.0]
         self.yaw = float(yaw)
@@ -840,6 +846,7 @@ class Mob:
         return {
             "type": self.mob_type,
             "id": self.id,
+            "uuid": self.uuid,
             "pos": [round(v, 4) for v in self.pos],
             "vel": [round(v, 4) for v in self.vel],
             "yaw": round(self.yaw, 4),
@@ -855,6 +862,8 @@ class Mob:
             return Pig.from_dict(data)
         if mob_type == "sheep":
             return Sheep.from_dict(data)
+        if mob_type == "zombie":
+            return Zombie.from_dict(data)
         mob = cls(
             mob_type=mob_type,
             pos=data.get("pos"),
@@ -863,6 +872,7 @@ class Mob:
             pitch=data.get("pitch", 0.0),
             health=data.get("health", 10.0),
             entity_id=data.get("id"),
+            uuid_val=data.get("uuid"),
         )
         mob.hurt_time = float(data.get("hurt_time", 0.0))
         return mob
@@ -880,6 +890,7 @@ class Pig(Mob):
         health=10.0,
         max_health=10.0,
         entity_id=None,
+        uuid_val=None,
     ):
         super().__init__(
             mob_type="pig",
@@ -890,6 +901,7 @@ class Pig(Mob):
             health=health,
             max_health=max_health,
             entity_id=entity_id,
+            uuid_val=uuid_val,
         )
         self.walk_speed = 1.2
         self.run_speed = 2.8
@@ -912,6 +924,7 @@ class Pig(Mob):
             pitch=data.get("pitch", 0.0),
             health=data.get("health", 10.0),
             entity_id=data.get("id"),
+            uuid_val=data.get("uuid"),
         )
         pig.hurt_time = float(data.get("hurt_time", 0.0))
         return pig
@@ -953,6 +966,7 @@ class Sheep(Mob):
         sheared=False,
         color="white",
         regrow_cooldown=0.0,
+        uuid_val=None,
     ):
         super().__init__(
             mob_type="sheep",
@@ -963,6 +977,7 @@ class Sheep(Mob):
             health=health,
             max_health=max_health,
             entity_id=entity_id,
+            uuid_val=uuid_val,
         )
         self.walk_speed = 1.2
         self.run_speed = 2.8
@@ -1048,9 +1063,79 @@ class Sheep(Mob):
             sheared=data.get("sheared", False),
             color=data.get("color", "white"),
             regrow_cooldown=data.get("regrow_cooldown", 0.0),
+            uuid_val=data.get("uuid"),
         )
         sheep.hurt_time = float(data.get("hurt_time", 0.0))
         return sheep
+
+
+class Zombie(Mob):
+    """Hostile zombie mob that chases and attacks players within 16 blocks."""
+
+    def __init__(
+        self,
+        pos=None,
+        vel=None,
+        yaw=0.0,
+        pitch=0.0,
+        health=20.0,
+        max_health=20.0,
+        entity_id=None,
+        uuid_val=None,
+    ):
+        super().__init__(
+            mob_type="zombie",
+            pos=pos,
+            vel=vel,
+            yaw=yaw,
+            pitch=pitch,
+            health=health,
+            max_health=max_health,
+            entity_id=entity_id,
+            uuid_val=uuid_val,
+        )
+        self.name = "Zombie"
+        self.walk_speed = 1.2
+        self.run_speed = 2.4
+        self.radius = 0.35
+        self.height = 1.95
+        self.attack_damage = 3.0
+        self.attack_range = 1.5
+        self.loot_table = "entities/zombie"
+
+        from server.ai import GoalSelector, WanderGoal, ZombieAttackGoal
+
+        self.goals = GoalSelector()
+        self.goals.add_goal(1, ZombieAttackGoal(self, target_range=16.0, reach=1.5, damage=3.0))
+        self.goals.add_goal(2, WanderGoal(self))
+
+    def in_panic(self):
+        return False
+
+    def take_damage(self, amount, attacker=None, knockback_dir=None, world=None):
+        res = super().take_damage(amount, attacker=attacker, knockback_dir=knockback_dir, world=world)
+        self.panic_timer = 0.0
+        if attacker is not None and self.goals is not None:
+            # Retaliate / focus target on attacker if within goals
+            for _, goal in self.goals.goals:
+                if hasattr(goal, "target"):
+                    goal.target = attacker
+        return res
+
+    @classmethod
+    def from_dict(cls, data):
+        zombie = cls(
+            pos=data.get("pos"),
+            vel=data.get("vel"),
+            yaw=data.get("yaw", 0.0),
+            pitch=data.get("pitch", 0.0),
+            health=data.get("health", 20.0),
+            max_health=data.get("max_health", 20.0),
+            entity_id=data.get("id"),
+            uuid_val=data.get("uuid"),
+        )
+        zombie.hurt_time = float(data.get("hurt_time", 0.0))
+        return zombie
 
 
 def entity_from_dict(data):
@@ -1061,6 +1146,8 @@ def entity_from_dict(data):
         return Pig.from_dict(data)
     elif etype == "sheep" or data.get("mob_type") == "sheep":
         return Sheep.from_dict(data)
+    elif etype == "zombie" or data.get("mob_type") == "zombie":
+        return Zombie.from_dict(data)
     elif etype == "mob":
         return Mob.from_dict(data)
     return ItemEntity.from_dict(data)

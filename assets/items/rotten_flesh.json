@@ -1,0 +1,19 @@
+{
+  "id": "rotten_flesh",
+  "name": "Rotten Flesh",
+  "tab": [
+    "materials"
+  ],
+  "model": "flat",
+  "texture": "rotten_flesh",
+  "max_stack": 64,
+  "left": "none",
+  "right": "eat",
+  "durability": 0,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 1,
+  "food": 4,
+  "lang": "item.rotten_flesh"
+}
+

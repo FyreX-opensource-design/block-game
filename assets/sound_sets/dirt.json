@@ -1,0 +1,10 @@
+{
+  "id": "dirt",
+  "walk": [
+    "dirt_walking_1"
+  ],
+  "breaking": [
+    "soil_breaking"
+  ]
+}
+

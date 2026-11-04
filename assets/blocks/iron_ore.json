@@ -5,7 +5,7 @@
   "model": "cube",
   "hardness": 3.0,
   "tool": "pickaxe",
-  "mining_level": 1,
+  "mining_level": 2,
   "loot_table": "blocks/iron_ore",
   "textures": {
     "top": "iron_ore",

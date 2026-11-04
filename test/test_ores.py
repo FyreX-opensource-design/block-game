@@ -117,7 +117,7 @@ class OreTests(unittest.TestCase):
         self.assertIn(GRAVEL, found_blocks)
 
     def test_mining_drops_coal_ore(self):
-        pickaxe = ITEMS["wood_pickaxe"]
+        pickaxe = ITEMS["flint_pickaxe"]
         drops = get_block_drops("coal_ore", held_item=pickaxe)
         items = dict(drops)
         self.assertIn("coal", items)
@@ -128,11 +128,12 @@ class OreTests(unittest.TestCase):
         self.assertEqual(no_drops, [])
 
     def test_mining_drops_copper_and_iron_ore(self):
-        pickaxe = ITEMS["wood_pickaxe"]
+        flint_pick = ITEMS["flint_pickaxe"]
+        stone_pick = ITEMS["stone_pickaxe"]
 
         # Seed 2 triggers the ~20% dust chance
         rng_with_dust = random.Random(2)
-        copper_drops = get_block_drops("copper_ore", held_item=pickaxe, rng=rng_with_dust)
+        copper_drops = get_block_drops("copper_ore", held_item=flint_pick, rng=rng_with_dust)
         copper_dict = dict(copper_drops)
         self.assertIn("raw_copper", copper_dict)
         self.assertEqual(copper_dict["raw_copper"], 1)
@@ -142,9 +143,13 @@ class OreTests(unittest.TestCase):
         self.assertIn("copper_dust", copper_dict)
         self.assertEqual(copper_dict["copper_dust"], 1)
 
+        # Flint pickaxe cannot harvest iron ore (requires stone pickaxe level 2)
+        self.assertEqual(get_block_drops("iron_ore", held_item=flint_pick), [])
+
+        # Stone pickaxe can harvest iron ore
         # Seed 0 does not trigger dust
         rng_no_dust = random.Random(0)
-        iron_drops = get_block_drops("iron_ore", held_item=pickaxe, rng=rng_no_dust)
+        iron_drops = get_block_drops("iron_ore", held_item=stone_pick, rng=rng_no_dust)
         iron_dict = dict(iron_drops)
         self.assertIn("raw_iron", iron_dict)
         self.assertEqual(iron_dict["raw_iron"], 1)
@@ -154,7 +159,7 @@ class OreTests(unittest.TestCase):
         self.assertNotIn("iron_dust", iron_dict)
 
         # Seed 2 also triggers iron dust
-        iron_dust_drops = dict(get_block_drops("iron_ore", held_item=pickaxe, rng=random.Random(2)))
+        iron_dust_drops = dict(get_block_drops("iron_ore", held_item=stone_pick, rng=random.Random(2)))
         self.assertIn("iron_dust", iron_dust_drops)
         self.assertEqual(iron_dust_drops["iron_dust"], 1)
 

@@ -372,7 +372,7 @@ class TestFluidMeshing(unittest.TestCase):
         self.assertTrue(is_water(self.world.get_block(3, 81, 2)))
         # A dropped item entity was spawned
         self.assertEqual(len(self.world.entities), initial_count + 1)
-        self.assertEqual(self.world.entities[-1].item, "tall_grass")
+        self.assertEqual(self.world.entities[-1].item, "plant_fiber")
 
         # 3. Placing water directly into dandelion breaks it and drops dandelion
         self.world.set_block(5, 80, 5, STONE)
@@ -419,7 +419,7 @@ class TestFluidMeshing(unittest.TestCase):
 
         # Plant loot must have dropped
         self.assertEqual(len(self.world.entities), initial_entities + 1)
-        self.assertEqual(self.world.entities[-1].item, "tall_grass")
+        self.assertEqual(self.world.entities[-1].item, "plant_fiber")
 
         # In survival, bucket becomes empty iron_bucket
         self.assertEqual(stack_id(app.hotbar[0]), "iron_bucket")
