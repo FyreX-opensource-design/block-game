@@ -521,10 +521,10 @@ class World:
         if callback is not None:
             callback(entity)
 
-    def spawn_item(self, item, count=1, pos=None, vel=None, despawn_timer=300.0, pickup_delay=0.0):
+    def spawn_item(self, item, count=1, pos=None, vel=None, despawn_timer=300.0, pickup_delay=0.0, damage=0):
         from server.entity import ItemEntity
 
-        entity = ItemEntity(item, count=count, pos=pos, vel=vel, despawn_timer=despawn_timer, pickup_delay=pickup_delay)
+        entity = ItemEntity(item, count=count, pos=pos, vel=vel, despawn_timer=despawn_timer, pickup_delay=pickup_delay, damage=damage)
         self.entities.append(entity)
         self._notify_entity_spawn(entity)
         return entity
@@ -738,9 +738,6 @@ class World:
         if sub_cell is None or sub_cell.is_empty():
             chunk.sub_cells.pop((lx, ly, lz), None)
             return self.set_block(x, y, z, AIR)
-        if sub_cell.is_full():
-            chunk.sub_cells.pop((lx, ly, lz), None)
-            return self.set_block(x, y, z, sub_cell.octants[0])
 
         chunk.sub_cells[(lx, ly, lz)] = sub_cell
         self.mark_dirty(cx, cy, cz)

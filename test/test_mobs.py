@@ -332,13 +332,18 @@ class TestMultiplayerMobs(unittest.TestCase):
             broadcasted = []
             server.broadcast = lambda pkt: broadcasted.append(pkt)
 
-            # Client attacks mob
-            server._handle_packet(mock_client, {"type": "attack_entity", "id": pig.id})
+            # Client attacks mob with wooden pickaxe (attack: 2)
+            server._handle_packet(mock_client, {"type": "attack_entity", "id": pig.id, "item": "wood_pickaxe"})
 
             self.assertEqual(pig.health, 8.0)
             self.assertGreater(pig.hurt_time, 0.0)
             # Server broadcasted damage_mob packet
             self.assertTrue(any(p.get("type") == "damage_mob" and p.get("id") == pig.id for p in broadcasted))
+
+            # Second hit bare-handed after hurt time resets (attack: 1)
+            pig.hurt_time = 0.0
+            server._handle_packet(mock_client, {"type": "attack_entity", "id": pig.id, "item": ""})
+            self.assertEqual(pig.health, 7.0)
 
 
 class TestSheepAndWool(unittest.TestCase):

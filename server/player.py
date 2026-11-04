@@ -71,6 +71,13 @@ class Player:
         self.dead = False
         self._fall_peak = None
         self._suffocation_timer = 0.0
+        # Hunger system (survival only)
+        self.max_hunger = 20.0
+        self.hunger = 20.0
+        self.saturation = 5.0
+        self.exhaustion = 0.0
+        self._starve_timer = 0.0
+        self._regen_timer = 0.0
 
     @property
     def effective_gamemode(self):
@@ -131,6 +138,10 @@ class Player:
     def survival(self):
         return self.effective_gamemode == "survival"
 
+    @survival.setter
+    def survival(self, value):
+        self.gamemode = "survival" if value else "creative"
+
     @property
     def health_fraction(self):
         if self.max_health <= 0:
@@ -146,11 +157,40 @@ class Player:
         self.dead = self.health <= 0.0
         return self.health
 
-    def eat(self, nutrition=0.0):
-        """Absorb food and restore health.
+    @property
+    def hunger_fraction(self):
+        if self.max_hunger <= 0.0:
+            return 0.0
+        return max(0.0, min(1.0, float(self.hunger) / float(self.max_hunger)))
 
-        Food items carry a ``food`` value (health points restored per item).
-        Returns the amount of health restored this call.
+    def set_hunger(self, value):
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            value = self.max_hunger
+        self.hunger = max(0.0, min(float(self.max_hunger), value))
+        return self.hunger
+
+    def add_exhaustion(self, amount):
+        if not self.survival or self.dead:
+            return
+        try:
+            self.exhaustion += float(amount)
+        except (TypeError, ValueError):
+            return
+        while self.exhaustion >= 4.0:
+            self.exhaustion -= 4.0
+            if self.saturation > 0.0:
+                self.saturation = max(0.0, self.saturation - 1.0)
+            else:
+                self.hunger = max(0.0, self.hunger - 1.0)
+
+    def eat(self, nutrition=0.0, saturation=None):
+        """Absorb food and restore hunger and saturation.
+
+        Food items carry a ``food`` value (hunger points restored per item)
+        and optional ``saturation``.
+        Returns the amount of hunger restored this call.
         """
         if not self.survival or self.dead:
             return 0.0
@@ -160,13 +200,24 @@ class Player:
             return 0.0
         if nutrition <= 0:
             return 0.0
-        before = self.health
-        restored = float(self.set_health(self.health + nutrition) - before)
+        before = self.hunger
+        self.set_hunger(self.hunger + nutrition)
+        restored = float(self.hunger - before)
+
+        if saturation is None:
+            saturation = round(nutrition * 0.6, 1)
+        try:
+            sat_val = float(saturation)
+        except (TypeError, ValueError):
+            sat_val = 0.0
+        self.saturation = min(float(self.hunger), self.saturation + max(0.0, sat_val))
         return max(0.0, restored)
 
     def reset_damage_state(self):
         self._fall_peak = None
         self._suffocation_timer = 0.0
+        self._starve_timer = 0.0
+        self._regen_timer = 0.0
 
     def head_in_block(self):
         """Return True when the player's head is inside a solid block."""
@@ -261,6 +312,32 @@ class Player:
         else:
             self._suffocation_timer = 0.0
 
+        # Natural health regeneration when well-fed (hunger >= 18)
+        if self.hunger >= 18.0 and self.health < self.max_health:
+            self._regen_timer += max(0.0, float(dt))
+            if self._regen_timer >= 4.0:
+                self._regen_timer = 0.0
+                self.set_health(self.health + 1.0)
+                self.add_exhaustion(3.0)
+        else:
+            self._regen_timer = 0.0
+
+        # Starvation damage when hunger is completely depleted
+        if self.hunger <= 0.0:
+            self._starve_timer += max(0.0, float(dt))
+            starve = get_damage_type("starvation")
+            interval = starve.interval if starve is not None and starve.interval > 0 else 4.0
+            while self._starve_timer + 1e-9 >= interval and not self.dead:
+                self._starve_timer -= interval
+                # In standard survival, starves down to 1 HP
+                if self.health > 1.0:
+                    damage_amt = starve.damage if starve is not None else 1.0
+                    dealt = self.take_damage(damage_amt, starve)
+                    if dealt > 0:
+                        events.append(DamageEvent(starve, dealt, self.dead))
+        else:
+            self._starve_timer = 0.0
+
         return events
 
     def respawn_position(self):
@@ -284,6 +361,9 @@ class Player:
         self.pos = [float(pos[0]), float(pos[1]), float(pos[2])]
         self.vel = [0.0, 0.0, 0.0]
         self.health = float(self.max_health)
+        self.hunger = float(self.max_hunger)
+        self.saturation = 5.0
+        self.exhaustion = 0.0
         self.dead = False
         self.hurt_time = 0.0
         self.on_ground = False
@@ -390,6 +470,8 @@ class Player:
 
     def update(self, dt):
         inp = self.input
+        if self.survival and self.hunger <= 6.0:
+            inp.sprint = False
         ix = (-1 if inp.left else 0) + (1 if inp.right else 0)
         iz = (1 if inp.forward else 0) + (-1 if inp.back else 0)
         length = math.hypot(ix, iz)
@@ -480,6 +562,8 @@ class Player:
             if jumping:
                 self.vel[1] = JUMP
                 self.on_ground = False
+                if self.survival:
+                    self.add_exhaustion(0.2 if inp.sprint else 0.05)
             elif self.on_ground and self.vel[1] < 0:
                 self.vel[1] = 0.0
             self.vel[1] -= GRAVITY * dt
@@ -498,6 +582,8 @@ class Player:
             hit_ground = self.sweep(1, dy) and dy < 0
             actual_moved = math.hypot(self.pos[0] - start_x, self.pos[2] - start_z)
             self.actual_speed = actual_moved / max(dt, 0.001)
+            if self.survival and actual_moved > 0:
+                self.add_exhaustion((0.08 if inp.sprint else 0.01) * actual_moved)
 
             self.pos[1] -= 0.06
             grounded = self.collides_at(*self.pos)

@@ -210,6 +210,47 @@ class CommandHandlerTests(unittest.TestCase):
         self.assertEqual(self.player.gamemode, "survival")
         self.assertTrue(any("Game mode set to survival" in r[0] for r in ctx.responses))
 
+    def test_gamemode_command_aliases_and_abbreviations(self):
+        # /gamemode c
+        ctx = CommandContext(player=self.player, world=self.world)
+        handled = self.handler.execute(ctx, "/gamemode c")
+        self.assertTrue(handled)
+        self.assertEqual(self.player.gamemode, "creative")
+
+        # /gm 0
+        ctx = CommandContext(player=self.player, world=self.world)
+        handled = self.handler.execute(ctx, "/gm 0")
+        self.assertTrue(handled)
+        self.assertEqual(self.player.gamemode, "survival")
+
+        # /gm 1
+        ctx = CommandContext(player=self.player, world=self.world)
+        handled = self.handler.execute(ctx, "/gm 1")
+        self.assertTrue(handled)
+        self.assertEqual(self.player.gamemode, "creative")
+
+        # /gm s
+        ctx = CommandContext(player=self.player, world=self.world)
+        handled = self.handler.execute(ctx, "/gm s")
+        self.assertTrue(handled)
+        self.assertEqual(self.player.gamemode, "survival")
+
+    def test_gamemode_syncs_app_state_and_resets_breaking(self):
+        from unittest.mock import MagicMock
+        mock_app = MagicMock()
+        mock_app.gamemode = "survival"
+        mock_app.info.gamemode = "survival"
+        mock_app._reset_breaking = MagicMock()
+
+        ctx = CommandContext(player=self.player, world=self.world)
+        ctx.app = mock_app
+        handled = self.handler.execute(ctx, "/gamemode creative")
+        self.assertTrue(handled)
+        self.assertEqual(self.player.gamemode, "creative")
+        self.assertEqual(mock_app.gamemode, "creative")
+        self.assertEqual(mock_app.info.gamemode, "creative")
+        mock_app._reset_breaking.assert_called_once()
+
     def test_gamemode_command_rejects_unknown_mode(self):
         ctx = CommandContext(player=self.player, world=self.world)
         handled = self.handler.execute(ctx, "/gamemode hardcore")

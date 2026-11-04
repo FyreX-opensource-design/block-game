@@ -91,18 +91,18 @@ class PlayerHealthTests(unittest.TestCase):
         self.assertEqual(self.player.max_health, DEFAULT_MAX_HEALTH)
         self.assertFalse(self.player.dead)
 
-    def test_eating_restores_health_and_caps_at_max(self):
-        self.player.health = 5.0
+    def test_eating_restores_hunger_and_caps_at_max(self):
+        self.player.hunger = 5.0
         self.assertEqual(self.player.eat(4.0), 4.0)
-        self.assertEqual(self.player.health, 9.0)
+        self.assertEqual(self.player.hunger, 9.0)
         self.assertEqual(self.player.eat(50.0), 11.0)
-        self.assertEqual(self.player.health, self.player.max_health)
+        self.assertEqual(self.player.hunger, self.player.max_hunger)
         self.assertFalse(self.player.dead)
 
     def test_eating_without_nutrition_does_nothing(self):
-        self.player.health = 5.0
+        self.player.hunger = 5.0
         self.assertEqual(self.player.eat(0.0), 0.0)
-        self.assertEqual(self.player.health, 5.0)
+        self.assertEqual(self.player.hunger, 5.0)
 
     def test_fall_damage_scales_with_blocks_beyond_threshold(self):
         self.player.pos = [0.5, 70.0, 0.5]

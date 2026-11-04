@@ -1,6 +1,8 @@
 import tempfile
 import unittest
 
+import pyglet
+pyglet.options["headless"] = True
 from pyglet.window import key
 
 from client.app import Game

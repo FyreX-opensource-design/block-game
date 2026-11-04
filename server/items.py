@@ -30,6 +30,7 @@ class Item:
         repair,
         tabs,
         tool=None,
+        saturation=None,
     ):
         self.id = item_id
         self.name = name
@@ -44,6 +45,7 @@ class Item:
         self.mining_speed = mining_speed
         self.attack = attack
         self.food = food
+        self.saturation = float(saturation) if saturation is not None else round(float(food) * 0.6, 1)
         self.repair = repair
         self.tabs = tabs
         self.tool = str(tool).lower() if tool and tool != "none" else None
@@ -193,6 +195,7 @@ def _item_from_entry(entry, name, tab_ids):
         str(entry.get("repair", "")),
         tuple(tabs),
         tool=tool,
+        saturation=entry.get("saturation"),
     )
 
 

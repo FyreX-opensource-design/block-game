@@ -1,0 +1,9 @@
+{
+  "id": "starvation",
+  "name": "Starvation",
+  "kind": "starvation",
+  "damage": 1.0,
+  "interval": 4.0,
+  "message": "starved to death"
+}
+

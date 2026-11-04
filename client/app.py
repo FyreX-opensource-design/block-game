@@ -214,7 +214,7 @@ class Game(pyglet.window.Window):
         self._ignore_next_char = None
         self._chat_labels = []
         self._nametag_labels = []
-        self.gamemode = "survival"
+        self._gamemode = "survival"
         self._mouse_held_left = False
         self._breaking_block = None
         self._break_time = 0.0
@@ -223,6 +223,20 @@ class Game(pyglet.window.Window):
         pyglet.clock.schedule_interval(self.tick, 1 / 60)
         if connect:
             self._open_server(connect)
+
+    @property
+    def gamemode(self):
+        if getattr(self, "player", None) is not None and getattr(self.player, "gamemode", None):
+            return str(self.player.gamemode).lower()
+        return getattr(self, "_gamemode", "survival")
+
+    @gamemode.setter
+    def gamemode(self, value):
+        self._gamemode = str(value or "survival").lower()
+        if getattr(self, "player", None) is not None:
+            self.player.gamemode = self._gamemode
+        if getattr(self, "info", None) is not None:
+            self.info.gamemode = self._gamemode
 
     def tick(self, dt):
         if self.network_client is not None:
@@ -324,7 +338,7 @@ class Game(pyglet.window.Window):
             if dist <= 1.6:
                 if self.network_client is not None:
                     continue
-                leftover = add_to_inventory([self.hotbar, self.storage], entity.item, entity.count)
+                leftover = add_to_inventory([self.hotbar, self.storage], entity.item, entity.count, damage=getattr(entity, "damage", 0))
                 picked = entity.count - leftover
                 if picked > 0:
                     entity.count = leftover
@@ -389,6 +403,12 @@ class Game(pyglet.window.Window):
                     self.player.pitch = float(pkt["pitch"])
                 self.player.max_health = float(pkt.get("max_health", DEFAULT_MAX_HEALTH))
                 self.player.set_health(pkt.get("health", self.player.max_health))
+                if "hunger" in pkt:
+                    self.player.hunger = float(pkt["hunger"])
+                if "max_hunger" in pkt:
+                    self.player.max_hunger = float(pkt["max_hunger"])
+                if "saturation" in pkt:
+                    self.player.saturation = float(pkt["saturation"])
                 self.player.hurt_time = float(pkt.get("hurt_time", 0.0))
                 self.eye = (pos[0], pos[1] + self.player.eye, pos[2])
                 self.camera = self.eye
@@ -420,6 +440,12 @@ class Game(pyglet.window.Window):
                 if self.player is not None:
                     self.player.max_health = float(pkt.get("max_health", self.player.max_health))
                     self.player.set_health(pkt.get("health", self.player.health))
+                    if "hunger" in pkt:
+                        self.player.hunger = float(pkt["hunger"])
+                    if "max_hunger" in pkt:
+                        self.player.max_hunger = float(pkt["max_hunger"])
+                    if "saturation" in pkt:
+                        self.player.saturation = float(pkt["saturation"])
                     self.player.hurt_time = float(pkt.get("hurt_time", self.player.hurt_time))
                     if pkt.get("dead"):
                         self.player.dead = True
@@ -536,11 +562,24 @@ class Game(pyglet.window.Window):
                         if "pos" in pkt:
                             mob.pos = list(pkt["pos"])
                             mob.target_pos = list(pkt["pos"])
+            elif p_type == "player_hurt":
+                hurt_uuid = pkt.get("uuid")
+                ht = float(pkt.get("hurt_time", 0.4))
+                if hurt_uuid == self.profile["uuid"]:
+                    if self.player is not None:
+                        self.player.hurt_time = ht
+                elif hurt_uuid in self.other_players:
+                    self.other_players[hurt_uuid].hurt_time = ht
+            elif p_type == "player_knockback":
+                if self.player is not None:
+                    self.player.vel = list(pkt.get("vel", [0.0, 0.0, 0.0]))
+                    self.player.hurt_time = 0.4
             elif p_type == "give_item":
                 item = pkt.get("item")
                 count = int(pkt.get("count", 1))
+                dmg = int(pkt.get("damage", 0))
                 if item and count > 0:
-                    leftover = add_to_inventory([self.hotbar, self.storage], item, count)
+                    leftover = add_to_inventory([self.hotbar, self.storage], item, count, damage=dmg)
                     if leftover > 0 and self.network_client is not None and self.player is not None:
                         # The inventory is full. Put the remainder back on the
                         # ground instead of silently losing it, with a delay so
@@ -1083,6 +1122,9 @@ class Game(pyglet.window.Window):
         if not block_id or block_id == AIR:
             return
 
+        if self.gamemode == "survival" and getattr(self, "player", None) is not None:
+            self.player.add_exhaustion(0.025)
+
         from server.sub_cell import SUB_CELL_BLOCK, is_sub_cell
         sub = self.world.get_sub_cell(x, y, z)
         if sub is not None:
@@ -1185,6 +1227,8 @@ class Game(pyglet.window.Window):
                     drops = get_block_drops(BLOCKS.get(drop_item) or BLOCKS.get(broken_mat), held_item)
                     if drops:
                         self._spawn_break_drops(drops, x, y + 0.5, z)
+                    if hasattr(self, "_use_held_tool"):
+                        self._use_held_tool()
 
                 if self.network_client is not None:
                     if sub.is_empty():
@@ -1241,6 +1285,8 @@ class Game(pyglet.window.Window):
             if self.gamemode == "survival":
                 drops = get_block_drops(broken_item, held_item)
                 self._spawn_break_drops(drops, x, drop_y, z)
+                if hasattr(self, "_use_held_tool"):
+                    self._use_held_tool()
 
             if self.network_client is not None:
                 self.network_client.send_set_block(x, y, z, remaining_block)
@@ -1266,6 +1312,8 @@ class Game(pyglet.window.Window):
 
             if self.gamemode == "survival":
                 self._spawn_break_drops(drops, x, drop_y, z)
+                if hasattr(self, "_use_held_tool"):
+                    self._use_held_tool()
 
             if self.network_client is not None:
                 self.network_client.send_set_block(x, y, z, remaining_block)
@@ -1292,6 +1340,8 @@ class Game(pyglet.window.Window):
                 held_item = ITEMS.get(held_id)
                 drops = get_block_drops(broken_item, held_item)
                 self._spawn_break_drops(drops, x, drop_y, z)
+                if hasattr(self, "_use_held_tool"):
+                    self._use_held_tool()
 
             if self.network_client is not None:
                 self.network_client.send_set_block(x, y, z, remaining_block)
@@ -1318,6 +1368,8 @@ class Game(pyglet.window.Window):
                 held_item = ITEMS.get(held_id)
                 drops = get_block_drops(broken_item, held_item)
                 self._spawn_break_drops(drops, x, drop_y, z)
+                if hasattr(self, "_use_held_tool"):
+                    self._use_held_tool()
 
             if self.network_client is not None:
                 self.network_client.send_set_block(x, y, z, remaining_block)
@@ -1344,6 +1396,8 @@ class Game(pyglet.window.Window):
                 held_item = ITEMS.get(held_id)
                 drops = get_block_drops(broken_item, held_item)
                 self._spawn_break_drops(drops, x, drop_y, z)
+                if hasattr(self, "_use_held_tool"):
+                    self._use_held_tool()
 
             if self.network_client is not None:
                 self.network_client.send_set_block(x, y, z, remaining_block)
@@ -1387,6 +1441,8 @@ class Game(pyglet.window.Window):
             held_item = ITEMS.get(held_id)
             drops = get_block_drops(broken_id, held_item)
             self._spawn_break_drops(drops, x, y + 0.3, z)
+            if hasattr(self, "_use_held_tool"):
+                self._use_held_tool()
 
         if self.network_client is not None:
             self.network_client.send_set_block(x, y, z, next_block)
@@ -1419,6 +1475,94 @@ class Game(pyglet.window.Window):
             vz = random.uniform(-0.8, 0.8)
             pos = [x + 0.5, drop_y, z + 0.5]
             self._spawn_loose_item(drop_id, count, pos, [vx, vy, vz], pickup_delay=0.3)
+
+    def _use_held_tool(self, amount=1):
+        """Reduce durability on the held item in survival mode."""
+        if self.gamemode != "survival":
+            return
+        if self.selected >= len(self.hotbar):
+            return
+        slot = self.hotbar[self.selected]
+        from server.stacks import damage_tool
+        new_slot = damage_tool(slot, amount=amount)
+        if new_slot != slot:
+            self.hotbar[self.selected] = new_slot
+
+    @staticmethod
+    def _intersect_aabb(ox, oy, oz, dx, dy, dz, min_x, min_y, min_z, max_x, max_y, max_z, max_t):
+        length = math.sqrt(dx * dx + dy * dy + dz * dz)
+        if length == 0:
+            return None
+        ndx, ndy, ndz = dx / length, dy / length, dz / length
+        tmin = 0.0
+        tmax = float(max_t)
+        if abs(ndx) > 1e-8:
+            tx1 = (min_x - ox) / ndx
+            tx2 = (max_x - ox) / ndx
+            tmin = max(tmin, min(tx1, tx2))
+            tmax = min(tmax, max(tx1, tx2))
+        elif ox < min_x or ox > max_x:
+            return None
+        if abs(ndy) > 1e-8:
+            ty1 = (min_y - oy) / ndy
+            ty2 = (max_y - oy) / ndy
+            tmin = max(tmin, min(ty1, ty2))
+            tmax = min(tmax, max(ty1, ty2))
+        elif oy < min_y or oy > max_y:
+            return None
+        if abs(ndz) > 1e-8:
+            tz1 = (min_z - oz) / ndz
+            tz2 = (max_z - oz) / ndz
+            tmin = max(tmin, min(tz1, tz2))
+            tmax = min(tmax, max(tz1, tz2))
+        elif oz < min_z or oz > max_z:
+            return None
+        if tmax >= tmin and tmin < max_t:
+            return tmin
+        return None
+
+    def _raycast_attack_target(self, ex, ey, ez, fx, fy, fz, max_dist=3.5):
+        """Find the closest attackable mob or remote player in line of sight."""
+        if self.world is None:
+            return None
+        block_hit = self.world.raycast(ex, ey, ez, fx, fy, fz, max_dist, solid_only=True)
+        best_t = float(block_hit["dist"]) if block_hit is not None else float(max_dist)
+        best_target = None
+
+        # Check mobs
+        for entity in self.world.entities:
+            if not getattr(entity, "is_mob", False) or not getattr(entity, "alive", True):
+                continue
+            r = float(getattr(entity, "radius", 0.45))
+            h = float(getattr(entity, "height", 0.9))
+            t = self._intersect_aabb(
+                ex, ey, ez, fx, fy, fz,
+                entity.pos[0] - r, entity.pos[1], entity.pos[2] - r,
+                entity.pos[0] + r, entity.pos[1] + h, entity.pos[2] + r,
+                best_t,
+            )
+            if t is not None and t < best_t:
+                best_t = t
+                best_target = ("mob", entity)
+
+        # Check remote players in multiplayer
+        if self.network_client is not None and getattr(self, "other_players", None):
+            for u, other in self.other_players.items():
+                if not getattr(other, "alive", True):
+                    continue
+                r = 0.4
+                h = 1.8
+                t = self._intersect_aabb(
+                    ex, ey, ez, fx, fy, fz,
+                    other.pos[0] - r, other.pos[1], other.pos[2] - r,
+                    other.pos[0] + r, other.pos[1] + h, other.pos[2] + r,
+                    best_t,
+                )
+                if t is not None and t < best_t:
+                    best_t = t
+                    best_target = ("player", u, other)
+
+        return best_target
 
     def _drop_held_item(self):
         if self.player is None or self.world is None:
@@ -2357,6 +2501,13 @@ class Game(pyglet.window.Window):
             self.selected = int(saved.get("slot", 0)) % HOTBAR_SLOTS
             self.player.max_health = float(saved.get("max_health", DEFAULT_MAX_HEALTH))
             self.player.set_health(saved.get("health", self.player.max_health))
+            self.player.max_hunger = float(saved.get("max_hunger", getattr(self.player, "max_hunger", 20.0)))
+            self.player.set_hunger(saved.get("hunger", self.player.max_hunger))
+            if "saturation" in saved:
+                try:
+                    self.player.saturation = float(saved["saturation"])
+                except (TypeError, ValueError):
+                    pass
             if self.player.health <= 0:
                 self.player.health = self.player.max_health
                 self.player.dead = False
@@ -2412,6 +2563,9 @@ class Game(pyglet.window.Window):
             "spawn": list(self.player.spawn_point) if getattr(self.player, "spawn_point", None) else None,
             "health": float(self.player.health),
             "max_health": float(self.player.max_health),
+            "hunger": float(getattr(self.player, "hunger", 20.0)),
+            "max_hunger": float(getattr(self.player, "max_hunger", 20.0)),
+            "saturation": float(getattr(self.player, "saturation", 5.0)),
         }
         self.info.last_played = time.time()
         self.catalog.write(self.info)
@@ -2850,6 +3004,8 @@ class Game(pyglet.window.Window):
                 break_progress=break_prog,
                 health=self.player.health if (self.gamemode == "survival" and self.player is not None) else None,
                 max_health=self.player.max_health if self.player is not None else 20.0,
+                hunger=self.player.hunger if (self.gamemode == "survival" and self.player is not None) else None,
+                max_hunger=self.player.max_hunger if self.player is not None else 20.0,
             )
             chat_rects, self._chat_labels = self.chat.layout(self.width, self.height, scale)
             if chat_rects:
@@ -3390,13 +3546,16 @@ class Game(pyglet.window.Window):
         held = ITEMS.get(held_id) if held_id else None
         if held is None or str(held.right) != "eat" or not held.food:
             return False
-        if self.player.dead or self.player.health >= self.player.max_health:
+        if self.player.dead:
+            return False
+        always_edible = bool(getattr(held, "always_edible", False))
+        if not always_edible and self.player.hunger >= self.player.max_hunger:
             return False
 
         if self.network_client is not None:
             self.network_client.send_eat_item(held_id)
         else:
-            self.player.eat(held.food)
+            self.player.eat(held.food, getattr(held, "saturation", None))
 
         # Consume one unit of food.
         count = stack_count(held_slot)
@@ -3769,18 +3928,34 @@ class Game(pyglet.window.Window):
                 self._on_right_click(modifiers)
             return
         if self.mode == "play":
-            # Check if hitting a living mob first
+            # Check if hitting a living mob or another player first
             if self.player is not None and self.world is not None:
                 ex, ey, ez = self.player.pos
                 ey += self.player.eye
                 fx, fy, fz = look_direction(self.player.yaw, self.player.pitch)
-                hit_mob = self.world.raycast_entity(ex, ey, ez, fx, fy, fz, max_dist=3.5)
-                if hit_mob is not None:
-                    if self.network_client is not None:
-                        self.network_client.send_attack_mob(hit_mob.id)
-                        hit_mob.hurt_time = 0.4
-                    else:
-                        hit_mob.take_damage(2.0, attacker=self.player, world=self.world)
+                target = Game._raycast_attack_target(self, ex, ey, ez, fx, fy, fz, max_dist=3.5)
+                if target is not None:
+                    held_id = stack_id(self.hotbar[self.selected]) if self.selected < len(self.hotbar) else ""
+                    held_item = ITEMS.get(held_id)
+                    attack_dmg = float(getattr(held_item, "attack", 1.0) or 1.0) if held_item else 1.0
+
+                    if target[0] == "mob":
+                        mob = target[1]
+                        if self.network_client is not None:
+                            self.network_client.send_attack_mob(mob.id, item_id=held_id)
+                            mob.hurt_time = 0.4
+                        else:
+                            mob.take_damage(attack_dmg, attacker=self.player, world=self.world)
+                    elif target[0] == "player":
+                        p_uuid = target[1]
+                        other_player = target[2]
+                        if self.network_client is not None:
+                            self.network_client.send_attack_player(p_uuid, item_id=held_id)
+                            other_player.hurt_time = 0.4
+                    if hasattr(self, "_use_held_tool"):
+                        self._use_held_tool()
+                    if self.gamemode == "survival" and getattr(self, "player", None) is not None:
+                        self.player.add_exhaustion(0.1)
                     return
             is_shift = bool(modifiers & key.MOD_SHIFT) if hasattr(key, "MOD_SHIFT") else False
             self._aim()
