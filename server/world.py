@@ -738,6 +738,9 @@ class World:
         if sub_cell is None or sub_cell.is_empty():
             chunk.sub_cells.pop((lx, ly, lz), None)
             return self.set_block(x, y, z, AIR)
+        if sub_cell.is_full():
+            chunk.sub_cells.pop((lx, ly, lz), None)
+            return self.set_block(x, y, z, sub_cell.octants[0])
 
         chunk.sub_cells[(lx, ly, lz)] = sub_cell
         self.mark_dirty(cx, cy, cz)

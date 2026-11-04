@@ -465,12 +465,18 @@ class Game(pyglet.window.Window):
                     from server.world import Chunk
                     ch = Chunk(cx, cy, cz)
                     ch.data[:, :, :] = chunk_data
+                    sub_cells_data = pkt.get("sub_cells")
+                    if sub_cells_data:
+                        from server.sub_cell import SubCell
+                        for k, v in sub_cells_data.items():
+                            lx, ly, lz = map(int, k.split(","))
+                            ch.sub_cells[(lx, ly, lz)] = SubCell.from_dict(v)
                     self.world._remember(ch)
                     self._upload((cx, cy, cz))
                     self.world.dirty.discard((cx, cy, cz))
             elif p_type == "block_change":
                 self._apply_remote_block_change(
-                    pkt.get("x"), pkt.get("y"), pkt.get("z"), pkt.get("block")
+                    pkt.get("x"), pkt.get("y"), pkt.get("z"), pkt.get("block"), pkt.get("sub_cell")
                 )
             elif p_type == "spawn_item":
                 if self.world is not None:
@@ -717,7 +723,7 @@ class Game(pyglet.window.Window):
         mesh = build_chunk_mesh(self.world, key[0], key[1], key[2])
         self.renderer.set_chunk(key, mesh, chunk_origin(key))
 
-    def _apply_remote_block_change(self, x, y, z, block):
+    def _apply_remote_block_change(self, x, y, z, block, sub_cell=None):
         """Apply a block change from the server and rebuild affected meshes.
 
         Local edits call :meth:`_upload_block_change` immediately; remote edits
@@ -730,8 +736,12 @@ class Game(pyglet.window.Window):
         """
         if self.world is None or x is None or y is None or z is None:
             return False
-        if not self.world.set_block(x, y, z, block):
-            return False
+        if sub_cell is not None:
+            from server.sub_cell import SubCell
+            self.world.set_sub_cell(x, y, z, SubCell.from_dict(sub_cell))
+        else:
+            if not self.world.set_block(x, y, z, block):
+                return False
         self._upload_block_change(x, y, z)
         return True
 
@@ -1164,10 +1174,8 @@ class Game(pyglet.window.Window):
                     if self.network_client is not None:
                         if p_sub.is_empty():
                             self.network_client.send_set_block(px, py, pz, AIR)
-                        elif p_sub.is_full():
-                            self.network_client.send_set_block(px, py, pz, p_sub.octants[0])
                         else:
-                            self.network_client.send_set_block(px, py, pz, SUB_CELL_BLOCK)
+                            self.network_client.send_set_block(px, py, pz, SUB_CELL_BLOCK, sub_cell=p_sub.to_dict())
                     self.world.set_sub_cell(px, py, pz, p_sub)
                     self._upload_block_change(px, py, pz)
 
@@ -1181,10 +1189,8 @@ class Game(pyglet.window.Window):
                 if self.network_client is not None:
                     if sub.is_empty():
                         self.network_client.send_set_block(x, y, z, AIR)
-                    elif sub.is_full():
-                        self.network_client.send_set_block(x, y, z, sub.octants[0])
                     else:
-                        self.network_client.send_set_block(x, y, z, SUB_CELL_BLOCK)
+                        self.network_client.send_set_block(x, y, z, SUB_CELL_BLOCK, sub_cell=sub.to_dict())
 
                 self.world.set_sub_cell(x, y, z, sub)
                 self._upload_block_change(x, y, z)
@@ -1562,10 +1568,10 @@ class Game(pyglet.window.Window):
 
                 for cx, cy, cz, new_sub in horiz_res:
                     if self.network_client is not None:
-                        if new_sub.is_full():
-                            self.network_client.send_set_block(cx, cy, cz, new_sub.octants[0])
+                        if new_sub.is_empty():
+                            self.network_client.send_set_block(cx, cy, cz, AIR)
                         else:
-                            self.network_client.send_set_block(cx, cy, cz, SUB_CELL_BLOCK)
+                            self.network_client.send_set_block(cx, cy, cz, SUB_CELL_BLOCK, sub_cell=new_sub.to_dict())
                     self.world.set_sub_cell(cx, cy, cz, new_sub)
                     self._upload_block_change(cx, cy, cz)
 
@@ -1619,10 +1625,10 @@ class Game(pyglet.window.Window):
                         return
 
                 if self.network_client is not None:
-                    if new_sub.is_full():
-                        self.network_client.send_set_block(cx, cy, cz, new_sub.octants[0])
+                    if new_sub.is_empty():
+                        self.network_client.send_set_block(cx, cy, cz, AIR)
                     else:
-                        self.network_client.send_set_block(cx, cy, cz, SUB_CELL_BLOCK)
+                        self.network_client.send_set_block(cx, cy, cz, SUB_CELL_BLOCK, sub_cell=new_sub.to_dict())
 
                 if self.world.set_sub_cell(cx, cy, cz, new_sub):
                     self._upload_block_change(cx, cy, cz)
@@ -2140,10 +2146,10 @@ class Game(pyglet.window.Window):
                         return
 
                 if self.network_client is not None:
-                    if new_sub.is_full():
-                        self.network_client.send_set_block(cx, cy, cz, new_sub.octants[0])
+                    if new_sub.is_empty():
+                        self.network_client.send_set_block(cx, cy, cz, AIR)
                     else:
-                        self.network_client.send_set_block(cx, cy, cz, SUB_CELL_BLOCK)
+                        self.network_client.send_set_block(cx, cy, cz, SUB_CELL_BLOCK, sub_cell=new_sub.to_dict())
 
                 if self.world.set_sub_cell(cx, cy, cz, new_sub):
                     self._upload_block_change(cx, cy, cz)

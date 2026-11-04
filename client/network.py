@@ -66,7 +66,7 @@ class NetworkClient:
         }
         self._enqueue(packet)
 
-    def send_set_block(self, x, y, z, block_id):
+    def send_set_block(self, x, y, z, block_id, sub_cell=None):
         if not self.connected:
             return
         packet = {
@@ -76,6 +76,8 @@ class NetworkClient:
             "z": int(z),
             "block": str(block_id or ""),
         }
+        if sub_cell is not None:
+            packet["sub_cell"] = sub_cell
         self._enqueue(packet)
 
     def send_hit_block(self, x, y, z, item_id):

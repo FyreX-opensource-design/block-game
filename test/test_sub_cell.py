@@ -631,6 +631,214 @@ class TestWorldSubCell(unittest.TestCase):
         res = calculate_sub_cell_placement(self.world, hit, "pine_log", 0.0)
         self.assertIsNone(res, "Full block must not be placed into partial sub-cell via calculate_sub_cell_placement")
 
+    def test_multiplayer_sub_cell_sync_and_chunk_packet(self):
+        from server.network import MultiplayerServer
+        from server.sub_cell import SubCell, SUB_CELL_BLOCK
+        from client.app import Game
+        from unittest.mock import MagicMock
+
+        server = MultiplayerServer(world=self.world)
+        client1 = MagicMock()
+        client1.uuid = "player1"
+        client1.alive = True
+        client1.sent_packets = []
+        client1.send = lambda pkt: client1.sent_packets.append(pkt)
+
+        client2 = MagicMock()
+        client2.uuid = "player2"
+        client2.alive = True
+        client2.sent_packets = []
+        client2.send = lambda pkt: client2.sent_packets.append(pkt)
+
+        server.clients["player1"] = client1
+        server.clients["player2"] = client2
+
+        # 1. Test set_block packet with sub_cell data
+        test_sub = SubCell()
+        for oy in (0, 1):
+            for oz in (0, 1):
+                test_sub.set_octant(0, oy, oz, "stone")
+        
+        pkt = {
+            "type": "set_block",
+            "x": 10,
+            "y": 64,
+            "z": 10,
+            "block": SUB_CELL_BLOCK,
+            "sub_cell": test_sub.to_dict(),
+        }
+        server._handle_packet(client1, pkt)
+
+        # Server world must have the sub_cell
+        srv_sub = self.world.get_sub_cell(10, 64, 10)
+        self.assertIsNotNone(srv_sub)
+        self.assertEqual(srv_sub.count_occupied(), 4)
+
+        # Broadcast must have gone to client2 with sub_cell payload
+        b_pkts = [p for p in client2.sent_packets if p.get("type") == "block_change" and p.get("x") == 10 and p.get("z") == 10]
+        self.assertTrue(len(b_pkts) > 0)
+        self.assertIn("sub_cell", b_pkts[0])
+        self.assertEqual(b_pkts[0]["sub_cell"], test_sub.to_dict())
+
+        # 2. Client 2 applying remote block change
+        game2 = Game.__new__(Game)
+        from server.world import World
+        game2.world = World()
+        game2.renderer = MagicMock()
+        game2._upload = MagicMock()
+
+        # Load chunk in game2 so it can receive changes
+        cx, cy, cz = game2.world.chunk_key(10, 64, 10)
+        from server.world import Chunk
+        game2.world.chunks[(cx, cy, cz)] = Chunk(cx, cy, cz)
+
+        applied = game2._apply_remote_block_change(10, 64, 10, b_pkts[0]["block"], b_pkts[0].get("sub_cell"))
+        self.assertTrue(applied)
+        g2_sub = game2.world.get_sub_cell(10, 64, 10)
+        self.assertIsNotNone(g2_sub)
+        self.assertEqual(g2_sub.count_occupied(), 4)
+        self.assertEqual(g2_sub.to_dict(), test_sub.to_dict())
+
+        # 3. Test chunk packet includes sub_cells
+        client1.sent_chunks = set()
+        client1.pos = [10.0, 64.0, 10.0]
+        client2.pos = [10.0, 64.0, 10.0]
+        client2.sent_chunks = set()
+        server._sync_player_chunks()
+        chunk_pkts = [p for p in client1.sent_packets if p.get("type") == "chunk" and p.get("cx") == cx and p.get("cy") == cy and p.get("cz") == cz]
+        self.assertTrue(len(chunk_pkts) > 0)
+        self.assertIn("sub_cells", chunk_pkts[0])
+        lx = 10 % 16
+        ly = 64 % 16
+        lz = 10 % 16
+        self.assertIn(f"{lx},{ly},{lz}", chunk_pkts[0]["sub_cells"])
+
+    def test_multiplayer_shared_cell_breaking_does_not_split(self):
+        from server.network import MultiplayerServer
+        from server.sub_cell import SubCell, SUB_CELL_BLOCK, calculate_horizontal_offset_placement
+        from client.app import Game
+        from client.inventory import make_stack
+        from unittest.mock import MagicMock
+
+        server = MultiplayerServer(world=self.world)
+        client1 = MagicMock()
+        client1.uuid = "player1"
+        client1.alive = True
+        client1.sent_packets = []
+        client1.send = lambda pkt: client1.sent_packets.append(pkt)
+
+        client2 = MagicMock()
+        client2.uuid = "player2"
+        client2.alive = True
+        client2.sent_packets = []
+        client2.send = lambda pkt: client2.sent_packets.append(pkt)
+
+        server.clients["player1"] = client1
+        server.clients["player2"] = client2
+
+        # Client 1 game
+        game1 = Game.__new__(Game)
+        game1.world = self.world
+        game1.renderer = MagicMock()
+        game1._upload = MagicMock()
+        game1.gamemode = "survival"
+        game1.hotbar = [make_stack("diamond_pickaxe", 1)]
+        game1.selected = 0
+        game1._breaking_pos = None
+        game1._breaking_progress = 0.0
+        game1._breaking_stage = 0
+        game1.target_sub_cell_octant = None
+        game1._spawn_break_drops = MagicMock()
+
+        # Mock network client for game1 that feeds packets into server
+        net1 = MagicMock()
+        def g1_send_set_block(x, y, z, block, sub_cell=None):
+            pkt = {"type": "set_block", "x": x, "y": y, "z": z, "block": block}
+            if sub_cell is not None:
+                pkt["sub_cell"] = sub_cell
+            server._handle_packet(client1, pkt)
+        net1.send_set_block = g1_send_set_block
+        game1.network_client = net1
+
+        # Client 2 game
+        game2 = Game.__new__(Game)
+        from server.world import World
+        game2.world = World()
+        game2.renderer = MagicMock()
+        game2._upload = MagicMock()
+
+        # Step 1: Vertical slab at (5, 80, 5) North
+        self.world.set_block(5, 80, 5, "stone_vertical_slab_north")
+
+        # Step 2: First offset planks block
+        hit1 = {"x": 5, "y": 80, "z": 5, "nx": 0, "ny": 0, "nz": 1, "hit_x": 5.5, "hit_y": 80.5, "hit_z": 5.5}
+        res1 = calculate_horizontal_offset_placement(self.world, hit1, "planks")
+        for cx, cy, cz, sub in res1:
+            g1_send_set_block(cx, cy, cz, SUB_CELL_BLOCK, sub_cell=sub.to_dict())
+
+        # Step 3: Second offset planks block
+        hit2 = {"x": 5, "y": 80, "z": 6, "nx": 0, "ny": 0, "nz": 1, "hit_x": 5.5, "hit_y": 80.5, "hit_z": 6.5, "octant": (0, 0, 0)}
+        res2 = calculate_horizontal_offset_placement(self.world, hit2, "planks")
+        for cx, cy, cz, sub in res2:
+            g1_send_set_block(cx, cy, cz, SUB_CELL_BLOCK, sub_cell=sub.to_dict())
+
+        # Forward all server broadcasts to client 2
+        for p in client2.sent_packets:
+            if p.get("type") == "block_change":
+                # Ensure chunk exists in game2
+                cx, cy, cz = game2.world.chunk_key(p["x"], p["y"], p["z"])
+                from server.world import Chunk
+                if (cx, cy, cz) not in game2.world.chunks:
+                    game2.world.chunks[(cx, cy, cz)] = Chunk(cx, cy, cz)
+                game2._apply_remote_block_change(p["x"], p["y"], p["z"], p["block"], p.get("sub_cell"))
+
+        client2.sent_packets.clear()
+
+        # Verify middle cell in both server and game2 has all 8 octants as planks
+        self.assertEqual(self.world.get_sub_cell(5, 80, 6).count_occupied(), 8)
+        self.assertEqual(game2.world.get_sub_cell(5, 80, 6).count_occupied(), 8)
+
+        # Step 4: Player 1 breaks the first offset block by clicking the middle cell at oz=0
+        ray_hit = {
+            "x": 5, "y": 80, "z": 6,
+            "nx": 0, "ny": 1, "nz": 0,
+            "hit_x": 5.5, "hit_y": 80.5, "hit_z": 6.25,
+            "octant": (0, 0, 0),
+            "slab_half": "sub_offz_0",
+        }
+        game1.target = ray_hit
+        game1._reset_breaking = MagicMock()
+        game1._aim = MagicMock()
+        game1._break_block()
+
+        # Apply any newly generated broadcasts to game2
+        for p in client2.sent_packets:
+            if p.get("type") == "block_change":
+                game2._apply_remote_block_change(p["x"], p["y"], p["z"], p["block"], p.get("sub_cell"))
+
+        # Both server and game2 must still have the second offset block intact at (5, 80, 6) oz=1 and (5, 80, 7) oz=0
+        srv_mid = self.world.get_sub_cell(5, 80, 6)
+        g2_mid = game2.world.get_sub_cell(5, 80, 6)
+        self.assertIsNotNone(srv_mid)
+        self.assertIsNotNone(g2_mid)
+        self.assertEqual(srv_mid.count_occupied(), 4)
+        self.assertEqual(g2_mid.count_occupied(), 4)
+        # All 4 occupied octants in the middle cell are oz=1
+        for ox in (0, 1):
+            for oy in (0, 1):
+                self.assertEqual(srv_mid.get_octant(ox, oy, 1), "planks")
+                self.assertEqual(srv_mid.get_octant(ox, oy, 0), "")
+                self.assertEqual(g2_mid.get_octant(ox, oy, 1), "planks")
+                self.assertEqual(g2_mid.get_octant(ox, oy, 0), "")
+
+        # And the remaining half at (5, 80, 7) is intact
+        srv_end = self.world.get_sub_cell(5, 80, 7)
+        g2_end = game2.world.get_sub_cell(5, 80, 7)
+        self.assertIsNotNone(srv_end)
+        self.assertIsNotNone(g2_end)
+        self.assertEqual(srv_end.count_occupied(), 4)
+        self.assertEqual(g2_end.count_occupied(), 4)
+
 
 if __name__ == "__main__":
     unittest.main()

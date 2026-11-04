@@ -136,10 +136,7 @@ class MultiplayerServer:
         self.gamemode = str(gamemode or "survival").lower()
         self.world = world
         if self.world is not None:
-            self.world.on_block_set = lambda bx, by, bz, b: self.broadcast(
-                {"type": "block_change", "x": bx, "y": by, "z": bz, "block": b}
-            )
-            self.world.on_entity_spawn = self._broadcast_entity_spawn
+            self._setup_world_callbacks(self.world)
         self.world_info = None
         self.world_dir = None
         self.player_dir = None
@@ -243,6 +240,19 @@ class MultiplayerServer:
                 pass
         return data.get("spawn")
 
+    def _setup_world_callbacks(self, world):
+        def _on_block_set(bx, by, bz, b):
+            msg = {"type": "block_change", "x": bx, "y": by, "z": bz, "block": b}
+            from server.sub_cell import SUB_CELL_BLOCK, is_sub_cell
+            if b == SUB_CELL_BLOCK or is_sub_cell(b):
+                sub = world.get_sub_cell(bx, by, bz)
+                if sub is not None:
+                    msg["sub_cell"] = sub.to_dict()
+            self.broadcast(msg)
+
+        world.on_block_set = _on_block_set
+        world.on_entity_spawn = self._broadcast_entity_spawn
+
     def start(self):
         """Start the server on a background daemon thread."""
         if self.world is None:
@@ -265,10 +275,7 @@ class MultiplayerServer:
                 day_time=getattr(info, "day_time", 1000.0),
                 spawn_point=getattr(info, "spawn", None),
             )
-            self.world.on_block_set = lambda bx, by, bz, b: self.broadcast(
-                {"type": "block_change", "x": bx, "y": by, "z": bz, "block": b}
-            )
-            self.world.on_entity_spawn = self._broadcast_entity_spawn
+            self._setup_world_callbacks(self.world)
             self.world_info = info
             self.world_dir = self.catalog._folder(info.id)
         elif self.world.store is not None and hasattr(self.world.store, "folder"):
@@ -810,28 +817,46 @@ class MultiplayerServer:
             y = int(packet.get("y", 0))
             z = int(packet.get("z", 0))
             block = str(packet.get("block", ""))
-            if block not in ("", "air"):
-                from server.blocks import BLOCKS, can_place_block, placement_block
-
-                if block in BLOCKS and BLOCKS[block].properties.get("rotation") == "horizontal" and not BLOCKS[block].is_variant:
-                    block = placement_block(block, (0, 1, 0), yaw=getattr(client, "yaw", 0.0))
-
-                if not can_place_block(self.world, x, y, z, block):
-                    return
+            sub_cell_data = packet.get("sub_cell")
             cx, cy, cz = self.world.chunk_key(x, y, z)
             if (cx, cy, cz) not in self.world.chunks:
                 self.world.load_chunk(cx, cy, cz)
-            if self.world.set_block(x, y, z, block):
-                if getattr(self.world, "on_block_set", None) is None:
-                    self.broadcast(
-                        {
+
+            if sub_cell_data is not None:
+                from server.sub_cell import SubCell
+                sub = SubCell.from_dict(sub_cell_data)
+                if self.world.set_sub_cell(x, y, z, sub):
+                    if getattr(self.world, "on_block_set", None) is None:
+                        msg = {
                             "type": "block_change",
                             "x": x,
                             "y": y,
                             "z": z,
-                            "block": block,
+                            "block": "air" if sub.is_empty() else "sub_cell",
                         }
-                    )
+                        if not sub.is_empty():
+                            msg["sub_cell"] = sub.to_dict()
+                        self.broadcast(msg)
+            else:
+                if block not in ("", "air"):
+                    from server.blocks import BLOCKS, can_place_block, placement_block
+
+                    if block in BLOCKS and BLOCKS[block].properties.get("rotation") == "horizontal" and not BLOCKS[block].is_variant:
+                        block = placement_block(block, (0, 1, 0), yaw=getattr(client, "yaw", 0.0))
+
+                    if not can_place_block(self.world, x, y, z, block):
+                        return
+                if self.world.set_block(x, y, z, block):
+                    if getattr(self.world, "on_block_set", None) is None:
+                        self.broadcast(
+                            {
+                                "type": "block_change",
+                                "x": x,
+                                "y": y,
+                                "z": z,
+                                "block": block,
+                            }
+                        )
 
         elif p_type == "hit_block":
             x = int(packet.get("x", 0))
@@ -1041,15 +1066,20 @@ class MultiplayerServer:
             for _, _, key in candidates[:12]:
                 chunk = self.world.chunks.get(key)
                 if chunk is not None:
-                    client.send(
-                        {
-                            "type": "chunk",
-                            "cx": key[0],
-                            "cy": key[1],
-                            "cz": key[2],
-                            "data": encode_chunk(chunk.data),
+                    chunk_pkt = {
+                        "type": "chunk",
+                        "cx": key[0],
+                        "cy": key[1],
+                        "cz": key[2],
+                        "data": encode_chunk(chunk.data),
+                    }
+                    if getattr(chunk, "sub_cells", None):
+                        chunk_pkt["sub_cells"] = {
+                            f"{lx},{ly},{lz}": sub.to_dict()
+                            for (lx, ly, lz), sub in chunk.sub_cells.items()
+                            if sub and not sub.is_empty()
                         }
-                    )
+                    client.send(chunk_pkt)
                     client.sent_chunks.add(key)
 
     def _broadcast_entity_spawn(self, entity):
