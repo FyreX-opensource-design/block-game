@@ -136,10 +136,7 @@ class MultiplayerServer:
         self.gamemode = str(gamemode or "survival").lower()
         self.world = world
         if self.world is not None:
-            self.world.on_block_set = lambda bx, by, bz, b: self.broadcast(
-                {"type": "block_change", "x": bx, "y": by, "z": bz, "block": b}
-            )
-            self.world.on_entity_spawn = self._broadcast_entity_spawn
+            self._setup_world_callbacks(self.world)
         self.world_info = None
         self.world_dir = None
         self.player_dir = None
@@ -188,6 +185,13 @@ class MultiplayerServer:
         if health is None:
             health = existing.get("health", DEFAULT_MAX_HEALTH)
         max_health = getattr(player, "max_health", None) or existing.get("max_health", DEFAULT_MAX_HEALTH)
+        hunger = getattr(player, "hunger", None)
+        if hunger is None:
+            hunger = existing.get("hunger", 20.0)
+        max_hunger = getattr(player, "max_hunger", None) or existing.get("max_hunger", 20.0)
+        saturation = getattr(player, "saturation", None)
+        if saturation is None:
+            saturation = existing.get("saturation", 5.0)
         data = {
             "uuid": client.uuid,
             "username": client.username,
@@ -198,6 +202,9 @@ class MultiplayerServer:
             "spawn": [float(v) for v in spawn] if spawn else None,
             "health": float(health),
             "max_health": float(max_health),
+            "hunger": float(hunger),
+            "max_hunger": float(max_hunger),
+            "saturation": float(saturation),
             "last_played": time.time(),
         }
         self.players_data[client.uuid] = data
@@ -228,6 +235,9 @@ class MultiplayerServer:
                     "held": str(client.held_item),
                     "health": float(getattr(player, "health", data.get("health", DEFAULT_MAX_HEALTH))),
                     "max_health": float(getattr(player, "max_health", data.get("max_health", DEFAULT_MAX_HEALTH))),
+                    "hunger": float(getattr(player, "hunger", data.get("hunger", 20.0))),
+                    "max_hunger": float(getattr(player, "max_hunger", data.get("max_hunger", 20.0))),
+                    "saturation": float(getattr(player, "saturation", data.get("saturation", 5.0))),
                     "last_played": time.time(),
                 }
             )
@@ -242,6 +252,19 @@ class MultiplayerServer:
             except OSError:
                 pass
         return data.get("spawn")
+
+    def _setup_world_callbacks(self, world):
+        def _on_block_set(bx, by, bz, b):
+            msg = {"type": "block_change", "x": bx, "y": by, "z": bz, "block": b}
+            from server.sub_cell import SUB_CELL_BLOCK, is_sub_cell
+            if b == SUB_CELL_BLOCK or is_sub_cell(b):
+                sub = world.get_sub_cell(bx, by, bz)
+                if sub is not None:
+                    msg["sub_cell"] = sub.to_dict()
+            self.broadcast(msg)
+
+        world.on_block_set = _on_block_set
+        world.on_entity_spawn = self._broadcast_entity_spawn
 
     def start(self):
         """Start the server on a background daemon thread."""
@@ -265,10 +288,7 @@ class MultiplayerServer:
                 day_time=getattr(info, "day_time", 1000.0),
                 spawn_point=getattr(info, "spawn", None),
             )
-            self.world.on_block_set = lambda bx, by, bz, b: self.broadcast(
-                {"type": "block_change", "x": bx, "y": by, "z": bz, "block": b}
-            )
-            self.world.on_entity_spawn = self._broadcast_entity_spawn
+            self._setup_world_callbacks(self.world)
             self.world_info = info
             self.world_dir = self.catalog._folder(info.id)
         elif self.world.store is not None and hasattr(self.world.store, "folder"):
@@ -559,6 +579,9 @@ class MultiplayerServer:
                 "type": "health",
                 "health": float(player.health),
                 "max_health": float(player.max_health),
+                "hunger": float(getattr(player, "hunger", 20.0)),
+                "max_hunger": float(getattr(player, "max_hunger", 20.0)),
+                "saturation": float(getattr(player, "saturation", 5.0)),
                 "hurt_time": float(player.hurt_time),
                 "dead": bool(player.dead),
             }
@@ -630,7 +653,9 @@ class MultiplayerServer:
                     if event.fatal and event.message:
                         cause = event.message
                 self._respawn_client_player(client, player, cause)
-            elif events:
+            elif events or getattr(client, "_last_synced_health", None) != player.health or getattr(client, "_last_synced_hunger", None) != player.hunger:
+                client._last_synced_health = player.health
+                client._last_synced_hunger = player.hunger
                 self._send_player_health(client, player)
 
     def _handle_packet(self, client, packet):
@@ -703,6 +728,23 @@ class MultiplayerServer:
                 player.dead = False
             else:
                 player.set_health(saved_health)
+
+            if saved:
+                try:
+                    player.max_hunger = float(saved.get("max_hunger", 20.0))
+                except (TypeError, ValueError):
+                    player.max_hunger = 20.0
+                saved_hunger = saved.get("hunger")
+                try:
+                    saved_hunger = float(saved_hunger) if saved_hunger is not None else player.max_hunger
+                except (TypeError, ValueError):
+                    saved_hunger = player.max_hunger
+                player.set_hunger(saved_hunger)
+                try:
+                    player.saturation = float(saved.get("saturation", 5.0))
+                except (TypeError, ValueError):
+                    player.saturation = 5.0
+
             player.reset_damage_state()
 
             # Build list of already-connected players
@@ -736,6 +778,9 @@ class MultiplayerServer:
                     "day_time": self.world.day_time if self.world else 1000.0,
                     "health": float(player.health),
                     "max_health": float(player.max_health),
+                    "hunger": float(getattr(player, "hunger", 20.0)),
+                    "max_hunger": float(getattr(player, "max_hunger", 20.0)),
+                    "saturation": float(getattr(player, "saturation", 5.0)),
                     "hurt_time": float(player.hurt_time),
                 }
             )
@@ -773,6 +818,12 @@ class MultiplayerServer:
             # Update world player
             player = self.world.players.get(client.uuid)
             if player is not None:
+                if player.survival:
+                    moved = math.hypot(client.pos[0] - player.pos[0], client.pos[2] - player.pos[2])
+                    if moved > 0.001:
+                        speed = moved / 0.04
+                        is_sprinting = speed > 5.0
+                        player.add_exhaustion((0.08 if is_sprinting else 0.01) * moved)
                 player.pos = list(client.pos)
                 player.vel = list(client.vel)
                 player.yaw = client.yaw
@@ -788,8 +839,11 @@ class MultiplayerServer:
                 "pitch": client.pitch,
                 "held": client.held_item,
                 "spawn": previous.get("spawn"),
-                "health": previous.get("health", DEFAULT_MAX_HEALTH),
-                "max_health": previous.get("max_health", DEFAULT_MAX_HEALTH),
+                "health": player.health if player else previous.get("health", DEFAULT_MAX_HEALTH),
+                "max_health": player.max_health if player else previous.get("max_health", DEFAULT_MAX_HEALTH),
+                "hunger": getattr(player, "hunger", previous.get("hunger", 20.0)) if player else previous.get("hunger", 20.0),
+                "max_hunger": getattr(player, "max_hunger", previous.get("max_hunger", 20.0)) if player else previous.get("max_hunger", 20.0),
+                "saturation": getattr(player, "saturation", previous.get("saturation", 5.0)) if player else previous.get("saturation", 5.0),
                 "last_played": time.time(),
             }
 
@@ -810,28 +864,54 @@ class MultiplayerServer:
             y = int(packet.get("y", 0))
             z = int(packet.get("z", 0))
             block = str(packet.get("block", ""))
-            if block not in ("", "air"):
-                from server.blocks import BLOCKS, can_place_block, placement_block
-
-                if block in BLOCKS and BLOCKS[block].properties.get("rotation") == "horizontal" and not BLOCKS[block].is_variant:
-                    block = placement_block(block, (0, 1, 0), yaw=getattr(client, "yaw", 0.0))
-
-                if not can_place_block(self.world, x, y, z, block):
-                    return
+            sub_cell_data = packet.get("sub_cell")
             cx, cy, cz = self.world.chunk_key(x, y, z)
             if (cx, cy, cz) not in self.world.chunks:
                 self.world.load_chunk(cx, cy, cz)
-            if self.world.set_block(x, y, z, block):
-                if getattr(self.world, "on_block_set", None) is None:
-                    self.broadcast(
-                        {
+
+            if sub_cell_data is not None:
+                from server.sub_cell import SubCell
+                sub = SubCell.from_dict(sub_cell_data)
+                if sub.is_empty():
+                    player = self.world.players.get(client.uuid)
+                    if player is not None and player.survival:
+                        player.add_exhaustion(0.005)
+                if self.world.set_sub_cell(x, y, z, sub):
+                    if getattr(self.world, "on_block_set", None) is None:
+                        msg = {
                             "type": "block_change",
                             "x": x,
                             "y": y,
                             "z": z,
-                            "block": block,
+                            "block": "air" if sub.is_empty() else "sub_cell",
                         }
-                    )
+                        if not sub.is_empty():
+                            msg["sub_cell"] = sub.to_dict()
+                        self.broadcast(msg)
+            else:
+                if block in ("", "air"):
+                    player = self.world.players.get(client.uuid)
+                    if player is not None and player.survival:
+                        player.add_exhaustion(0.005)
+                else:
+                    from server.blocks import BLOCKS, can_place_block, placement_block
+
+                    if block in BLOCKS and BLOCKS[block].properties.get("rotation") == "horizontal" and not BLOCKS[block].is_variant:
+                        block = placement_block(block, (0, 1, 0), yaw=getattr(client, "yaw", 0.0))
+
+                    if not can_place_block(self.world, x, y, z, block):
+                        return
+                if self.world.set_block(x, y, z, block):
+                    if getattr(self.world, "on_block_set", None) is None:
+                        self.broadcast(
+                            {
+                                "type": "block_change",
+                                "x": x,
+                                "y": y,
+                                "z": z,
+                                "block": block,
+                            }
+                        )
 
         elif p_type == "hit_block":
             x = int(packet.get("x", 0))
@@ -863,6 +943,20 @@ class MultiplayerServer:
                 if entity is not None:
                     self.world.remove_entity(entity_id)
                     self.broadcast({"type": "remove_entity", "id": entity_id})
+
+        elif p_type == "eat_item":
+            item_id = str(packet.get("item", ""))
+            if self.world is not None and item_id and client.uuid:
+                from server.items import ITEMS
+
+                player = self.world.players.get(client.uuid)
+                item = ITEMS.get(item_id)
+                nutrition = float(getattr(item, "food", 0) or 0) if item is not None else 0.0
+                if player is not None and player.survival and not player.dead and nutrition > 0.0:
+                    always_edible = bool(getattr(item, "always_edible", False))
+                    if always_edible or player.hunger < player.max_hunger:
+                        player.eat(nutrition, getattr(item, "saturation", None))
+                        self._send_player_health(client, player)
 
         elif p_type == "furnace_open":
             fx = int(packet.get("x", 0))
@@ -912,13 +1006,20 @@ class MultiplayerServer:
 
         elif p_type == "attack_entity":
             entity_id = int(packet.get("id", 0))
+            item_id = str(packet.get("item") or getattr(client, "held_item", "") or "")
             if self.world is not None:
                 entity = next((e for e in self.world.entities if e.id == entity_id), None)
                 if entity is not None and getattr(entity, "is_mob", False) and getattr(entity, "alive", True):
                     p_pos = client.pos
                     dist = math.hypot(entity.pos[0] - p_pos[0], entity.pos[2] - p_pos[2])
                     if dist <= 6.0:
-                        damaged = entity.take_damage(2.0, attacker=client, world=self.world)
+                        attacker_player = self.world.players.get(client.uuid)
+                        if attacker_player is not None and attacker_player.survival:
+                            attacker_player.add_exhaustion(0.1)
+                        from server.items import ITEMS
+                        held = ITEMS.get(item_id)
+                        attack_dmg = float(getattr(held, "attack", 1.0) or 1.0) if held else 1.0
+                        damaged = entity.take_damage(attack_dmg, attacker=client, world=self.world)
                         if damaged:
                             self.broadcast({
                                 "type": "damage_mob",
@@ -928,6 +1029,50 @@ class MultiplayerServer:
                                 "vel": entity.vel,
                                 "pos": entity.pos,
                             })
+
+        elif p_type == "attack_player":
+            target_uuid = str(packet.get("uuid", ""))
+            item_id = str(packet.get("item") or getattr(client, "held_item", "") or "")
+            if self.world is not None and target_uuid in self.world.players:
+                target_player = self.world.players[target_uuid]
+                target_client = self.clients.get(target_uuid)
+                if target_client is not None and target_player.survival and not target_player.dead and target_player.hurt_time <= 0:
+                    p_pos = client.pos
+                    t_pos = target_client.pos
+                    dist = math.hypot(t_pos[0] - p_pos[0], t_pos[2] - p_pos[2])
+                    if dist <= 6.0:
+                        attacker_player = self.world.players.get(client.uuid)
+                        if attacker_player is not None and attacker_player.survival:
+                            attacker_player.add_exhaustion(0.1)
+                        from server.items import ITEMS
+                        held = ITEMS.get(item_id)
+                        attack_dmg = float(getattr(held, "attack", 1.0) or 1.0) if held else 1.0
+                        dealt = target_player.take_damage(attack_dmg)
+                        if dealt > 0.0:
+                            kdx = t_pos[0] - p_pos[0]
+                            kdz = t_pos[2] - p_pos[2]
+                            klen = math.hypot(kdx, kdz)
+                            if klen > 0.001:
+                                kdx /= klen
+                                kdz /= klen
+                            else:
+                                kdx, kdz = 0.0, 1.0
+                            kb_speed = 5.0
+                            new_vel = [kdx * kb_speed, 3.5, kdz * kb_speed]
+                            target_client.vel = new_vel
+                            target_client.send({
+                                "type": "player_knockback",
+                                "vel": new_vel,
+                            })
+                            self._send_player_health(target_client, target_player)
+                            self.broadcast({
+                                "type": "player_hurt",
+                                "uuid": target_uuid,
+                                "hurt_time": target_player.hurt_time,
+                            })
+                            if target_player.dead:
+                                attacker_name = getattr(client, "username", "Player")
+                                self._respawn_client_player(target_client, target_player, cause=f"slain by {attacker_name}")
 
         elif p_type == "interact_entity":
             entity_id = int(packet.get("id", 0))
@@ -1029,15 +1174,20 @@ class MultiplayerServer:
             for _, _, key in candidates[:12]:
                 chunk = self.world.chunks.get(key)
                 if chunk is not None:
-                    client.send(
-                        {
-                            "type": "chunk",
-                            "cx": key[0],
-                            "cy": key[1],
-                            "cz": key[2],
-                            "data": encode_chunk(chunk.data),
+                    chunk_pkt = {
+                        "type": "chunk",
+                        "cx": key[0],
+                        "cy": key[1],
+                        "cz": key[2],
+                        "data": encode_chunk(chunk.data),
+                    }
+                    if getattr(chunk, "sub_cells", None):
+                        chunk_pkt["sub_cells"] = {
+                            f"{lx},{ly},{lz}": sub.to_dict()
+                            for (lx, ly, lz), sub in chunk.sub_cells.items()
+                            if sub and not sub.is_empty()
                         }
-                    )
+                    client.send(chunk_pkt)
                     client.sent_chunks.add(key)
 
     def _broadcast_entity_spawn(self, entity):
@@ -1076,17 +1226,18 @@ class MultiplayerServer:
                 }
             )
         elif hasattr(entity, "item"):
-            self.broadcast(
-                {
-                    "type": "spawn_item",
-                    "id": entity.id,
-                    "item": entity.item,
-                    "count": entity.count,
-                    "pos": entity.pos,
-                    "vel": entity.vel,
-                    "pickup_delay": entity.pickup_delay,
-                }
-            )
+            pkt = {
+                "type": "spawn_item",
+                "id": entity.id,
+                "item": entity.item,
+                "count": entity.count,
+                "pos": entity.pos,
+                "vel": entity.vel,
+                "pickup_delay": entity.pickup_delay,
+            }
+            if getattr(entity, "damage", 0):
+                pkt["damage"] = entity.damage
+            self.broadcast(pkt)
 
     def broadcast(self, packet, exclude=None):
         for uuid, client in self.clients.items():

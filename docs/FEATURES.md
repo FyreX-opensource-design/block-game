@@ -209,6 +209,12 @@ Full survival game loop with living creatures:
   - Taking damage briefly tints the screen red.
   - At 0 HP the player dies and respawns at their personal spawn point (or the world spawn if none is set), with full health.
   - Creative-mode players are immune to environmental damage.
+- **Food & Eating**:
+  - Food items (apple, porkchops, mutton) carry a `food` value that restores player health when eaten (up to the 20 HP maximum).
+  - Eating is performed by right-clicking while holding an item whose right-click action is `eat`.
+  - Eating is server-authoritative in multiplayer: clients send an `eat_item` packet, the server heals the player, and broadcasts the health update.
+  - Eating at full health is a no-op and consumes nothing.
+
 - **Entities & Mob AI**:
   - Wandering animals (e.g. `pig`) with multi-bone 3D models and animated walking legs.
   - Idle wandering, obstacle avoidance, panic sprint when attacked, and sound effects.

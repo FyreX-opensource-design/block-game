@@ -17,11 +17,21 @@ from server.blocks import (
     UNLOAD_RADIUS,
     VERTICAL_RADIUS,
     VERTICAL_UNLOAD,
+    SUB_CELL_BLOCK,
     WATER,
     WATER_LEVEL,
     WORLD_HEIGHT,
     block_from_index,
     block_index,
+    get_double_vertical_slab_info,
+    get_vertical_slab_info,
+    get_vertical_slab_offset_info,
+    get_vertical_slab_torch_info,
+    is_sub_cell,
+    is_vertical_slab,
+    is_vertical_slab_offset,
+    vertical_slab_bounds,
+    vertical_slab_offset_bounds,
 )
 from server.caves import load_caves
 from server.ores import load_ores
@@ -71,12 +81,29 @@ def _intersect_ray_box(ox, oy, oz, dx, dy, dz, bx0, by0, bz0, bx1, by1, bz1):
         hit_x = ox + dx * t_hit
         hit_y = oy + dy * t_hit
         hit_z = oz + dz * t_hit
-        if abs(tmin - tx0) < 1e-5:
-            normal = (-1 if dx > 0 else 1, 0, 0)
-        elif abs(tmin - ty0) < 1e-5:
-            normal = (0, -1 if dy > 0 else 1, 0)
+        # Determine the normal at the actual hit point by checking
+        # which boundary the hit coordinate lies on.
+        tol = 1e-5
+        if abs(hit_x - bx0) < tol:
+            normal = (-1, 0, 0)
+        elif abs(hit_x - bx1) < tol:
+            normal = (1, 0, 0)
+        elif abs(hit_y - by0) < tol:
+            normal = (0, -1, 0)
+        elif abs(hit_y - by1) < tol:
+            normal = (0, 1, 0)
+        elif abs(hit_z - bz0) < tol:
+            normal = (0, 0, -1)
+        elif abs(hit_z - bz1) < tol:
+            normal = (0, 0, 1)
         else:
-            normal = (0, 0, -1 if dz > 0 else 1)
+            # Fallback to the original entry-point logic
+            if abs(tmin - tx0) < 1e-5:
+                normal = (-1 if dx > 0 else 1, 0, 0)
+            elif abs(tmin - ty0) < 1e-5:
+                normal = (0, -1 if dy > 0 else 1, 0)
+            else:
+                normal = (0, 0, -1 if dz > 0 else 1)
 
     return t_hit, hit_x, hit_y, hit_z, normal
 
@@ -90,6 +117,7 @@ class Chunk:
         self.skylight = np.zeros((CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE), dtype=np.uint8)
         self.blocklight = np.zeros((CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE, 5), dtype=np.uint8)
         self.light_valid = False
+        self.sub_cells = {}
 
 
 def tree_at(x, z, seed=0):
@@ -493,10 +521,10 @@ class World:
         if callback is not None:
             callback(entity)
 
-    def spawn_item(self, item, count=1, pos=None, vel=None, despawn_timer=300.0, pickup_delay=0.0):
+    def spawn_item(self, item, count=1, pos=None, vel=None, despawn_timer=300.0, pickup_delay=0.0, damage=0):
         from server.entity import ItemEntity
 
-        entity = ItemEntity(item, count=count, pos=pos, vel=vel, despawn_timer=despawn_timer, pickup_delay=pickup_delay)
+        entity = ItemEntity(item, count=count, pos=pos, vel=vel, despawn_timer=despawn_timer, pickup_delay=pickup_delay, damage=damage)
         self.entities.append(entity)
         self._notify_entity_spawn(entity)
         return entity
@@ -684,9 +712,131 @@ class World:
         block = block_from_index(chunk.data[ly, lz, lx])
         return block.id if block is not None else AIR
 
+    def get_sub_cell(self, x, y, z):
+        """Return the SubCell at (x, y, z), or None."""
+        cx, cy, cz = self.chunk_key(x, y, z)
+        chunk = self.chunks.get((cx, cy, cz))
+        if chunk is None:
+            return None
+        lx = x - cx * CHUNK_SIZE
+        ly = y - cy * CHUNK_SIZE
+        lz = z - cz * CHUNK_SIZE
+        return chunk.sub_cells.get((lx, ly, lz))
+
+    def set_sub_cell(self, x, y, z, sub_cell):
+        """Set or update a SubCell at world coordinates (x, y, z).
+        If sub_cell is None or empty, sets the cell to AIR.
+        If all 8 octants are the same material, collapses to a full block.
+        """
+        cx, cy, cz = self.chunk_key(x, y, z)
+        chunk = self.chunks.get((cx, cy, cz))
+        if chunk is None:
+            return False
+        lx = x - cx * CHUNK_SIZE
+        ly = y - cy * CHUNK_SIZE
+        lz = z - cz * CHUNK_SIZE
+        if sub_cell is None or sub_cell.is_empty():
+            chunk.sub_cells.pop((lx, ly, lz), None)
+            return self.set_block(x, y, z, AIR)
+
+        chunk.sub_cells[(lx, ly, lz)] = sub_cell
+        self.mark_dirty(cx, cy, cz)
+        if lx == 0:
+            self.mark_dirty(cx - 1, cy, cz)
+        if lx == CHUNK_SIZE - 1:
+            self.mark_dirty(cx + 1, cy, cz)
+        if ly == 0:
+            self.mark_dirty(cx, cy - 1, cz)
+        if ly == CHUNK_SIZE - 1:
+            self.mark_dirty(cx, cy + 1, cz)
+        if lz == 0:
+            self.mark_dirty(cx, cy, cz - 1)
+        if lz == CHUNK_SIZE - 1:
+            self.mark_dirty(cx, cy, cz + 1)
+        self.modified.add((cx, cy, cz))
+
+        was_lit_furnace = False
+        if (x, y, z) in self.furnaces:
+            has_furnace = False
+            for oct_mat in sub_cell.octants:
+                if oct_mat:
+                    b = BLOCKS.get(oct_mat)
+                    if b and (b.id == "furnace" or getattr(b, "base_id", "") == "furnace" or getattr(b, "station", None) == "furnace"):
+                        has_furnace = True
+                        break
+            if not has_furnace:
+                furnace = self.furnaces.pop((x, y, z), None)
+                if furnace:
+                    was_lit_furnace = getattr(furnace, "is_lit", False)
+                    from server.stacks import stack_count, stack_id
+
+                    for stack in (furnace.input, furnace.fuel, furnace.output):
+                        sid = stack_id(stack)
+                        scnt = stack_count(stack)
+                        if sid and scnt > 0:
+                            self.spawn_item(sid, count=scnt, pos=(x + 0.5, y + 0.5, z + 0.5))
+
+        if int(chunk.data[ly, lz, lx]) != block_index(SUB_CELL_BLOCK):
+            return self.set_block(x, y, z, SUB_CELL_BLOCK)
+
+        if getattr(self, "lighting", None) is not None:
+            self.lighting.on_block_changed(x, y, z, was_emitter=was_lit_furnace)
+        if getattr(self, "on_block_set", None) is not None:
+            self.on_block_set(x, y, z, SUB_CELL_BLOCK)
+        return True
+
     def is_solid(self, x, y, z):
-        block = BLOCKS.get(self.get_block(x, y, z))
+        blk_id = self.get_block(x, y, z)
+        if blk_id == SUB_CELL_BLOCK or is_sub_cell(blk_id):
+            sub = self.get_sub_cell(x, y, z)
+            return sub is not None and not sub.is_empty()
+        block = BLOCKS.get(blk_id)
         return block is not None and block.solid
+
+    def is_solid_for_water_flow(self, x, y, z, flow_dir):
+        """Check if a block is solid for water flow, considering facing direction on vertical slabs.
+
+        flow_dir: tuple (nx, ny, nz) of the water's approach direction into the block.
+        Returns True if water is blocked, False if water can flow through.
+        For vertical slabs, water approaching the solid back face (facing) is blocked.
+        """
+        block = BLOCKS.get(self.get_block(x, y, z))
+        if block is None or not block.solid:
+            return False
+
+        # A double vertical slab fills the cell and blocks water everywhere.
+        if get_double_vertical_slab_info(block) is not None:
+            return True
+
+        # Special handling for vertical slabs
+        if is_vertical_slab(block):
+            # Get the slab's facing direction from its properties
+            facing = block.properties.get("facing", None)
+            if facing in ("north", "south", "east", "west"):
+                nx, ny, nz = flow_dir
+                if nx == 1:
+                    hit_face = "east"
+                elif nx == -1:
+                    hit_face = "west"
+                elif nz == 1:
+                    hit_face = "south"
+                elif nz == -1:
+                    hit_face = "north"
+                elif ny == 1:
+                    hit_face = "up"
+                elif ny == -1:
+                    hit_face = "down"
+                else:
+                    hit_face = None
+
+                # Approaching from the solid back face is blocked
+                if hit_face == facing:
+                    return True
+
+                # Open front and sides allow water flow
+                return False
+
+        return True
 
     def blocks_movement(self, x, y, z):
         if y < 0:
@@ -716,17 +866,41 @@ class World:
         if not block_id or block_id == AIR:
             return []
 
+        if block_id == SUB_CELL_BLOCK or is_sub_cell(block_id):
+            sub = self.get_sub_cell(x, y, z)
+            if sub is not None:
+                return sub.bounding_boxes(float(x), float(y), float(z))
+            return []
+
         b_obj = BLOCKS.get(block_id)
         if b_obj is None or not b_obj.solid:
             return []
 
-        from server.blocks import get_offset_info, get_offset_torch_info, get_slab_info
+        from server.blocks import (
+            get_offset_info,
+            get_offset_torch_info,
+            get_slab_info,
+            get_vertical_slab_info,
+            get_vertical_slab_offset_info,
+            vertical_slab_bounds,
+            vertical_slab_offset_bounds,
+        )
 
         t_info = get_offset_torch_info(b_obj)
         if t_info is not None:
             if t_info["capped"]:
                 return [(float(x), float(y) + 0.5, float(z), float(x + 1), float(y + 1), float(z + 1))]
             return []
+
+        v_off_info = get_vertical_slab_offset_info(b_obj) if b_obj is not None else None
+        if v_off_info is not None:
+            v_box = vertical_slab_offset_bounds(x, y, z, v_off_info["facing"])
+            if v_off_info["capped"]:
+                return [
+                    v_box,
+                    (float(x), float(y) + 0.5, float(z), float(x + 1), float(y) + 1.0, float(z + 1)),
+                ]
+            return [v_box]
 
         o_info = get_offset_info(b_obj)
         if o_info is not None:
@@ -742,6 +916,10 @@ class World:
                 return [(float(x), float(y) + 0.5, float(z), float(x + 1), float(y + 1), float(z + 1))]
             else:
                 return [(float(x), float(y), float(z), float(x + 1), float(y + 1), float(z + 1))]
+
+        v_info = get_vertical_slab_info(b_obj)
+        if v_info is not None:
+            return [vertical_slab_bounds(x, y, z, v_info["facing"])]
 
         return [(float(x), float(y), float(z), float(x + 1), float(y + 1), float(z + 1))]
 
@@ -803,23 +981,29 @@ class World:
         lx = x - cx * CHUNK_SIZE
         ly = y - cy * CHUNK_SIZE
         lz = z - cz * CHUNK_SIZE
+        if block_id != SUB_CELL_BLOCK:
+            chunk.sub_cells.pop((lx, ly, lz), None)
         if int(chunk.data[ly, lz, lx]) == stored:
             return False
         old_idx = int(chunk.data[ly, lz, lx])
         old_block = block_from_index(old_idx)
-        if simulate and (
+        was_lit_furnace = False
+        is_old_furnace = (
             (old_block and (old_block.id == "furnace" or getattr(old_block, "base_id", "") == "furnace" or getattr(old_block, "station", None) == "furnace"))
             or (x, y, z) in self.furnaces
-        ):
+        )
+        if is_old_furnace:
             furnace = self.furnaces.pop((x, y, z), None)
             if furnace:
-                from server.stacks import stack_count, stack_id
+                was_lit_furnace = getattr(furnace, "is_lit", False)
+                if simulate:
+                    from server.stacks import stack_count, stack_id
 
-                for stack in (furnace.input, furnace.fuel, furnace.output):
-                    sid = stack_id(stack)
-                    scnt = stack_count(stack)
-                    if sid and scnt > 0:
-                        self.spawn_item(sid, count=scnt, pos=(x + 0.5, y + 0.5, z + 0.5))
+                    for stack in (furnace.input, furnace.fuel, furnace.output):
+                        sid = stack_id(stack)
+                        scnt = stack_count(stack)
+                        if sid and scnt > 0:
+                            self.spawn_item(sid, count=scnt, pos=(x + 0.5, y + 0.5, z + 0.5))
         if simulate and old_block and getattr(old_block, "fluid_breakable", False):
             from server.fluid import is_fluid, is_water
 
@@ -851,8 +1035,8 @@ class World:
             op_lut, em_lut = _get_luts()
             old_em = em_lut[old_idx]
             new_em = em_lut[stored]
-            if op_lut[old_idx] != op_lut[stored] or np.any(old_em != new_em):
-                was_emitter = bool(np.any(old_em > 0) or np.any(new_em > 0))
+            if was_lit_furnace or op_lut[old_idx] != op_lut[stored] or np.any(old_em != new_em):
+                was_emitter = bool(was_lit_furnace or np.any(old_em > 0) or np.any(new_em > 0))
                 self.lighting.on_block_changed(x, y, z, was_emitter=was_emitter)
         if getattr(self, "on_block_set", None) is not None:
             self.on_block_set(x, y, z, block_id if block_id not in ("", None) else AIR)
@@ -1069,6 +1253,7 @@ class World:
             data = self.store.read_chunk(cx, cy, cz)
             if data is not None:
                 chunk = Chunk(cx, cy, cz)
+                chunk.sub_cells = dict(getattr(data, "sub_cells", {}))
                 chunk.data[:, :, :] = data
                 self._remember(chunk)
                 return chunk
@@ -1611,14 +1796,27 @@ class World:
         limit = int(max_dist * 4) + 2
         for _ in range(limit):
             from server.fluid import is_fluid
-            from server.blocks import get_offset_info, get_offset_torch_info, get_slab_info, is_offset_block, is_offset_torch, is_slab
+            from server.blocks import (
+                get_double_vertical_slab_info,
+                get_offset_info,
+                get_offset_torch_info,
+                get_slab_info,
+                get_vertical_slab_offset_info,
+                get_vertical_slab_torch_info,
+                is_offset_block,
+                is_offset_torch,
+                is_slab,
+                is_vertical_slab_offset,
+                vertical_slab_bounds,
+            )
 
             blk = self.get_block(x, y, z)
             above_blk = self.get_block(x, y + 1, z) if y + 1 < WORLD_HEIGHT else AIR
-            above_is_offset = is_offset_block(above_blk)
+            above_is_v_offset = is_vertical_slab_offset(above_blk)
+            above_is_offset = is_offset_block(above_blk) and not above_is_v_offset
             above_is_offset_torch = not solid_only and is_offset_torch(above_blk)
 
-            if blk not in ("", AIR) or above_is_offset or above_is_offset_torch:
+            if blk not in ("", AIR) or above_is_offset or above_is_v_offset or above_is_offset_torch:
                 boxes = []
                 if blk not in ("", AIR):
                     is_f = is_fluid(blk)
@@ -1626,8 +1824,136 @@ class World:
                     s_info = get_slab_info(blk)
                     o_info = get_offset_info(blk)
                     t_info = get_offset_torch_info(blk)
+                    v_info = get_vertical_slab_info(blk)
+                    v_off_info = get_vertical_slab_offset_info(blk)
+                    dv_info = get_double_vertical_slab_info(blk)
+                    bt_info = get_vertical_slab_torch_info(blk)
 
                     if is_s or (fluids and is_f) or (not solid_only and not is_f):
+                        if blk == SUB_CELL_BLOCK or is_sub_cell(blk):
+                            sub = self.get_sub_cell(x, y, z)
+                            if sub is not None:
+                                from server.sub_cell import OCTANT_COORDS
+
+                                processed_indices = set()
+
+                                # Check horizontal offset blocks (Z axis)
+                                for soz in (0, 1):
+                                    mat0 = sub.get_octant(0, 0, soz)
+                                    if mat0 and all(sub.get_octant(cx, cy, soz) == mat0 for cx in (0, 1) for cy in (0, 1)):
+                                        adj_z = z + (1 if soz == 1 else -1)
+                                        adj_sub = self.get_sub_cell(x, y, adj_z)
+                                        target_oz = 0 if soz == 1 else 1
+                                        if adj_sub is not None and all(adj_sub.get_octant(cx, cy, target_oz) == mat0 for cx in (0, 1) for cy in (0, 1)):
+                                            bz0 = float(z) + (0.5 if soz == 1 else -0.5)
+                                            boxes.append(
+                                                (
+                                                    x, y, z,
+                                                    f"sub_offz_{soz}",
+                                                    (float(x), float(y), bz0, float(x + 1), float(y + 1), bz0 + 1.0),
+                                                )
+                                            )
+                                            for cx in (0, 1):
+                                                for cy in (0, 1):
+                                                    processed_indices.add(cy * 4 + soz * 2 + cx)
+
+                                # Check horizontal offset blocks (X axis)
+                                for sox in (0, 1):
+                                    mat0 = sub.get_octant(sox, 0, 0)
+                                    if mat0 and all(sub.get_octant(sox, cy, cz) == mat0 for cy in (0, 1) for cz in (0, 1)):
+                                        if all(cy * 4 + cz * 2 + sox not in processed_indices for cy in (0, 1) for cz in (0, 1)):
+                                            adj_x = x + (1 if sox == 1 else -1)
+                                            adj_sub = self.get_sub_cell(adj_x, y, z)
+                                            target_ox = 0 if sox == 1 else 1
+                                            if adj_sub is not None and all(adj_sub.get_octant(target_ox, cy, cz) == mat0 for cy in (0, 1) for cz in (0, 1)):
+                                                bx0 = float(x) + (0.5 if sox == 1 else -0.5)
+                                                boxes.append(
+                                                    (
+                                                        x, y, z,
+                                                        f"sub_offx_{sox}",
+                                                        (bx0, float(y), float(z), bx0 + 1.0, float(y + 1), float(z + 1)),
+                                                    )
+                                                )
+                                                for cy in (0, 1):
+                                                    for cz in (0, 1):
+                                                        processed_indices.add(cy * 4 + cz * 2 + sox)
+
+                                # Check if cell is completely full of a single material and not paired
+                                if len(processed_indices) == 0 and all(sub.octants[i] == sub.octants[0] and sub.octants[i] != "" for i in range(8)):
+                                    boxes.append(
+                                        (
+                                            x, y, z,
+                                            "sub_full",
+                                            (float(x), float(y), float(z), float(x + 1), float(y + 1), float(z + 1)),
+                                        )
+                                    )
+                                    processed_indices.update(range(8))
+
+                                # Check vertical slabs (Z axis)
+                                for soz in (0, 1):
+                                    mat0 = sub.get_octant(0, 0, soz)
+                                    if mat0 and all(cy * 4 + soz * 2 + cx not in processed_indices for cx in (0, 1) for cy in (0, 1)):
+                                        if all(sub.get_octant(cx, cy, soz) == mat0 for cx in (0, 1) for cy in (0, 1)):
+                                            boxes.append(
+                                                (
+                                                    x, y, z,
+                                                    f"sub_vslabz_{soz}",
+                                                    (float(x), float(y), float(z) + soz * 0.5, float(x + 1), float(y + 1), float(z) + (soz + 1) * 0.5),
+                                                )
+                                            )
+                                            for cx in (0, 1):
+                                                for cy in (0, 1):
+                                                    processed_indices.add(cy * 4 + soz * 2 + cx)
+
+                                # Check vertical slabs (X axis)
+                                for sox in (0, 1):
+                                    mat0 = sub.get_octant(sox, 0, 0)
+                                    if mat0 and all(cy * 4 + cz * 2 + sox not in processed_indices for cy in (0, 1) for cz in (0, 1)):
+                                        if all(sub.get_octant(sox, cy, cz) == mat0 for cy in (0, 1) for cz in (0, 1)):
+                                            boxes.append(
+                                                (
+                                                    x, y, z,
+                                                    f"sub_vslabx_{sox}",
+                                                    (float(x) + sox * 0.5, float(y), float(z), float(x) + (sox + 1) * 0.5, float(y + 1), float(z + 1)),
+                                                )
+                                            )
+                                            for cy in (0, 1):
+                                                for cz in (0, 1):
+                                                    processed_indices.add(cy * 4 + cz * 2 + sox)
+
+                                # Check horizontal slabs (Y axis)
+                                for soy in (0, 1):
+                                    mat0 = sub.get_octant(0, soy, 0)
+                                    if mat0 and all(soy * 4 + cz * 2 + cx not in processed_indices for cx in (0, 1) for cz in (0, 1)):
+                                        if all(sub.get_octant(cx, soy, cz) == mat0 for cx in (0, 1) for cz in (0, 1)):
+                                            boxes.append(
+                                                (
+                                                    x, y, z,
+                                                    f"sub_slaby_{soy}",
+                                                    (float(x), float(y) + soy * 0.5, float(z), float(x + 1), float(y) + (soy + 1) * 0.5, float(z + 1)),
+                                                )
+                                            )
+                                            for cx in (0, 1):
+                                                for cz in (0, 1):
+                                                    processed_indices.add(soy * 4 + cz * 2 + cx)
+
+                                # Remaining individual octants
+                                for idx, block_id in enumerate(sub.octants):
+                                    if not block_id or idx in processed_indices:
+                                        continue
+                                    sub_x, sub_y, sub_z = OCTANT_COORDS[idx]
+                                    bx0 = float(x) + sub_x * 0.5
+                                    by0 = float(y) + sub_y * 0.5
+                                    bz0 = float(z) + sub_z * 0.5
+                                    boxes.append(
+                                        (
+                                            x,
+                                            y,
+                                            z,
+                                            f"sub_{sub_x}_{sub_y}_{sub_z}",
+                                            (bx0, by0, bz0, bx0 + 0.5, by0 + 0.5, bz0 + 0.5),
+                                        )
+                                    )
                         b_obj = BLOCKS.get(blk)
                         if t_info is not None:
                             if not solid_only and b_obj is not None and b_obj.elements:
@@ -1658,6 +1984,68 @@ class World:
                                         z,
                                         "top",
                                         (float(x), float(y) + 0.5, float(z), float(x + 1), float(y + 1), float(z + 1)),
+                                    )
+                                )
+                        elif v_off_info is not None:
+                            v_box = vertical_slab_offset_bounds(x, y, z, v_off_info["facing"])
+                            boxes.append((x, y, z, "vertical_offset", v_box))
+                            if v_off_info["capped"]:
+                                boxes.append(
+                                    (
+                                        x,
+                                        y,
+                                        z,
+                                        "top",
+                                        (float(x), float(y) + 0.5, float(z), float(x + 1), float(y + 1), float(z + 1)),
+                                    )
+                                )
+                        elif dv_info is not None:
+                            if o_info is not None:
+                                boxes.append(
+                                    (
+                                        x,
+                                        y,
+                                        z,
+                                        "vertical_positive",
+                                        vertical_slab_offset_bounds(x, y, z, dv_info["positive_facing"]),
+                                    )
+                                )
+                                boxes.append(
+                                    (
+                                        x,
+                                        y,
+                                        z,
+                                        "vertical_negative",
+                                        vertical_slab_offset_bounds(x, y, z, dv_info["negative_facing"]),
+                                    )
+                                )
+                                if o_info["capped"]:
+                                    boxes.append(
+                                        (
+                                            x,
+                                            y,
+                                            z,
+                                            "top",
+                                            (float(x), float(y) + 0.5, float(z), float(x + 1), float(y + 1), float(z + 1)),
+                                        )
+                                    )
+                            else:
+                                boxes.append(
+                                    (
+                                        x,
+                                        y,
+                                        z,
+                                        "vertical_positive",
+                                        vertical_slab_bounds(x, y, z, dv_info["positive_facing"]),
+                                    )
+                                )
+                                boxes.append(
+                                    (
+                                        x,
+                                        y,
+                                        z,
+                                        "vertical_negative",
+                                        vertical_slab_bounds(x, y, z, dv_info["negative_facing"]),
                                     )
                                 )
                         elif o_info is not None:
@@ -1720,6 +2108,53 @@ class World:
                                         (float(x), float(y) + 0.5, float(z), float(x + 1), float(y + 1), float(z + 1)),
                                     )
                                 )
+                        elif bt_info is not None:
+                            boxes.append(
+                                (
+                                    x,
+                                    y,
+                                    z,
+                                    "vertical",
+                                    vertical_slab_bounds(x, y, z, bt_info["facing"]),
+                                )
+                            )
+                            torch_element = next(
+                                (
+                                    element
+                                    for element in (b_obj.elements if b_obj is not None else ())
+                                    if element.get("part") == "torch"
+                                ),
+                                None,
+                            )
+                            if torch_element is not None:
+                                fx0, fy0, fz0 = torch_element["from"]
+                                fx1, fy1, fz1 = torch_element["to"]
+                                boxes.append(
+                                    (
+                                        x,
+                                        y,
+                                        z,
+                                        "torch_back",
+                                        (
+                                            float(x) + float(fx0) / 16.0,
+                                            float(y) + float(fy0) / 16.0,
+                                            float(z) + float(fz0) / 16.0,
+                                            float(x) + float(fx1) / 16.0,
+                                            float(y) + float(fy1) / 16.0,
+                                            float(z) + float(fz1) / 16.0,
+                                        ),
+                                    )
+                                )
+                        elif v_info is not None:
+                            boxes.append(
+                                (
+                                    x,
+                                    y,
+                                    z,
+                                    "vertical",
+                                    vertical_slab_bounds(x, y, z, v_info["facing"]),
+                                )
+                            )
                         elif b_obj is not None and b_obj.properties.get("torch") and b_obj.elements:
                             el = b_obj.elements[0]
                             fx0, fy0, fz0 = el["from"]
@@ -1740,6 +2175,8 @@ class World:
                                     ),
                                 )
                             )
+                        elif blk == SUB_CELL_BLOCK or is_sub_cell(blk):
+                            pass
                         else:
                             boxes.append(
                                 (
@@ -1751,16 +2188,26 @@ class World:
                                 )
                             )
 
-                if above_is_offset:
-                    boxes.append(
-                        (
-                            x,
-                            y + 1,
-                            z,
-                            "offset",
-                            (float(x), float(y) + 0.5, float(z), float(x + 1), float(y) + 1.5, float(z + 1)),
+                if above_is_v_offset:
+                    v_off_above = get_vertical_slab_offset_info(above_blk)
+                    if v_off_above is not None:
+                        v_box_above = vertical_slab_offset_bounds(x, y + 1, z, v_off_above["facing"])
+                        boxes.append((x, y + 1, z, "vertical_offset", v_box_above))
+                elif above_is_offset:
+                    above_dv = get_double_vertical_slab_info(above_blk)
+                    if above_dv is not None:
+                        boxes.append((x, y + 1, z, "vertical_positive", vertical_slab_offset_bounds(x, y + 1, z, above_dv["positive_facing"])))
+                        boxes.append((x, y + 1, z, "vertical_negative", vertical_slab_offset_bounds(x, y + 1, z, above_dv["negative_facing"])))
+                    else:
+                        boxes.append(
+                            (
+                                x,
+                                y + 1,
+                                z,
+                                "offset",
+                                (float(x), float(y) + 0.5, float(z), float(x + 1), float(y) + 1.5, float(z + 1)),
+                            )
                         )
-                    )
                 elif above_is_offset_torch:
                     above_obj = BLOCKS.get(above_blk)
                     if above_obj is not None and above_obj.elements:
@@ -1808,11 +2255,19 @@ class World:
                     if closest_hit is not None:
                         t_hit, hx, hy, hz, b_norm, tx, ty, tz, box_part, part_box = closest_hit
                         loc_y = hy - ty
-                        if box_part in ("bottom", "top", "offset", "offset_torch"):
+                        if box_part.startswith("sub_") or box_part in (
+                            "bottom",
+                            "top",
+                            "offset",
+                            "offset_torch",
+                            "vertical_positive",
+                            "vertical_negative",
+                            "torch_back",
+                        ):
                             slab_half = box_part
                         else:
                             slab_half = "bottom" if loc_y < 0.5 else "top"
-                        return {
+                        hit_info = {
                             "x": tx,
                             "y": ty,
                             "z": tz,
@@ -1827,6 +2282,27 @@ class World:
                             "slab_half": slab_half,
                             "box": part_box,
                         }
+                        if box_part.startswith("sub_"):
+                            pts = box_part.split("_")
+                            if len(pts) == 4 and pts[1].isdigit():
+                                hit_info["octant"] = (int(pts[1]), int(pts[2]), int(pts[3]))
+                            elif len(pts) == 3 and pts[2].isdigit():
+                                ox = max(0, min(1, int(math.floor((hx - tx - b_norm[0] * 1e-4) * 2.0))))
+                                oy = max(0, min(1, int(math.floor((hy - ty - b_norm[1] * 1e-4) * 2.0))))
+                                oz = max(0, min(1, int(math.floor((hz - tz - b_norm[2] * 1e-4) * 2.0))))
+                                if "offz" in pts[1] or "vslabz" in pts[1]:
+                                    oz = int(pts[2])
+                                elif "offx" in pts[1] or "vslabx" in pts[1]:
+                                    ox = int(pts[2])
+                                elif "slaby" in pts[1]:
+                                    oy = int(pts[2])
+                                hit_info["octant"] = (ox, oy, oz)
+                            else:
+                                ox = max(0, min(1, int(math.floor((hx - tx - b_norm[0] * 1e-4) * 2.0))))
+                                oy = max(0, min(1, int(math.floor((hy - ty - b_norm[1] * 1e-4) * 2.0))))
+                                oz = max(0, min(1, int(math.floor((hz - tz - b_norm[2] * 1e-4) * 2.0))))
+                                hit_info["octant"] = (ox, oy, oz)
+                        return hit_info
             if t_max_x <= t_max_y and t_max_x <= t_max_z:
                 if t_max_x > max_dist:
                     return None

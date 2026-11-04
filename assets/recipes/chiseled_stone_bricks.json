@@ -1,0 +1,15 @@
+{
+  "id": "chiseled_stone_bricks",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "#"
+  ],
+  "key": {
+    "#": "stone_brick_slab"
+  },
+  "result": {
+    "item": "chiseled_stone_bricks",
+    "count": 1
+  }
+}

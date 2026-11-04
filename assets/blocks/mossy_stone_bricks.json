@@ -1,0 +1,18 @@
+{
+  "id": "mossy_stone_bricks",
+  "lang": "block.mossy_stone_bricks",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/mossy_stone_bricks",
+  "gravity": false,
+  "textures": {
+    "top": "mossy_stone_bricks",
+    "side": "mossy_stone_bricks",
+    "bottom": "mossy_stone_bricks"
+  }
+}

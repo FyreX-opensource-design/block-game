@@ -13,6 +13,7 @@ from server.stacks import (
     make_stack,
     normalize_stack,
     stack_count,
+    stack_damage,
     stack_id,
 )
 
@@ -38,6 +39,7 @@ class CreativeInventory:
         self.scroll = 0
         self.held = ""
         self.held_count = 0
+        self.held_damage = 0
         self.held_infinite = False
         self.hover = None
         self.tab = TABS[0].id
@@ -635,6 +637,7 @@ class CreativeInventory:
     def clear_held(self):
         self.held = ""
         self.held_count = 0
+        self.held_damage = 0
         self.held_infinite = False
 
     def dismiss_held(self, hotbar, storage, craft):
@@ -646,28 +649,31 @@ class CreativeInventory:
     def stash_held(self, hotbar, storage, craft):
         block_id = self.held
         remaining = self.held_count
+        damage = getattr(self, "held_damage", 0)
         self.clear_held()
         if not block_id or remaining <= 0:
             return
         groups = (storage, hotbar, craft)
-        for slots in groups:
-            for index, raw in enumerate(slots):
-                slot = normalize_stack(raw)
-                if stack_id(slot) != block_id or stack_count(slot) >= stack_limit(block_id):
-                    continue
-                moved = min(stack_limit(block_id) - stack_count(slot), remaining)
-                slots[index] = make_stack(block_id, stack_count(slot) + moved)
-                remaining -= moved
-                if remaining <= 0:
-                    return
+        if not damage:
+            for slots in groups:
+                for index, raw in enumerate(slots):
+                    slot = normalize_stack(raw)
+                    if stack_id(slot) != block_id or stack_damage(slot) or stack_count(slot) >= stack_limit(block_id):
+                        continue
+                    moved = min(stack_limit(block_id) - stack_count(slot), remaining)
+                    slots[index] = make_stack(block_id, stack_count(slot) + moved)
+                    remaining -= moved
+                    if remaining <= 0:
+                        return
         for slots in groups:
             for index, raw in enumerate(slots):
                 if stack_id(raw):
                     continue
-                slots[index] = make_stack(block_id, remaining)
+                slots[index] = make_stack(block_id, remaining, damage=damage)
                 return
         self.held = block_id
         self.held_count = remaining
+        self.held_damage = damage
         self.held_infinite = False
 
     def _click_slot(self, slots, index, button):
@@ -688,20 +694,22 @@ class CreativeInventory:
                     total = stack_count(current)
                     take = (total + 1) // 2
                     left = total - take
-                    slots[index] = make_stack(stack_id(current), left) if left > 0 else empty_stack()
+                    dmg = stack_damage(current)
+                    slots[index] = make_stack(stack_id(current), left, damage=dmg) if left > 0 else empty_stack()
                     self.held = stack_id(current)
                     self.held_count = take
+                    self.held_damage = dmg
                     self.held_infinite = False
                 return
 
             if not stack_id(current):
-                slots[index] = make_stack(self.held, 1)
+                slots[index] = make_stack(self.held, 1, damage=self.held_damage)
                 self.held_count -= 1
                 if self.held_count <= 0:
                     self.clear_held()
                 return
 
-            if stack_id(current) == self.held:
+            if stack_id(current) == self.held and not self.held_damage and not stack_damage(current):
                 if stack_count(current) < stack_limit(self.held):
                     slots[index] = make_stack(self.held, stack_count(current) + 1)
                     self.held_count -= 1
@@ -714,14 +722,15 @@ class CreativeInventory:
             if stack_id(current):
                 self.held = stack_id(current)
                 self.held_count = stack_count(current)
+                self.held_damage = stack_damage(current)
                 self.held_infinite = False
                 slots[index] = empty_stack()
             return
         if not stack_id(current):
-            slots[index] = make_stack(self.held, self.held_count)
+            slots[index] = make_stack(self.held, self.held_count, damage=self.held_damage)
             self.clear_held()
             return
-        if stack_id(current) == self.held:
+        if stack_id(current) == self.held and not self.held_damage and not stack_damage(current):
             room = stack_limit(self.held) - stack_count(current)
             moved = min(room, self.held_count)
             slots[index] = make_stack(self.held, stack_count(current) + moved)
@@ -729,9 +738,13 @@ class CreativeInventory:
             if self.held_count <= 0:
                 self.clear_held()
             return
-        slots[index] = make_stack(self.held, self.held_count)
-        self.held = stack_id(current)
-        self.held_count = stack_count(current)
+        temp_id = stack_id(current)
+        temp_cnt = stack_count(current)
+        temp_dmg = stack_damage(current)
+        slots[index] = make_stack(self.held, self.held_count, damage=self.held_damage)
+        self.held = temp_id
+        self.held_count = temp_cnt
+        self.held_damage = temp_dmg
         self.held_infinite = False
 
     def _take_result(self, craft):
@@ -809,6 +822,15 @@ class CreativeInventory:
         count = stack_count(stack)
         if count > 1:
             frame.label(str(count), x + CELL - 5, y + 5, 13, "right", "bottom", TITLE)
+        damage = stack_damage(stack)
+        item = ITEMS.get(stack_id(stack))
+        if item is not None and getattr(item, "durability", 0) and damage > 0:
+            ratio = max(0.0, min(1.0, 1.0 - damage / item.durability))
+            bar_w = max(1, int((CELL - 14) * ratio))
+            frame.rect(x + 7, y + 4, CELL - 14, 3, (0.0, 0.0, 0.0, 0.9))
+            r = min(1.0, 2.0 * (1.0 - ratio))
+            g = min(1.0, 2.0 * ratio)
+            frame.rect(x + 7, y + 4, bar_w, 2, (r, g, 0.1, 1.0))
 
     def _tab(self, frame, tab, x, y, height, selected):
         action = f"tab:{tab.id}"
@@ -880,7 +902,7 @@ class CreativeInventory:
         elif self.hover and self.hover == "furnace:output":
             slot = self.furnace.output if self.furnace else ""
         elif self.held:
-            return self._name(make_stack(self.held, self.held_count))
+            return self._name(make_stack(self.held, self.held_count, damage=self.held_damage))
         return self._name(slot) if slot is not None else ""
 
     def _name(self, slot):
@@ -888,9 +910,11 @@ class CreativeInventory:
         if item is None:
             return ""
         count = stack_count(slot)
+        damage = stack_damage(slot)
+        durability_str = f" ({item.durability - damage}/{item.durability})" if getattr(item, "durability", 0) and damage > 0 else ""
         if count > 1:
-            return f"{item.name} x{count}"
-        return item.name
+            return f"{item.name} x{count}{durability_str}"
+        return f"{item.name}{durability_str}"
 
     def _preview(self, craft):
         ids = tuple(stack_id(slot) if stack_count(slot) else "" for slot in list(craft)[:CRAFT_SLOTS])

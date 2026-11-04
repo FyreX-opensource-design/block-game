@@ -191,7 +191,7 @@ class NetworkIntegrationTests(unittest.TestCase):
                 client1.send_move([10.0, 32.0, 15.0], [0.0, 0.0, 0.0], 1.2, -0.4, "wood_pickaxe")
 
                 # Send test block placement from Client 2
-                client2.send_set_block(0, 10, 0, "planks")
+                client2.send_set_block(0, 100, 0, "planks")
 
                 if (
                     c1_received_c2_skin is not None
@@ -217,7 +217,7 @@ class NetworkIntegrationTests(unittest.TestCase):
             # Verify movement and block synchronization
             self.assertTrue(c1_received_move, "Client 2 should receive Client 1 movement")
             self.assertTrue(c2_received_block, "Client 1 should receive Client 2 block change")
-            self.assertEqual(server.world.get_block(0, 10, 0), "planks")
+            self.assertEqual(server.world.get_block(0, 100, 0), "planks")
 
             # Clean disconnect
             client2.disconnect()
@@ -349,7 +349,12 @@ class NetworkIntegrationTests(unittest.TestCase):
             c1.poll_events()
 
             c1.send_move(target_pos, [0.0, 0.0, 0.0], 2.1, 0.5, "")
-            time.sleep(0.08)
+            t_wait = time.time()
+            while time.time() - t_wait < 1.0:
+                sc = s1.clients.get(uuid)
+                if sc and sc.pos == target_pos:
+                    break
+                time.sleep(0.02)
 
             # Stop server (should save all player data to disk)
             s1.stop()
@@ -1081,6 +1086,55 @@ class FallingBlockSyncTests(unittest.TestCase):
             spawns = [p for p in pkts if p.get("type") == "spawn_falling_block"]
             self.assertEqual(len(spawns), 1)
             self.assertEqual(spawns[0]["block"], "sand")
+
+
+class PlayerFoodTests(unittest.TestCase):
+    """Food eating is handled by the server so health stays multiplayer-authoritative."""
+
+    def _server_with_player(self, tmp, world):
+        from unittest.mock import MagicMock
+
+        from server.network import MultiplayerServer, RemoteClient
+        from server.player import Player
+
+        server = MultiplayerServer(host="127.0.0.1", port=0, saves_dir=tmp, world=world)
+        player = Player(world)
+        player.apply_identity("p1", None)
+        world.register_player(player)
+        client = MagicMock(spec=RemoteClient)
+        client.alive = True
+        client.uuid = "p1"
+        client.pos = [2.5, 10.0, 2.5]
+        client.out_queue = []
+        pkts = []
+        client.send = lambda pkt: pkts.append(pkt)
+        server.clients["p1"] = client
+        return server, client, pkts, player
+
+    def test_eat_item_heals_the_server_player(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            world = World(seed=12)
+            world.chunks[(0, 0, 0)] = Chunk(0, 0, 0)
+            server, client, pkts, player = self._server_with_player(tmp, world)
+            player.hunger = 5.0
+
+            server._handle_packet(client, {"type": "eat_item", "item": "cooked_porkchop"})
+
+            health_pkts = [p for p in pkts if p.get("type") == "health"]
+            self.assertEqual(len(health_pkts), 1)
+            self.assertEqual(float(health_pkts[0]["hunger"]), 13.0)
+            self.assertEqual(float(health_pkts[0]["max_hunger"]), 20.0)
+
+    def test_eat_item_with_unknown_food_does_not_change_health(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            world = World(seed=12)
+            world.chunks[(0, 0, 0)] = Chunk(0, 0, 0)
+            server, client, pkts, player = self._server_with_player(tmp, world)
+            player.health = 5.0
+
+            server._handle_packet(client, {"type": "eat_item", "item": "does_not_exist"})
+
+            self.assertEqual([p for p in pkts if p.get("type") == "health"], [])
 
 
 class ItemPickupTests(unittest.TestCase):

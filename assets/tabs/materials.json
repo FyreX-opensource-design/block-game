@@ -1,6 +1,9 @@
 {
-    "id": "materials",
-    "lang": "tab.materials",
-    "icon": "iron_ingot",
-    "order": 3
+  "id": "materials",
+  "lang": "tab.materials",
+  "icon": "iron_ingot",
+  "order": 3,
+  "items": [
+    "vertical_slab"
+  ]
 }

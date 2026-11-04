@@ -1,0 +1,16 @@
+{
+  "id": "vertical_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "SS",
+    "SS"
+  ],
+  "recipe_type": "crafting_shaped",
+  "result": {
+    "item": "vertical_slab",
+    "count": 1
+  },
+  "key": {
+    "S": "smooth_stone_slab"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "id": "sandstone_slab_from_sandstone_vertical_slab",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "sandstone_vertical_slab"
+  ],
+  "result": {
+    "item": "sandstone_slab",
+    "count": 1
+  }
+}

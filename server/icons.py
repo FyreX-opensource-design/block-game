@@ -4,12 +4,12 @@ ICON_SIZE = 32
 _SCALE = 15.0 / 16.0
 
 
-def render_block_icon(top, side, height_scale=1.0):
+def render_block_icon(top, side, height_scale=1.0, width_scale=1.0):
     image = np.zeros((ICON_SIZE, ICON_SIZE, 4), dtype=np.uint8)
     # Left = south, right = east, top last (painter order).
-    _paint_face(image, side, "south", 0.84, height_scale=height_scale)
-    _paint_face(image, side, "east", 0.62, height_scale=height_scale)
-    _paint_face(image, top, "up", 1.0, height_scale=height_scale)
+    _paint_face(image, side, "south", 0.84, height_scale=height_scale, width_scale=width_scale)
+    _paint_face(image, side, "east", 0.62, height_scale=height_scale, width_scale=width_scale)
+    _paint_face(image, top, "up", 1.0, height_scale=height_scale, width_scale=width_scale)
     return _seal(image)
 
 
@@ -23,8 +23,8 @@ def render_flat_icon(texture):
     return image
 
 
-def _paint_face(image, texture, face, shade, height_scale=1.0):
-    corners3, uvs = _face(face, height_scale=height_scale)
+def _paint_face(image, texture, face, shade, height_scale=1.0, width_scale=1.0):
+    corners3, uvs = _face(face, height_scale=height_scale, width_scale=width_scale)
     corners = np.asarray([_project(*point) for point in corners3], dtype=np.float32)
     # Grow the quad a half-pixel so face seams do not leave holes.
     center = corners.mean(axis=0)
@@ -58,26 +58,31 @@ def _seal(image):
     return sealed
 
 
-def _face(face, height_scale=1.0):
+def _face(face, height_scale=1.0, width_scale=1.0):
     # Corners CCW from outside. UV (0,0) = texture top-left.
+    # width_scale narrows the block along X (centered), e.g. 0.5 for a vertical slab.
     h = 16.0 * height_scale
     y_off = (1.0 - height_scale) * 4.0
     y0 = y_off
     y1 = y_off + h
+    x0 = (1.0 - width_scale) * 8.0
+    x1 = 16.0 - x0
+    u0 = x0 / 16.0
+    u1 = x1 / 16.0
     if face == "south":
         return (
-            ((0.0, y1, 16.0), (16.0, y1, 16.0), (16.0, y0, 16.0), (0.0, y0, 16.0)),
-            ((0.0, 1.0 - height_scale), (1.0, 1.0 - height_scale), (1.0, 1.0), (0.0, 1.0)),
+            ((x0, y1, 16.0), (x1, y1, 16.0), (x1, y0, 16.0), (x0, y0, 16.0)),
+            ((u0, 1.0 - height_scale), (u1, 1.0 - height_scale), (u1, 1.0), (u0, 1.0)),
         )
     if face == "east":
         # u=0 at high z so the left edge of the east face (screen-left of that face) matches texture left.
         return (
-            ((16.0, y1, 16.0), (16.0, y1, 0.0), (16.0, y0, 0.0), (16.0, y0, 16.0)),
+            ((x1, y1, 16.0), (x1, y1, 0.0), (x1, y0, 0.0), (x1, y0, 16.0)),
             ((0.0, 1.0 - height_scale), (1.0, 1.0 - height_scale), (1.0, 1.0), (0.0, 1.0)),
         )
     return (
-        ((0.0, y1, 0.0), (16.0, y1, 0.0), (16.0, y1, 16.0), (0.0, y1, 16.0)),
-        ((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)),
+        ((x0, y1, 0.0), (x1, y1, 0.0), (x1, y1, 16.0), (x0, y1, 16.0)),
+        ((u0, 0.0), (u1, 0.0), (u1, 1.0), (u0, 1.0)),
     )
 
 

@@ -225,6 +225,23 @@ class TestFallingBlocksAndClay(unittest.TestCase):
         finally:
             self.world.remove_entity(falling.id)
 
+    def test_world_full_block_at_head_still_blocks_view(self):
+        player = Player(self.world)
+        player.pos = [5.0, 5.0, 5.0]
+        # A landed full block becomes a world block rather than an entity.
+        self.world.set_block(5, 6, 5, "stone")
+        game = self._game_with_player(player)
+        self.assertEqual(game._fallen_block_on_player(), "stone")
+
+    def test_vertical_slab_at_head_does_not_block_view(self):
+        player = Player(self.world)
+        player.pos = [5.0, 5.0, 5.0]
+        # A vertical slab only occupies half a cell and cannot fall onto the
+        # player, so the fallen-block overlay must stay hidden.
+        self.world.set_block(5, 6, 5, "stone_vertical_slab")
+        game = self._game_with_player(player)
+        self.assertIsNone(game._fallen_block_on_player())
+
     def test_falling_block_origin_removal_is_broadcast(self):
         changes = []
         self.world.on_block_set = lambda x, y, z, b: changes.append((x, y, z, b))

@@ -6,8 +6,11 @@
       "entries": [
         {
           "type": "item",
-          "name": "wool",
-          "count": 1
+          "name": "raw_mutton",
+          "count": [
+            1,
+            2
+          ]
         }
       ]
     }

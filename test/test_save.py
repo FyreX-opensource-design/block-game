@@ -113,9 +113,9 @@ class SaveTests(unittest.TestCase):
             store = ChunkStore(Path(folder) / "chunks")
             chunk = Chunk(0, 5, 0)
             chunk.data.fill(0)
-            # Oak saplings were inserted before pine logs, so BG02 stored this
-            # block one index earlier than the current registry does.
-            old_index = block_index("pine_log") - 1
+            # BG02 stored global registry indices. Blocks added since then shift
+            # the current index, so ask the legacy lookup for the old position.
+            old_index = list(storage._legacy_lookup()).index(block_index("pine_log"))
             chunk.data[7, 8, 9] = old_index
             raw = np.ascontiguousarray(chunk.data, dtype=np.uint16).tobytes()
             header = struct.pack("<iiiI", 0, 5, 0, len(raw))

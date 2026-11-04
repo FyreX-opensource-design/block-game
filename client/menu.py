@@ -87,6 +87,7 @@ class MenuState:
         self._row_click = 0.0
         self.web_ui_enabled = False
         self.web_ui_port = 5000
+        self.arrow_key_camera = False
         self.local_ips = []
         self._prev_screen = "title"
 
@@ -142,6 +143,9 @@ class MenuState:
         if action == "toggle-web-ui":
             self.web_ui_enabled = not self.web_ui_enabled
             return "toggle-web-ui"
+        if action in ("toggle-arrow-camera", "toggle-arrow-key-camera", "toggle-arrow-keys-camera"):
+            self.arrow_key_camera = not self.arrow_key_camera
+            return "toggle-arrow-camera"
         if action == "back-options":
             self.screen = getattr(self, "_prev_screen", "title") or "title"
             return "back-options"
@@ -416,30 +420,33 @@ class MenuState:
 
     def _options(self, width, height):
         frame = Frame()
-        x, y, w, h = self._panel(frame, width, height, 520, 420)
+        x, y, w, h = self._panel(frame, width, height, 520, 520)
         frame.label("Options", x + w / 2, y + h - 46, 32, "center", "center")
         field_w = 340
         field_x = x + (w - field_w) / 2
 
-        status_text = f"Web UI: {'ON' if self.web_ui_enabled else 'OFF'}"
-        frame.button(field_x, y + h - 108, field_w, 44, status_text, "toggle-web-ui", self.hover)
+        camera_text = f"Arrow Key Camera: {'ON' if self.arrow_key_camera else 'OFF'}"
+        frame.button(field_x, y + h - 108, field_w, 44, camera_text, "toggle-arrow-camera", self.hover)
 
-        frame.label("Web UI Port", field_x, y + h - 144, 14, "left", "center", MUTED)
-        self._field(frame, field_x, y + h - 192, field_w, 40, "web_ui_port", str(self.web_ui_port), "5000")
+        status_text = f"Web UI: {'ON' if self.web_ui_enabled else 'OFF'}"
+        frame.button(field_x, y + h - 166, field_w, 44, status_text, "toggle-web-ui", self.hover)
+
+        frame.label("Web UI Port", field_x, y + h - 202, 14, "left", "center", MUTED)
+        self._field(frame, field_x, y + h - 250, field_w, 40, "web_ui_port", str(self.web_ui_port), "5000")
 
         if self.web_ui_enabled:
             port = self.web_ui_port
             ips = getattr(self, "local_ips", []) or []
             if ips:
-                frame.label("Phone / Tablet URL:", x + w / 2, y + h - 230, 13, "center", "center", MUTED)
-                frame.label(f"http://{ips[0]}:{port}", x + w / 2, y + h - 252, 16, "center", "center", TITLE)
+                frame.label("Phone / Tablet URL:", x + w / 2, y + h - 288, 13, "center", "center", MUTED)
+                frame.label(f"http://{ips[0]}:{port}", x + w / 2, y + h - 310, 16, "center", "center", TITLE)
                 if len(ips) > 1:
-                    frame.label(f"Alt: http://{ips[1]}:{port}   |   localhost:{port}", x + w / 2, y + h - 274, 12, "center", "center", MUTED)
+                    frame.label(f"Alt: http://{ips[1]}:{port}   |   localhost:{port}", x + w / 2, y + h - 332, 12, "center", "center", MUTED)
                 else:
-                    frame.label(f"Local: http://localhost:{port}", x + w / 2, y + h - 274, 12, "center", "center", MUTED)
+                    frame.label(f"Local: http://localhost:{port}", x + w / 2, y + h - 332, 12, "center", "center", MUTED)
             else:
-                frame.label(f"Running: http://localhost:{port}", x + w / 2, y + h - 234, 15, "center", "center", TITLE)
-                frame.label("(Connect to Wi-Fi to access from your phone or tablet)", x + w / 2, y + h - 258, 12, "center", "center", MUTED)
+                frame.label(f"Running: http://localhost:{port}", x + w / 2, y + h - 292, 15, "center", "center", TITLE)
+                frame.label("(Connect to Wi-Fi to access from your phone or tablet)", x + w / 2, y + h - 316, 12, "center", "center", MUTED)
 
         self._row_buttons(
             frame,

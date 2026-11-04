@@ -1,0 +1,18 @@
+{
+  "id": "stone_bricks",
+  "lang": "block.stone_bricks",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/stone_bricks",
+  "gravity": false,
+  "textures": {
+    "top": "stone_bricks",
+    "side": "stone_bricks",
+    "bottom": "stone_bricks"
+  }
+}

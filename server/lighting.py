@@ -71,6 +71,20 @@ def get_block_opacity(block_obj):
     if not getattr(block_obj, "solid", True):
         return 0
     props = getattr(block_obj, "properties", None) or {}
+    if (
+        (
+            getattr(block_obj, "vertical_slab", False)
+            or props.get("vertical_slab")
+            or base == "vertical_slab"
+            or "_vertical_slab" in str(base)
+        )
+        and not props.get("double_vertical_slab")
+    ):
+        # Vertical slabs only occupy half of a block, so (like horizontal
+        # half slabs) they must not extinguish light in the whole cell.
+        if props.get("waterlogged") or getattr(block_obj, "waterlogged", False):
+            return 2
+        return 0
     if props.get("offset_block"):
         if not props.get("capped"):
             return 0
@@ -78,6 +92,10 @@ def get_block_opacity(block_obj):
     if props.get("slab") and not props.get("double_slab"):
         if props.get("waterlogged") or getattr(block_obj, "waterlogged", False):
             return 2
+        return 0
+    if bid == "sub_cell" or props.get("sub_cell") or base == "sub_cell":
+        # Sub-cells contain open octants (full sub-cells collapse to their full block).
+        # Like horizontal slabs and vertical slabs, they must not extinguish light in the whole cell.
         return 0
     if getattr(block_obj, "full_cube", False):
         return 15
@@ -364,8 +382,27 @@ class LightingSystem:
 
         # Check lit furnaces in chunk bounds
         if getattr(self.world, "furnaces", None):
-            for (fx, fy, fz), furnace in self.world.furnaces.items():
+            from server.blocks import BLOCKS
+            for (fx, fy, fz), furnace in list(self.world.furnaces.items()):
                 if x0 <= fx < x0 + CHUNK_SIZE and y0 <= fy < y0 + CHUNK_SIZE and z0 <= fz < z0 + CHUNK_SIZE:
+                    # Verify furnace block actually still exists at this position
+                    b_id = self.world.get_block(fx, fy, fz)
+                    is_f_block = False
+                    if b_id:
+                        b_obj = BLOCKS.get(b_id)
+                        if b_obj and (b_obj.id == "furnace" or getattr(b_obj, "base_id", "") == "furnace" or getattr(b_obj, "station", None) == "furnace"):
+                            is_f_block = True
+                        elif b_id == "sub_cell" or (b_obj and getattr(b_obj, "properties", {}).get("sub_cell")):
+                            s_cell = self.world.get_sub_cell(fx, fy, fz)
+                            if s_cell and any(
+                                (so := BLOCKS.get(o)) and (so.id == "furnace" or getattr(so, "base_id", "") == "furnace" or getattr(so, "station", None) == "furnace")
+                                for o in s_cell.octants if o
+                            ):
+                                is_f_block = True
+                    if not is_f_block:
+                        self.world.furnaces.pop((fx, fy, fz), None)
+                        continue
+
                     if getattr(furnace, "is_lit", False):
                         bl_grid[fy - y0 + 1, fz - z0 + 1, fx - x0 + 1] = np.maximum(
                             bl_grid[fy - y0 + 1, fz - z0 + 1, fx - x0 + 1],
@@ -538,9 +575,9 @@ class LightingSystem:
                 ch.blocklight.fill(0)
             self.world.mark_dirty(*ckey)
 
-        # Immediately recompute lighting for the primary chunk; if an emitter changed,
-        # also recompute the affected neighbor chunks so removed blocklight cannot echo back.
-        self.compute_chunk_lighting(cx, cy, cz)
+        # Immediately recompute lighting for affected chunks so no chunk is left with stale or zero light.
+        for ckey in valid_keys:
+            self.compute_chunk_lighting(*ckey)
         if is_emitter:
             for _ in range(3):
                 re_invalidated = [

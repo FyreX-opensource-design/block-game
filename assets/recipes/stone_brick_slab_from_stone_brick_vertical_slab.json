@@ -1,0 +1,11 @@
+{
+  "id": "stone_brick_slab_from_stone_brick_vertical_slab",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "stone_brick_vertical_slab"
+  ],
+  "result": {
+    "item": "stone_brick_slab",
+    "count": 1
+  }
+}

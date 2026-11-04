@@ -4,10 +4,13 @@ from server.blocks import (
     BLOCKS,
     CHUNK_SIZE,
     SECTION_COUNT,
+    SUB_CELL_BLOCK,
     block_from_index,
     get_offset_info,
     has_half_offset_top,
     is_offset_block,
+    is_sub_cell,
+    is_vertical_slab_offset,
 )
 from server.noise import hash2, hash2_grid
 
@@ -198,6 +201,9 @@ def _fluid_height_grid(data):
         if block.properties.get("waterlogged"):
             level = block.properties.get("level", 8)
             h = int(level * 2)
+            if block.properties.get("vertical_slab"):
+                grid[data == value] = h
+                continue
             half = block.properties.get("half", getattr(block, "slab_half", "bottom"))
             if half == "top":
                 h = min(8, h)
@@ -289,7 +295,7 @@ def _exposed(cells, occ, see=None):
 
 
 def _is_opaque_offset(block_id):
-    if not block_id:
+    if not block_id or is_vertical_slab_offset(block_id):
         return False
     o_info = get_offset_info(block_id)
     if o_info is None:
@@ -312,6 +318,200 @@ def _slice_uv(uv, y_bot, y_top):
     return ((u0, vb), (u1, vb), (u1, vt), (u0, vt))
 
 
+def octant_face_uvs(mat_block, normal_i, ox, oy, oz, off_x=None, off_y=None, off_z=None):
+    base_uvs = mat_block.face_uvs[normal_i]
+    if base_uvs is None:
+        return ((0.0, 0.0), (0.0, 0.0), (0.0, 0.0), (0.0, 0.0))
+    (u0, v0), (u1, v1), (u2, v2), (u3, v3) = base_uvs
+    corners = CORNERS[normal_i]
+    uvs = []
+    for k in range(4):
+        X = (off_x + corners[k, 0] * 0.5) if off_x is not None else (ox + corners[k, 0]) * 0.5
+        Y = (off_y + corners[k, 1] * 0.5) if off_y is not None else (oy + corners[k, 1]) * 0.5
+        Z = (off_z + corners[k, 2] * 0.5) if off_z is not None else (oz + corners[k, 2]) * 0.5
+        if normal_i == 0:
+            s, t = 1.0 - Z, Y
+        elif normal_i == 1:
+            s, t = Z, Y
+        elif normal_i == 2:
+            s, t = X, 1.0 - Z
+        elif normal_i == 3:
+            s, t = X, Z
+        elif normal_i == 4:
+            s, t = X, Y
+        else:
+            s, t = 1.0 - X, Y
+        w0 = (1.0 - s) * (1.0 - t)
+        w1 = s * (1.0 - t)
+        w2 = s * t
+        w3 = (1.0 - s) * t
+        u = w0 * u0 + w1 * u1 + w2 * u2 + w3 * u3
+        v = w0 * v0 + w1 * v1 + w2 * v2 + w3 * v3
+        uvs.append((float(u), float(v)))
+    return uvs
+
+
+def _mesh_sub_cell(
+    sub,
+    lx, ly, lz,
+    wx, wy, wz,
+    x0, y0, z0,
+    world, occ, l_grid, grass_grid, shade,
+    extra_vertices, extra_indices, extra_lights, extra_colors,
+    cutout_extra_vert, cutout_extra_ind, cutout_extra_light, cutout_extra_color,
+    cursor_opaque, cursor_cutout,
+):
+    from server.sub_cell import OCTANT_COORDS
+
+    for idx, mat_id in enumerate(sub.octants):
+        if not mat_id:
+            continue
+        mat_block = BLOCKS.get(mat_id)
+        if mat_block is None:
+            continue
+
+        ox, oy, oz = OCTANT_COORDS[idx]
+        is_cutout = bool(mat_block.cutout)
+        is_grass_tinted = getattr(mat_block, "tint", None) == "grass" or mat_id in ("grass", "muddy_grass", "tall_grass", "fern")
+        if is_grass_tinted and grass_grid is not None:
+            pt_color = tuple(grass_grid[lz, lx])
+        else:
+            pt_color = (1.0, 1.0, 1.0)
+
+        # Check if this octant is part of a horizontally/vertically offset block paired with an adjacent cell
+        off_x = None
+        off_y = None
+        off_z = None
+
+        if world is not None:
+            # Z axis offset pairing
+            if all(sub.get_octant(cx, cy, oz) == mat_id for cx in (0, 1) for cy in (0, 1)):
+                if oz == 1:
+                    adj_sub = world.get_sub_cell(wx, wy, wz + 1)
+                    if adj_sub is not None and all(adj_sub.get_octant(cx, cy, 0) == mat_id for cx in (0, 1) for cy in (0, 1)):
+                        off_z = 0.0
+                elif oz == 0:
+                    adj_sub = world.get_sub_cell(wx, wy, wz - 1)
+                    if adj_sub is not None and all(adj_sub.get_octant(cx, cy, 1) == mat_id for cx in (0, 1) for cy in (0, 1)):
+                        off_z = 0.5
+
+            # X axis offset pairing
+            if all(sub.get_octant(ox, cy, cz) == mat_id for cy in (0, 1) for cz in (0, 1)):
+                if ox == 1:
+                    adj_sub = world.get_sub_cell(wx + 1, wy, wz)
+                    if adj_sub is not None and all(adj_sub.get_octant(0, cy, cz) == mat_id for cy in (0, 1) for cz in (0, 1)):
+                        off_x = 0.0
+                elif ox == 0:
+                    adj_sub = world.get_sub_cell(wx - 1, wy, wz)
+                    if adj_sub is not None and all(adj_sub.get_octant(1, cy, cz) == mat_id for cy in (0, 1) for cz in (0, 1)):
+                        off_x = 0.5
+
+            # Y axis offset pairing
+            if all(sub.get_octant(cx, oy, cz) == mat_id for cx in (0, 1) for cz in (0, 1)):
+                if oy == 1:
+                    adj_sub = world.get_sub_cell(wx, wy + 1, wz)
+                    if adj_sub is not None and all(adj_sub.get_octant(cx, 0, cz) == mat_id for cx in (0, 1) for cz in (0, 1)):
+                        off_y = 0.0
+                elif oy == 0:
+                    adj_sub = world.get_sub_cell(wx, wy - 1, wz)
+                    if adj_sub is not None and all(adj_sub.get_octant(cx, 1, cz) == mat_id for cx in (0, 1) for cz in (0, 1)):
+                        off_y = 0.5
+
+        for normal_i in range(6):
+            normal = NORMALS[normal_i]
+            nx = int(normal[0])
+            ny = int(normal[1])
+            nz = int(normal[2])
+
+            nox = ox + nx
+            noy = oy + ny
+            noz = oz + nz
+
+            if 0 <= nox <= 1 and 0 <= noy <= 1 and 0 <= noz <= 1:
+                adj_mat = sub.get_octant(nox, noy, noz)
+                if adj_mat:
+                    adj_blk = BLOCKS.get(adj_mat)
+                    if adj_blk is not None:
+                        if not adj_blk.cutout and adj_blk.opacity >= 1.0:
+                            continue
+                        if is_cutout and adj_blk.cutout and adj_mat == mat_id:
+                            continue
+                l_sample = tuple(
+                    np.maximum(
+                        l_grid[ly + 1, lz + 1, lx + 1],
+                        l_grid[ly + 2, lz + 1, lx + 1],
+                    )
+                )
+            else:
+                if _neighbor_solid(occ, ly, lz, lx, normal_i):
+                    continue
+
+                adj_wx = wx + nx
+                adj_wy = wy + ny
+                adj_wz = wz + nz
+                neigh_sub = world.get_sub_cell(adj_wx, adj_wy, adj_wz) if world is not None else None
+                if neigh_sub is not None:
+                    neigh_ox = nox % 2
+                    neigh_oy = noy % 2
+                    neigh_oz = noz % 2
+                    neigh_mat = neigh_sub.get_octant(neigh_ox, neigh_oy, neigh_oz)
+                    if neigh_mat:
+                        neigh_blk = BLOCKS.get(neigh_mat)
+                        if neigh_blk is not None:
+                            if not neigh_blk.cutout and neigh_blk.opacity >= 1.0:
+                                continue
+                            if is_cutout and neigh_blk.cutout and neigh_mat == mat_id:
+                                continue
+
+                if ny >= 0:
+                    l_sample = tuple(
+                        np.maximum(
+                            l_grid[ly + 1 + ny, lz + 1 + nz, lx + 1 + nx],
+                            l_grid[min(CHUNK_SIZE + 1, ly + 2 + ny), lz + 1 + nz, lx + 1 + nx],
+                        )
+                    )
+                else:
+                    l_sample = tuple(l_grid[ly + 1 + ny, lz + 1 + nz, lx + 1 + nx])
+
+            uvs = octant_face_uvs(mat_block, normal_i, ox, oy, oz, off_x=off_x, off_y=off_y, off_z=off_z)
+            corners = CORNERS[normal_i]
+            pts = []
+            for k in range(4):
+                px = lx + (ox + corners[k, 0]) * 0.5
+                py = ly + (oy + corners[k, 1]) * 0.5
+                pz = lz + (oz + corners[k, 2]) * 0.5
+                pts.append((px, py, pz))
+
+            if is_cutout:
+                base = cursor_cutout
+                for pt, uv in zip(pts, uvs):
+                    cutout_extra_vert.extend((
+                        pt[0], pt[1], pt[2],
+                        normal[0], normal[1], normal[2],
+                        uv[0], uv[1],
+                        shade,
+                    ))
+                    cutout_extra_light.append(l_sample)
+                    cutout_extra_color.append(pt_color)
+                    cursor_cutout += 1
+                cutout_extra_ind.extend((base, base + 1, base + 2, base, base + 2, base + 3))
+            else:
+                base = cursor_opaque
+                for pt, uv in zip(pts, uvs):
+                    extra_vertices.extend((
+                        pt[0], pt[1], pt[2],
+                        normal[0], normal[1], normal[2],
+                        uv[0], uv[1],
+                        shade,
+                    ))
+                    extra_lights.append(l_sample)
+                    extra_colors.append(pt_color)
+                    cursor_opaque += 1
+                extra_indices.extend((base, base + 1, base + 2, base, base + 2, base + 3))
+
+    return cursor_opaque, cursor_cutout
+
+
 def build_chunk_mesh(world, cx, cy, cz):
     if (cx, cy, cz) not in world.chunks:
         return None
@@ -321,7 +521,11 @@ def build_chunk_mesh(world, cx, cy, cz):
         block_id
         for block_id in present
         if (block := block_from_index(block_id)) is not None
-        and (not block.full_cube or block.properties.get("double_slab"))
+        and (
+            not block.full_cube
+            or block.properties.get("double_slab")
+            or block.properties.get("double_vertical_slab")
+        )
         and (not block.properties.get("fluid") or block.properties.get("waterlogged"))
     ]
     own = occ[1:-1, 1:-1, 1:-1].copy()
@@ -415,7 +619,11 @@ def build_chunk_mesh(world, cx, cy, cz):
     cursor_cutout = len(cutout[0]) if cutout is not None else 0
     cursor_translucent = 0
 
-    from server.blocks import has_half_offset_top, is_offset_block
+    from server.blocks import (
+        has_half_offset_top,
+        is_offset_block,
+        is_vertical_slab_offset,
+    )
 
     for y, z, x in partial_cells:
         block = block_from_index(data[int(y), int(z), int(x)])
@@ -425,6 +633,39 @@ def build_chunk_mesh(world, cx, cy, cz):
         wx = x0 + int(x)
         wy = y0 + int(y)
         wz = z0 + int(z)
+        if block.id == SUB_CELL_BLOCK or is_sub_cell(block):
+            sub = chunk.sub_cells.get((int(x), int(y), int(z)))
+            if sub is None and world is not None:
+                sub = world.get_sub_cell(wx, wy, wz)
+            if sub is not None:
+                cursor_opaque, cursor_cutout = _mesh_sub_cell(
+                    sub,
+                    int(x),
+                    int(y),
+                    int(z),
+                    wx,
+                    wy,
+                    wz,
+                    x0,
+                    y0,
+                    z0,
+                    world,
+                    occ,
+                    l_grid,
+                    grass_grid,
+                    shade,
+                    extra_vertices,
+                    extra_indices,
+                    extra_lights,
+                    extra_colors,
+                    cutout_extra_vert,
+                    cutout_extra_ind,
+                    cutout_extra_light,
+                    cutout_extra_color,
+                    cursor_opaque,
+                    cursor_cutout,
+                )
+            continue
         for element in block.elements:
             el_tint = element.get("tint", getattr(block, "tint", None))
             is_grass_tinted = el_tint == "grass" or getattr(block, "id", "") in ("tall_grass", "fern")
@@ -437,7 +678,7 @@ def build_chunk_mesh(world, cx, cy, cz):
                     pt_color = (1.0, 1.0, 1.0)
 
                 el_cutout = element.get("cutout", block.cutout)
-                if from_y < -1e-3 and float(element["from"][0]) == 0.0 and float(element["to"][0]) == 16.0:
+                if from_y < -1e-3:
                     nx = int(NORMALS[normal_i, 0])
                     nz = int(NORMALS[normal_i, 2])
                     if normal_i == 2:
@@ -456,21 +697,29 @@ def build_chunk_mesh(world, cx, cy, cz):
                             continue
                         l_sample = tuple(l_grid[int(y), int(z) + 1, int(x) + 1])
                     else:
-                        nbr_b = world.get_block(wx + nx, wy, wz + nz) if world is not None else None
-                        if _is_opaque_offset(nbr_b) or (el_cutout and is_offset_block(nbr_b) and normal_i in (1, 5)):
-                            continue
-                        if (
-                            _neighbor_solid(occ, int(y), int(z), int(x), normal_i)
-                            and int(y) > 0
-                            and _neighbor_solid(occ, int(y) - 1, int(z), int(x), normal_i)
-                        ):
-                            continue
-                        l_sample = tuple(
-                            np.maximum(
-                                l_grid[int(y) + 1, int(z) + 1 + nz, int(x) + 1 + nx],
-                                l_grid[int(y), int(z) + 1 + nz, int(x) + 1 + nx],
+                        if not _boundary(element, normal_i):
+                            l_sample = tuple(
+                                np.maximum(
+                                    l_grid[int(y) + 1, int(z) + 1, int(x) + 1],
+                                    l_grid[int(y), int(z) + 1, int(x) + 1],
+                                )
                             )
-                        )
+                        else:
+                            nbr_b = world.get_block(wx + nx, wy, wz + nz) if world is not None else None
+                            if _is_opaque_offset(nbr_b) or (el_cutout and is_offset_block(nbr_b) and not is_vertical_slab_offset(nbr_b) and normal_i in (1, 5)):
+                                continue
+                            if (
+                                _neighbor_solid(occ, int(y), int(z), int(x), normal_i)
+                                and int(y) > 0
+                                and _neighbor_solid(occ, int(y) - 1, int(z), int(x), normal_i)
+                            ):
+                                continue
+                            l_sample = tuple(
+                                np.maximum(
+                                    l_grid[int(y) + 1, int(z) + 1 + nz, int(x) + 1 + nx],
+                                    l_grid[int(y), int(z) + 1 + nz, int(x) + 1 + nx],
+                                )
+                            )
                 else:
                     if normal_i == 2 and abs(to_y - 8.0) <= 1e-3:
                         above_b = world.get_block(wx, wy + 1, wz) if world is not None else None
@@ -545,7 +794,11 @@ def build_chunk_mesh(world, cx, cy, cz):
         if block is None:
             continue
         shade = 0.92 + 0.08 * hash2(x0 + int(x), z0 + int(z))
-        is_slab = bool(block.properties.get("slab") or getattr(block, "slab", False))
+        is_slab = bool(
+            block.properties.get("slab")
+            or getattr(block, "slab", False)
+            or block.properties.get("waterlogged")
+        )
         fluid_uvs = (water_block.face_uvs if (is_slab and water_block is not None) else block.face_uvs)
         slab_half = block.properties.get("half", getattr(block, "slab_half", None)) if is_slab else None
 

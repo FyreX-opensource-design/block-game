@@ -145,6 +145,25 @@ class TestMobEntity(unittest.TestCase):
         self.assertGreater(len(new_items), 0)
         self.assertGreaterEqual(new_items[0].count, 1)
 
+    def test_sheep_death_drops_raw_mutton(self):
+        player = MagicMock()
+        player.pos = [0.0, 1.0, 0.0]
+
+        sheep = Sheep(pos=[5.0, 1.0, 5.0], health=2.0)
+        self.world.spawn_mob(sheep)
+
+        initial_entities = len(self.world.entities)
+
+        sheep.take_damage(2.0, attacker=player, world=self.world)
+        self.assertFalse(sheep.alive)
+        self.assertEqual(sheep.health, 0.0)
+
+        new_items = [
+            e for e in self.world.entities[initial_entities:] if getattr(e, "item", "") == "raw_mutton"
+        ]
+        self.assertGreater(len(new_items), 0)
+        self.assertGreaterEqual(new_items[0].count, 1)
+
     def test_pig_gravity_and_ground_collision(self):
         # Set solid stone ground at y=5
         for x in range(3):
@@ -313,13 +332,18 @@ class TestMultiplayerMobs(unittest.TestCase):
             broadcasted = []
             server.broadcast = lambda pkt: broadcasted.append(pkt)
 
-            # Client attacks mob
-            server._handle_packet(mock_client, {"type": "attack_entity", "id": pig.id})
+            # Client attacks mob with wooden pickaxe (attack: 2)
+            server._handle_packet(mock_client, {"type": "attack_entity", "id": pig.id, "item": "wood_pickaxe"})
 
             self.assertEqual(pig.health, 8.0)
             self.assertGreater(pig.hurt_time, 0.0)
             # Server broadcasted damage_mob packet
             self.assertTrue(any(p.get("type") == "damage_mob" and p.get("id") == pig.id for p in broadcasted))
+
+            # Second hit bare-handed after hurt time resets (attack: 1)
+            pig.hurt_time = 0.0
+            server._handle_packet(mock_client, {"type": "attack_entity", "id": pig.id, "item": ""})
+            self.assertEqual(pig.health, 7.0)
 
 
 class TestSheepAndWool(unittest.TestCase):

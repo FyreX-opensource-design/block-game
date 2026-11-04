@@ -1,0 +1,14 @@
+{
+  "id": "stone_brick_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###"
+  ],
+  "key": {
+    "#": "stone_bricks"
+  },
+  "result": {
+    "item": "stone_brick_slab",
+    "count": 6
+  }
+}

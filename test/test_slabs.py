@@ -5,11 +5,21 @@ from server.blocks import (
     AIR,
     BLOCKS,
     STONE,
+    can_place_block,
+    can_support_torch,
     get_double_slab,
+    get_double_vertical_slab,
+    get_double_vertical_slab_info,
     get_slab_info,
+    get_vertical_slab_info,
+    get_vertical_slab_torch,
+    get_vertical_slab_torch_info,
     is_slab,
+    is_vertical_slab,
     is_waterlogged_slab,
     placement_block,
+    rotation_variant,
+    vertical_slab_bounds,
 )
 from server.entity import ItemEntity
 from server.fluid import (
@@ -99,6 +109,58 @@ class TestSlabs(unittest.TestCase):
         double_boxes = self.world.get_collision_boxes(3, 80, 3)
         self.assertEqual(len(double_boxes), 1)
         self.assertEqual(double_boxes[0], (3.0, 80.0, 3.0, 4.0, 81.0, 4.0))
+
+    def test_vertical_slab_variants_and_placement_rotation(self):
+        self.assertTrue(is_vertical_slab("stone_vertical_slab"))
+        for facing in ("north", "east", "west"):
+            variant = f"stone_vertical_slab_{facing}"
+            self.assertIn(variant, BLOCKS)
+            self.assertTrue(is_vertical_slab(variant))
+            self.assertEqual(get_vertical_slab_info(variant)["facing"], facing)
+
+        cases = [
+            (0.0, "north"),
+            (math.pi / 2, "west"),
+            (math.pi, "south"),
+            (-math.pi / 2, "east"),
+        ]
+        for yaw, facing in cases:
+            placed = placement_block("stone_vertical_slab", (0, 1, 0), yaw=yaw)
+            info = get_vertical_slab_info(placed)
+            self.assertIsNotNone(info, placed)
+            self.assertEqual(info["facing"], facing)
+            self.assertEqual(info["base_id"], "stone_vertical_slab")
+
+    def test_vertical_slab_collision_and_raycast_hitbox(self):
+        self.world.chunks[(self.cx, self.cy, self.cz)].data.fill(0)
+        cases = [
+            ("stone_vertical_slab", "south", 5.75, 5.25, (8, 80, 5)),
+            ("stone_vertical_slab_north", "north", 5.25, 5.75, (8, 80, 5)),
+            ("stone_vertical_slab_east", "east", 5.75, 5.25, (5, 80, 8)),
+            ("stone_vertical_slab_west", "west", 5.25, 5.75, (5, 80, 8)),
+        ]
+        for block_id, facing, solid_coord, open_coord, behind in cases:
+            with self.subTest(facing=facing):
+                self.world.chunks[(self.cx, self.cy, self.cz)].data.fill(0)
+                self.world.set_block(5, 80, 5, block_id)
+                behind_x, behind_y, behind_z = behind
+                self.world.set_block(behind_x, behind_y, behind_z, STONE)
+
+                expected = vertical_slab_bounds(5, 80, 5, facing)
+                self.assertEqual(self.world.get_collision_boxes(5, 80, 5), [expected])
+
+                if facing in ("south", "north"):
+                    hit = self.world.raycast(0.0, 80.5, solid_coord, 1.0, 0.0, 0.0, 12.0)
+                    miss = self.world.raycast(0.0, 80.5, open_coord, 1.0, 0.0, 0.0, 12.0)
+                else:
+                    hit = self.world.raycast(solid_coord, 80.5, 0.0, 0.0, 0.0, 1.0, 12.0)
+                    miss = self.world.raycast(open_coord, 80.5, 0.0, 0.0, 0.0, 1.0, 12.0)
+
+                self.assertIsNotNone(hit)
+                self.assertEqual((hit["x"], hit["y"], hit["z"]), (5, 80, 5))
+                self.assertIsNotNone(miss)
+                self.assertEqual((miss["x"], miss["y"], miss["z"]), behind)
+
 
     def test_player_standing_on_slab(self):
         # Bottom slab at y=80
@@ -893,6 +955,928 @@ class TestSlabs(unittest.TestCase):
             & (verts[:, 3] == -1.0)
         ]
         self.assertEqual(len(planks_west_top_verts), 2)
+
+
+    def test_double_vertical_slab_registration_and_helpers(self):
+        canonical_z = "double_vertical_slab_z_stone_vertical_slab_planks_vertical_slab"
+        canonical_x = "double_vertical_slab_x_stone_vertical_slab_planks_vertical_slab"
+        self.assertIn(canonical_z, BLOCKS)
+        self.assertIn(canonical_x, BLOCKS)
+
+        # Same-material doubles keep a short alias alongside the canonical id.
+        same_material = "double_vertical_slab_z_stone_vertical_slab_stone_vertical_slab"
+        alias = "double_vertical_slab_z_stone_vertical_slab"
+        self.assertIn(same_material, BLOCKS)
+        self.assertIn(alias, BLOCKS)
+        self.assertIs(BLOCKS[alias], BLOCKS[same_material])
+
+        # Complementary halves combine regardless of argument order.
+        self.assertEqual(
+            get_double_vertical_slab("stone_vertical_slab", "planks_vertical_slab_north"),
+            canonical_z,
+        )
+        self.assertEqual(
+            get_double_vertical_slab("planks_vertical_slab_north", "stone_vertical_slab"),
+            canonical_z,
+        )
+        self.assertEqual(
+            get_double_vertical_slab("stone_vertical_slab_east", "planks_vertical_slab_west"),
+            canonical_x,
+        )
+        # Two slabs on the same side do not fill the cell.
+        self.assertIsNone(
+            get_double_vertical_slab("stone_vertical_slab", "planks_vertical_slab")
+        )
+
+        info = get_double_vertical_slab_info(canonical_z)
+        self.assertIsNotNone(info)
+        self.assertEqual(info["axis"], "z")
+        self.assertEqual(info["positive_block"], "stone_vertical_slab")
+        self.assertEqual(info["negative_block"], "planks_vertical_slab_north")
+        self.assertEqual(info["positive_facing"], "south")
+        self.assertEqual(info["negative_facing"], "north")
+
+        # A full-cell double is no longer a half-slab.
+        self.assertTrue(BLOCKS[canonical_z].full_cube)
+        self.assertFalse(is_vertical_slab(canonical_z))
+        self.assertIsNone(get_vertical_slab_info(canonical_z))
+
+    def test_double_vertical_slab_collision_and_raycast_halves(self):
+        canonical_z = "double_vertical_slab_z_stone_vertical_slab_planks_vertical_slab"
+        self.world.set_block(5, 80, 5, canonical_z)
+
+        # Collision and movement treat the cell as a full cube.
+        self.assertEqual(
+            self.world.get_collision_boxes(5, 80, 5),
+            [(5.0, 80.0, 5.0, 6.0, 81.0, 6.0)],
+        )
+
+        # Looking north-to-south hits the negative (north) half.
+        negative = self.world.raycast(5.5, 80.5, 0.0, 0.0, 0.0, 1.0, 12.0)
+        self.assertIsNotNone(negative)
+        self.assertEqual((negative["x"], negative["y"], negative["z"]), (5, 80, 5))
+        self.assertEqual(negative["slab_half"], "vertical_negative")
+        self.assertEqual(negative["box"], (5.0, 80.0, 5.0, 6.0, 81.0, 5.5))
+
+        # Looking south-to-north hits the positive (south) half.
+        positive = self.world.raycast(5.5, 80.5, 7.0, 0.0, 0.0, -1.0, 12.0)
+        self.assertIsNotNone(positive)
+        self.assertEqual((positive["x"], positive["y"], positive["z"]), (5, 80, 5))
+        self.assertEqual(positive["slab_half"], "vertical_positive")
+        self.assertEqual(positive["box"], (5.0, 80.0, 5.5, 6.0, 81.0, 6.0))
+
+        # The x-axis double uses east (positive) and west (negative) halves.
+        canonical_x = "double_vertical_slab_x_stone_vertical_slab_planks_vertical_slab"
+        self.world.set_block(8, 80, 8, canonical_x)
+        west = self.world.raycast(7.0, 80.5, 8.5, 1.0, 0.0, 0.0, 12.0)
+        east = self.world.raycast(10.0, 80.5, 8.5, -1.0, 0.0, 0.0, 12.0)
+        self.assertIsNotNone(west)
+        self.assertIsNotNone(east)
+        self.assertEqual(west["slab_half"], "vertical_negative")
+        self.assertEqual(east["slab_half"], "vertical_positive")
+
+    def test_place_mixed_double_vertical_slab(self):
+        from client.app import Game
+        from server.stacks import make_stack, stack_count
+
+        class MockGame:
+            def __init__(self, world, held, pos=(0.5, 70.0, 0.5)):
+                self.world = world
+                self.player = Player(world)
+                self.player.pos = list(pos)
+                self.gamemode = "survival"
+                self.network_client = None
+                self.hotbar = [make_stack(held, 2)]
+                self.selected = 0
+                self.target = None
+
+            def _upload_block_change(self, x, y, z):
+                pass
+
+        MockGame._place_block = Game._place_block
+        MockGame._aim = lambda self: None
+
+        canonical = "double_vertical_slab_z_stone_vertical_slab_planks_vertical_slab"
+
+        # Clicking the open (north) face of a south-facing slab fills the cell.
+        self.world.set_block(5, 80, 5, "stone_vertical_slab")
+        game = MockGame(self.world, "planks_vertical_slab")
+        game.target = {
+            "x": 5,
+            "y": 80,
+            "z": 5,
+            "nx": 0,
+            "ny": 0,
+            "nz": -1,
+            "local_y": 0.5,
+        }
+        game._place_block()
+        self.assertEqual(self.world.get_block(5, 80, 5), canonical)
+        self.assertEqual(stack_count(game.hotbar[0]), 1)
+
+        # The same combination works when the destination cell is the adjacent
+        # one and its slab already faces the clicked face.
+        self.world.set_block(6, 80, 6, "stone_vertical_slab")
+        self.world.set_block(6, 80, 5, STONE)
+        game = MockGame(self.world, "planks_vertical_slab", pos=(0.5, 70.0, 0.5))
+        game.target = {
+            "x": 6,
+            "y": 80,
+            "z": 5,
+            "nx": 0,
+            "ny": 0,
+            "nz": 1,
+            "local_y": 0.5,
+        }
+        game._place_block()
+        self.assertEqual(self.world.get_block(6, 80, 6), canonical)
+
+    def test_vertical_slab_torch_placement_front_side_and_back(self):
+        from client.app import Game
+        from server.stacks import make_stack, stack_count
+
+        class MockGame:
+            def __init__(self, world, held, pos=(0.5, 70.0, 0.5)):
+                self.world = world
+                self.player = Player(world)
+                self.player.pos = list(pos)
+                self.gamemode = "survival"
+                self.network_client = None
+                self.hotbar = [make_stack(held, 2)]
+                self.selected = 0
+                self.target = None
+
+            def _upload_block_change(self, x, y, z):
+                pass
+
+        MockGame._place_block = Game._place_block
+        MockGame._aim = lambda self: None
+
+        self.world.set_block(7, 80, 7, "stone_vertical_slab")
+
+        # The front long face and both short sides support a wall torch, but
+        # the back long face has no adjacent air cell.
+        self.assertTrue(can_support_torch("stone_vertical_slab", "south"))
+        self.assertTrue(can_support_torch("stone_vertical_slab", "east"))
+        self.assertTrue(can_support_torch("stone_vertical_slab", "west"))
+        self.assertFalse(can_support_torch("stone_vertical_slab", "north"))
+        self.assertFalse(can_support_torch("stone_vertical_slab", "up"))
+
+        self.assertTrue(can_place_block(self.world, 7, 80, 8, "torch_wall_south"))
+        self.assertFalse(can_place_block(self.world, 7, 80, 6, "torch_wall_north"))
+
+        # A torch on the front long face uses the normal adjacent-cell wall torch.
+        game = MockGame(self.world, "torch", pos=(7.5, 70.0, 9.5))
+        game.target = {
+            "x": 7,
+            "y": 80,
+            "z": 7,
+            "nx": 0,
+            "ny": 0,
+            "nz": 1,
+            "local_y": 0.5,
+        }
+        game._place_block()
+        self.assertEqual(self.world.get_block(7, 80, 8), "torch_wall_south")
+        self.assertEqual(stack_count(game.hotbar[0]), 1)
+
+        # A torch on the back long face goes into the empty half of the same
+        # cell as a combined block.
+        combined = get_vertical_slab_torch("stone_vertical_slab", "torch")
+        self.assertEqual(combined, "stone_vertical_slab_back_torch")
+        self.assertTrue(can_place_block(self.world, 7, 80, 7, combined))
+        game = MockGame(self.world, "torch", pos=(7.5, 70.0, 5.5))
+        game.target = {
+            "x": 7,
+            "y": 80,
+            "z": 7,
+            "nx": 0,
+            "ny": 0,
+            "nz": -1,
+            "local_y": 0.5,
+        }
+        game._place_block()
+        self.assertEqual(self.world.get_block(7, 80, 7), combined)
+        self.assertEqual(stack_count(game.hotbar[0]), 1)
+
+        info = get_vertical_slab_torch_info(combined)
+        self.assertIsNotNone(info)
+        self.assertEqual(info["slab_block"], "stone_vertical_slab")
+        self.assertEqual(info["torch_block"], "torch")
+        # The combined cell still contains the slab's half, but the torch is
+        # handled separately rather than as a pure slab.
+        self.assertEqual(get_vertical_slab_info(combined)["facing"], "south")
+
+        # Removing the torch block restores the plain slab.
+        self.assertTrue(can_place_block(self.world, 7, 80, 7, "stone_vertical_slab"))
+        self.assertTrue(self.world.set_block(7, 80, 7, "stone_vertical_slab"))
+        self.assertEqual(self.world.get_block(7, 80, 7), "stone_vertical_slab")
+
+    def test_breaking_double_vertical_slab_halves(self):
+        from client.app import Game
+        from server.stacks import make_stack
+
+        class MockGame:
+            def __init__(self, world):
+                self.world = world
+                self.gamemode = "survival"
+                self.network_client = None
+                self.hotbar = [make_stack("wood_pickaxe", 1)]
+                self.selected = 0
+                self.target = None
+
+            def _upload_block_change(self, x, y, z):
+                pass
+
+        MockGame._break_block = Game._break_block
+        MockGame._spawn_break_drops = Game._spawn_break_drops
+        MockGame._spawn_loose_item = Game._spawn_loose_item
+        MockGame._aim = lambda self: None
+
+        canonical = "double_vertical_slab_z_stone_vertical_slab_planks_vertical_slab"
+        game = MockGame(self.world)
+
+        # Breaking the north half leaves the south stone slab behind.
+        self.world.set_block(5, 80, 5, canonical)
+        game.target = {
+            "x": 5,
+            "y": 80,
+            "z": 5,
+            "slab_half": "vertical_negative",
+            "local_y": 0.5,
+        }
+        game._break_block()
+        self.assertEqual(self.world.get_block(5, 80, 5), "stone_vertical_slab")
+        self.assertTrue(
+            any(
+                isinstance(e, ItemEntity) and e.item == "planks_vertical_slab"
+                for e in self.world.entities
+            )
+        )
+
+        # Breaking the south half leaves the north planks slab behind.
+        self.world.set_block(6, 80, 6, canonical)
+        game.target = {
+            "x": 6,
+            "y": 80,
+            "z": 6,
+            "slab_half": "vertical_positive",
+            "local_y": 0.5,
+        }
+        game._break_block()
+        self.assertEqual(
+            self.world.get_block(6, 80, 6),
+            rotation_variant("planks_vertical_slab", "north"),
+        )
+        self.assertTrue(
+            any(
+                isinstance(e, ItemEntity) and e.item == "stone_vertical_slab"
+                for e in self.world.entities
+            )
+        )
+
+    def test_breaking_combined_vertical_slab_torch(self):
+        from client.app import Game
+        from server.stacks import make_stack
+
+        class MockGame:
+            def __init__(self, world):
+                self.world = world
+                self.gamemode = "survival"
+                self.network_client = None
+                self.hotbar = [make_stack("wood_pickaxe", 1)]
+                self.selected = 0
+                self.target = None
+
+            def _upload_block_change(self, x, y, z):
+                pass
+
+        MockGame._break_block = Game._break_block
+        MockGame._spawn_break_drops = Game._spawn_break_drops
+        MockGame._spawn_loose_item = Game._spawn_loose_item
+        MockGame._aim = lambda self: None
+
+        combined = "stone_vertical_slab_back_torch"
+        game = MockGame(self.world)
+
+        # Breaking the torch part leaves the slab and drops a torch.
+        self.world.set_block(7, 80, 7, combined)
+        game.target = {
+            "x": 7,
+            "y": 80,
+            "z": 7,
+            "slab_half": "torch_back",
+            "local_y": 0.5,
+        }
+        game._break_block()
+        self.assertEqual(self.world.get_block(7, 80, 7), "stone_vertical_slab")
+        self.assertTrue(
+            any(isinstance(e, ItemEntity) and e.item == "torch" for e in self.world.entities)
+        )
+
+        # Breaking the slab part removes both and drops both items.
+        self.world.set_block(8, 80, 8, combined)
+        game.target = {
+            "x": 8,
+            "y": 80,
+            "z": 8,
+            "slab_half": "vertical",
+            "local_y": 0.5,
+        }
+        game._break_block()
+        self.assertEqual(self.world.get_block(8, 80, 8), AIR)
+        dropped = [
+            e.item for e in self.world.entities if isinstance(e, ItemEntity)
+        ]
+        self.assertIn("stone_vertical_slab", dropped)
+        self.assertIn("torch", dropped)
+
+
+    def test_vertical_slab_placed_on_side_of_horizontal_slab(self):
+        """Right-clicking a vertical slab on the side of a horizontal slab places it in the adjacent cell without mixing."""
+        from client.app import Game
+        from server.stacks import make_stack
+        import math
+
+        class MockPlayer:
+            def __init__(self):
+                self.pos = [0.0, 80.0, 0.0]
+                self.yaw = math.pi
+                self.radius = 0.3
+                self.height = 1.8
+            def overlaps_block(self, bx, by, bz):
+                return False
+
+        class MockGame:
+            def __init__(self, world):
+                self.world = world
+                self.gamemode = "survival"
+                self.hotbar = [make_stack("stone_vertical_slab", 10)]
+                self.selected = 0
+                self.target = None
+                self.player = MockPlayer()
+                self.network_client = None
+
+            def _upload_block_change(self, x, y, z):
+                pass
+
+        MockGame._place_block = Game._place_block
+        MockGame._aim = lambda self: None
+
+        game = MockGame(self.world)
+
+        # Place a horizontal slab at (5, 80, 5)
+        self.world.set_block(5, 80, 5, "stone_slab")
+
+        # Right-click the east side face (nx=1, ny=0, nz=0)
+        game.target = {
+            "x": 5,
+            "y": 80,
+            "z": 5,
+            "nx": 1,
+            "ny": 0,
+            "nz": 0,
+            "local_y": 0.25,
+            "slab_half": "bottom",
+        }
+        game._place_block()
+
+        # The target block must remain a pure stone_slab (NOT combined/mixed)
+        self.assertEqual(self.world.get_block(5, 80, 5), "stone_slab")
+        # The adjacent cell (6, 80, 5) should now have the placed vertical slab
+        self.assertEqual(self.world.get_block(6, 80, 5), "stone_vertical_slab")
+
+
+    def test_vertical_slab_offset_registration_and_bounds(self):
+        """Vertical slab offset variants exist for all facings with correct bounds and properties."""
+        from server.blocks import (
+            BLOCKS,
+            is_vertical_slab_offset,
+            get_vertical_slab_offset_info,
+            vertical_slab_offset_bounds,
+            get_vertical_slab_offset_block,
+            get_capped_vertical_slab_offset,
+        )
+
+        for facing in ("north", "south", "east", "west"):
+            if facing == "south":
+                off_id = "stone_vertical_slab_offset"
+            else:
+                off_id = f"stone_vertical_slab_{facing}_offset"
+            self.assertIn(off_id, BLOCKS)
+            self.assertTrue(is_vertical_slab_offset(off_id))
+            info = get_vertical_slab_offset_info(off_id)
+            self.assertIsNotNone(info)
+            self.assertEqual(info["facing"], facing)
+            self.assertEqual(info["base_id"], "stone_vertical_slab")
+            self.assertFalse(info["capped"])
+
+            # Capped with stone_slab
+            capped = get_capped_vertical_slab_offset(off_id, "stone_slab")
+            self.assertIsNotNone(capped)
+            self.assertIn(capped, BLOCKS)
+            self.assertTrue(is_vertical_slab_offset(capped))
+            cap_info = get_vertical_slab_offset_info(capped)
+            self.assertTrue(cap_info["capped"])
+            self.assertEqual(cap_info["top_slab"], "stone_slab")
+
+            # Check bounds at (5, 80, 5)
+            bounds = vertical_slab_offset_bounds(5, 80, 5, facing)
+            # Y range is always [79.5, 80.5]
+            self.assertEqual(bounds[1], 79.5)
+            self.assertEqual(bounds[4], 80.5)
+
+    def test_offset_vertical_slabs_on_horizontal_slabs_and_capping(self):
+        """Placing a vertical slab onto a bottom horizontal slab places an offset vertical slab,
+        which can stack and be capped by a slab."""
+        from client.app import Game
+        from server.stacks import make_stack
+        from server.blocks import vertical_slab_offset_bounds
+
+        class MockGame:
+            def __init__(self, world, held_item):
+                self.world = world
+                self.player = Player(self.world)
+                self.player.pos = [0.5, 90.0, 0.5]
+                self.player.yaw = math.pi
+                self.gamemode = "survival"
+                self.network_client = None
+                self.hotbar = [make_stack(held_item, 10)]
+                self.selected = 0
+                self.target = None
+
+            def _upload_block_change(self, x, y, z):
+                pass
+
+        MockGame._place_block = Game._place_block
+        MockGame._aim = lambda self: None
+
+        # 1. Place a bottom slab at (4, 80, 4)
+        self.world.set_block(4, 80, 4, "stone_slab")
+
+        # 2. Aim at the top face of the bottom slab
+        hit_top = self.world.raycast(4.5, 82.0, 4.5, 0.0, -1.0, 0.0, 12.0)
+        self.assertIsNotNone(hit_top)
+        self.assertEqual(hit_top["ny"], 1)
+
+        # Place vertical slab on top of the slab
+        game = MockGame(self.world, "stone_vertical_slab")
+        game.target = hit_top
+        game._place_block()
+
+        # Should keep bottom slab at (4, 80, 4) and place stone_vertical_slab_offset at (4, 81, 4)
+        self.assertEqual(self.world.get_block(4, 80, 4), "stone_slab")
+        self.assertEqual(self.world.get_block(4, 81, 4), "stone_vertical_slab_offset")
+
+        # Collision box at (4, 81, 4) matches vertical slab offset bounds (south facing: [4.0, 80.5, 4.5] to [5.0, 81.5, 5.0])
+        boxes = self.world.get_collision_boxes(4, 81, 4)
+        self.assertEqual(boxes, [vertical_slab_offset_bounds(4, 81, 4, "south")])
+
+        # 3. Place another vertical slab on top of the offset vertical slab at (4, 81, 4)
+        hit_voff = self.world.raycast(4.5, 83.0, 4.75, 0.0, -1.0, 0.0, 12.0)
+        self.assertIsNotNone(hit_voff)
+        game.target = hit_voff
+        game._place_block()
+        self.assertEqual(self.world.get_block(4, 82, 4), "stone_vertical_slab_offset")
+
+        # 4. Place a full block "planks" on top of the offset vertical slab at (4, 82, 4)
+        hit_voff2 = self.world.raycast(4.5, 84.0, 4.75, 0.0, -1.0, 0.0, 12.0)
+        self.assertIsNotNone(hit_voff2)
+        game_planks = MockGame(self.world, "planks")
+        game_planks.target = hit_voff2
+        game_planks._place_block()
+        self.assertEqual(self.world.get_block(4, 83, 4), "planks_offset")
+
+        # 5. Cap an offset vertical slab with a slab
+        # Set up fresh uncapped offset vertical slab at (6, 81, 6)
+        self.world.set_block(6, 80, 6, "stone_slab")
+        self.world.set_block(6, 81, 6, "stone_vertical_slab_offset")
+        hit_cap = self.world.raycast(6.5, 83.0, 6.75, 0.0, -1.0, 0.0, 12.0)
+        game_slab = MockGame(self.world, "stone_slab")
+        game_slab.target = hit_cap
+        game_slab._place_block()
+        self.assertEqual(self.world.get_block(6, 81, 6), "stone_vertical_slab_offset_stone_slab")
+
+        # 6. Place full block on top of capped offset vertical slab -> normal grid-aligned dirt at (6, 82, 6)
+        hit_capped = self.world.raycast(6.5, 83.0, 6.75, 0.0, -1.0, 0.0, 12.0)
+        game_dirt = MockGame(self.world, "dirt")
+        game_dirt.target = hit_capped
+        game_dirt._place_block()
+        self.assertEqual(self.world.get_block(6, 82, 6), "dirt")
+
+    def test_breaking_capped_vertical_slab_offset_parts(self):
+        """Breaking parts of a capped vertical slab offset drops correct items and leaves expected half."""
+        from client.app import Game
+        from server.stacks import make_stack
+
+        class MockGame:
+            def __init__(self, world):
+                self.world = world
+                self.gamemode = "survival"
+                self.network_client = None
+                self.hotbar = [make_stack("wood_pickaxe", 1)]
+                self.selected = 0
+                self.target = None
+
+            def _upload_block_change(self, x, y, z):
+                pass
+
+        MockGame._break_block = Game._break_block
+        MockGame._spawn_break_drops = Game._spawn_break_drops
+        MockGame._spawn_loose_item = Game._spawn_loose_item
+        MockGame._aim = lambda self: None
+
+        # 1. Break top slab cap -> leaves uncapped vertical slab offset
+        self.world.set_block(5, 80, 5, "stone_slab")
+        self.world.set_block(5, 81, 5, "stone_vertical_slab_offset_stone_slab")
+        game = MockGame(self.world)
+        game.target = {
+            "x": 5,
+            "y": 81,
+            "z": 5,
+            "slab_half": "top",
+            "local_y": 0.75,
+        }
+        game._break_block()
+        self.assertEqual(self.world.get_block(5, 81, 5), "stone_vertical_slab_offset")
+        dropped = [e.item for e in self.world.entities if isinstance(e, ItemEntity)]
+        self.assertIn("stone_slab", dropped)
+
+        # 2. Break offset vertical slab part -> leaves top slab
+        self.world.set_block(6, 80, 6, "stone_slab")
+        self.world.set_block(6, 81, 6, "stone_vertical_slab_offset_stone_slab")
+        game.target = {
+            "x": 6,
+            "y": 81,
+            "z": 6,
+            "slab_half": "vertical_offset",
+            "local_y": 0.25,
+        }
+        game._break_block()
+        self.assertEqual(self.world.get_block(6, 81, 6), "stone_slab_top")
+        dropped = [e.item for e in self.world.entities if isinstance(e, ItemEntity)]
+        self.assertIn("stone_vertical_slab", dropped)
+
+    def test_breaking_uncapped_vertical_slab_offset(self):
+        """Breaking an uncapped vertical slab offset drops the vertical slab item and leaves air."""
+        from client.app import Game
+        from server.stacks import make_stack
+
+        class MockGame:
+            def __init__(self, world):
+                self.world = world
+                self.gamemode = "survival"
+                self.network_client = None
+                self.hotbar = [make_stack("wood_pickaxe", 1)]
+                self.selected = 0
+                self.target = None
+
+            def _upload_block_change(self, x, y, z):
+                pass
+
+        MockGame._break_block = Game._break_block
+        MockGame._spawn_break_drops = Game._spawn_break_drops
+        MockGame._spawn_loose_item = Game._spawn_loose_item
+        MockGame._aim = lambda self: None
+
+        self.world.set_block(5, 80, 5, "stone_slab")
+        self.world.set_block(5, 81, 5, "stone_vertical_slab_offset")
+        game = MockGame(self.world)
+        game.target = {
+            "x": 5,
+            "y": 81,
+            "z": 5,
+            "slab_half": "vertical_offset",
+            "local_y": 0.25,
+        }
+        game._break_block()
+        self.assertEqual(self.world.get_block(5, 81, 5), AIR)
+        dropped = [e.item for e in self.world.entities if isinstance(e, ItemEntity)]
+        self.assertIn("stone_vertical_slab", dropped)
+
+    def test_offset_vertical_slab_mesh_culling(self):
+        """Test that an offset vertical slab does NOT cull:
+        1. The top face of a horizontal bottom slab it sits upon.
+        2. The side face of an adjacent offset full block.
+        """
+        from server.mesh import build_chunk_mesh
+
+        # 1. Horizontal slab below offset vertical slab
+        self.world.chunks[(self.cx, self.cy, self.cz)].data.fill(0)
+        self.world.set_block(0, 80, 0, "smooth_sandstone_slab")
+        self.world.set_block(0, 81, 0, "stone_vertical_slab_offset")
+
+        mesh = build_chunk_mesh(self.world, self.cx, self.cy, self.cz)
+        self.assertIsNotNone(mesh)
+
+        # Look for the top face of the smooth_sandstone_slab (normal +Y at y=0.5 in chunk space)
+        has_slab_top = False
+        for i in range(0, len(mesh.vertices), 4):
+            v = mesh.vertices[i]
+            norm = (round(float(v[3])), round(float(v[4])), round(float(v[5])))
+            y_val = round(float(v[1]), 2)
+            if norm == (0, 1, 0) and y_val == 0.5:
+                has_slab_top = True
+                break
+        self.assertTrue(has_slab_top, "Horizontal slab top face under offset vertical slab was culled!")
+
+        # 2. Offset full block adjacent to offset vertical slab
+        self.world.chunks[(self.cx, self.cy, self.cz)].data.fill(0)
+        self.world.set_block(0, 80, 0, "smooth_sandstone_slab")
+        self.world.set_block(1, 80, 0, "smooth_sandstone_slab")
+        self.world.set_block(0, 81, 0, "mossy_stone_bricks_offset")
+        self.world.set_block(1, 81, 0, "stone_vertical_slab_offset")
+
+        mesh2 = build_chunk_mesh(self.world, self.cx, self.cy, self.cz)
+        self.assertIsNotNone(mesh2)
+
+        # Look for the East face (+X) of mossy_stone_bricks_offset at x=1.0
+        has_full_offset_east = False
+        for i in range(0, len(mesh2.vertices), 4):
+            v = mesh2.vertices[i]
+            norm = (round(float(v[3])), round(float(v[4])), round(float(v[5])))
+            x_val = round(float(v[0]), 2)
+            if norm == (1, 0, 0) and x_val == 1.0:
+                has_full_offset_east = True
+                break
+        self.assertTrue(has_full_offset_east, "Offset full block face toward offset vertical slab was culled!")
+
+    def test_mix_offset_vertical_slabs(self):
+        """Test mixing two vertical slabs when one vertical slab is offset by a horizontal slab."""
+        from client.app import Game
+        from server.stacks import make_stack
+        from server.blocks import (
+            get_double_vertical_slab,
+            get_double_vertical_slab_info,
+            get_offset_info,
+            vertical_slab_offset_bounds,
+        )
+
+        class MockGame:
+            def __init__(self, world, held_item):
+                self.world = world
+                self.player = Player(self.world)
+                self.player.pos = [0.5, 90.0, 0.5]
+                self.player.yaw = 0.0  # Looking North
+                self.gamemode = "survival"
+                self.network_client = None
+                self.hotbar = [make_stack(held_item, 10)]
+                self.selected = 0
+                self.target = None
+
+            def _upload_block_change(self, x, y, z):
+                pass
+
+        MockGame._place_block = Game._place_block
+        MockGame._break_block = Game._break_block
+        MockGame._spawn_break_drops = Game._spawn_break_drops
+        MockGame._spawn_loose_item = Game._spawn_loose_item
+        MockGame._aim = lambda self: None
+
+        # 1. Place a bottom slab at (2, 80, 2) and an offset vertical slab (south facing) at (2, 81, 2)
+        self.world.set_block(2, 80, 2, "stone_slab")
+        self.world.set_block(2, 81, 2, "stone_vertical_slab_offset")
+
+        # Direct function check:
+        double_cand = get_double_vertical_slab("stone_vertical_slab_offset", "planks_vertical_slab_north")
+        self.assertEqual(double_cand, "double_vertical_slab_z_stone_vertical_slab_planks_vertical_slab_offset")
+
+        # 2. Player aims at the open north face of stone_vertical_slab_offset
+        # Back face of south slab has normal (0, 0, -1)
+        game = MockGame(self.world, "planks_vertical_slab")
+        game.target = {
+            "x": 2,
+            "y": 81,
+            "z": 2,
+            "nx": 0,
+            "ny": 0,
+            "nz": -1,
+            "slab_half": "vertical_offset",
+            "local_y": 0.25,
+        }
+        game._place_block()
+
+        # The cell at (2, 81, 2) should now be the mixed offset double vertical slab!
+        placed_block = self.world.get_block(2, 81, 2)
+        self.assertEqual(placed_block, "double_vertical_slab_z_stone_vertical_slab_planks_vertical_slab_offset")
+
+        # Metadata checks
+        dv_info = get_double_vertical_slab_info(placed_block)
+        self.assertIsNotNone(dv_info)
+        self.assertEqual(dv_info["positive"], "stone_vertical_slab")
+        self.assertEqual(dv_info["negative"], "planks_vertical_slab")
+
+        # 3. Collision boxes should cover the offset bounds of both halves
+        boxes = self.world.get_collision_boxes(2, 81, 2)
+        self.assertEqual(len(boxes), 1)  # o_info full offset box: [-8, 8]
+        self.assertEqual(boxes[0], (2.0, 80.5, 2.0, 3.0, 81.5, 3.0))
+
+        # 4. Raycasting targets the positive and negative halves
+        hit_neg = self.world.raycast(2.5, 81.0, 1.5, 0.0, 0.0, 1.0, 5.0)
+        self.assertIsNotNone(hit_neg)
+        self.assertEqual(hit_neg["x"], 2)
+        self.assertEqual(hit_neg["y"], 81)
+        self.assertEqual(hit_neg["z"], 2)
+        self.assertEqual(hit_neg["slab_half"], "vertical_negative")
+
+        # 5. Break the negative (planks) half
+        game.target = hit_neg
+        game._break_block()
+
+        # Remaining block should be stone_vertical_slab_offset!
+        self.assertEqual(self.world.get_block(2, 81, 2), "stone_vertical_slab_offset")
+        dropped = [e.item for e in self.world.entities if isinstance(e, ItemEntity)]
+        self.assertIn("planks_vertical_slab", dropped)
+
+        # 6. Test mixing into open half by clicking the bottom slab below (ny == 1)
+        # Clear entities
+        self.world.entities.clear()
+        game2 = MockGame(self.world, "planks_vertical_slab")
+        game2.target = {
+            "x": 2,
+            "y": 80,
+            "z": 2,
+            "nx": 0,
+            "ny": 1,
+            "nz": 0,
+            "slab_half": "bottom",
+            "local_y": 0.5,
+        }
+        game2._place_block()
+        self.assertEqual(self.world.get_block(2, 81, 2), "double_vertical_slab_z_stone_vertical_slab_planks_vertical_slab_offset")
+
+        # 7. Cap the mixed offset double vertical slab with a top slab
+        game3 = MockGame(self.world, "smooth_sandstone_slab")
+        game3.target = {
+            "x": 2,
+            "y": 81,
+            "z": 2,
+            "nx": 0,
+            "ny": 1,
+            "nz": 0,
+            "slab_half": "offset",
+            "local_y": 0.5,
+        }
+        game3._place_block()
+        capped_block = self.world.get_block(2, 81, 2)
+        self.assertEqual(capped_block, "double_vertical_slab_z_stone_vertical_slab_planks_vertical_slab_offset_smooth_sandstone_slab")
+        o_info = get_offset_info(capped_block)
+        self.assertTrue(o_info["capped"])
+        self.assertEqual(o_info["top_slab"], "smooth_sandstone_slab")
+
+    def test_mix_into_capped_offset_vertical_slab_and_place_into_top_slab(self):
+        """Test mixing a vertical slab into an existing capped offset vertical slab,
+        and placing a vertical slab into an existing top slab cell."""
+        from client.app import Game
+        from server.stacks import make_stack
+        from server.player import Player
+
+        class MockGame:
+            def __init__(self, world, held_item):
+                self.world = world
+                self.player = Player(self.world)
+                self.player.pos = [2.5, 81.0, 1.5]
+                self.player.yaw = 0.0
+                self.gamemode = "survival"
+                self.network_client = None
+                self.hotbar = [make_stack(held_item, 10)]
+                self.selected = 0
+                self.target = None
+
+            def _upload_block_change(self, x, y, z):
+                pass
+
+        MockGame._place_block = Game._place_block
+        MockGame._aim = lambda self: None
+
+        # 1. Base bottom slab at y=80, capped offset vertical slab at y=81
+        self.world.set_block(2, 80, 2, "smooth_stone_slab")
+        self.world.set_block(2, 81, 2, "smooth_sandstone_vertical_slab_offset_smooth_stone_slab")
+
+        # Mix a smooth_stone_vertical_slab into it by aiming at the inner north face
+        game = MockGame(self.world, "smooth_stone_vertical_slab")
+        game.target = {
+            "x": 2,
+            "y": 81,
+            "z": 2,
+            "nx": 0,
+            "ny": 0,
+            "nz": -1,
+            "slab_half": "vertical_offset",
+        }
+        game._place_block()
+        self.assertEqual(
+            self.world.get_block(2, 81, 2),
+            "double_vertical_slab_z_smooth_sandstone_vertical_slab_smooth_stone_vertical_slab_offset_smooth_stone_slab"
+        )
+
+        # 2. Placing a vertical slab directly into a top slab cell
+        self.world.set_block(3, 80, 2, "smooth_stone_slab")
+        self.world.set_block(3, 81, 2, "smooth_stone_slab_top")
+
+        game2 = MockGame(self.world, "smooth_stone_vertical_slab")
+        # Aim at the underside of the top slab
+        game2.target = {
+            "x": 3,
+            "y": 81,
+            "z": 2,
+            "nx": 0,
+            "ny": -1,
+            "nz": 0,
+            "slab_half": "top",
+        }
+        game2.player.yaw = 0.0  # looking North -> places north facing
+        game2._place_block()
+        self.assertEqual(
+            self.world.get_block(3, 81, 2),
+            "smooth_stone_vertical_slab_north_offset_smooth_stone_slab"
+        )
+
+        # 3. Placing into adjacent cell containing a top slab
+        self.world.set_block(4, 80, 2, "smooth_stone_slab")
+        self.world.set_block(4, 81, 2, "smooth_stone_slab_top")
+        self.world.set_block(4, 81, 1, "smooth_stone")  # back wall
+
+        game3 = MockGame(self.world, "smooth_stone_vertical_slab")
+        # Click the south face of the back wall at (4, 81, 1)
+        game3.target = {
+            "x": 4,
+            "y": 81,
+            "z": 1,
+            "nx": 0,
+            "ny": 0,
+            "nz": 1,
+        }
+        game3.player.yaw = 0.0
+        game3._place_block()
+        self.assertEqual(
+            self.world.get_block(4, 81, 2),
+            "smooth_stone_vertical_slab_north_offset_smooth_stone_slab"
+        )
+
+    def test_placing_slabs_in_flowing_water_and_source(self):
+        from client.app import Game
+        from server.stacks import make_stack
+
+        class MockGame:
+            def __init__(self, world, held_item):
+                self.world = world
+                self.player = Player(self.world)
+                self.player.pos = [0.0, 90.0, 0.0]
+                self.gamemode = "survival"
+                self.network_client = None
+                self.hotbar = [make_stack(held_item, 10)]
+                self.selected = 0
+                self.target = None
+
+            def _upload_block_change(self, x, y, z):
+                pass
+
+        MockGame._place_block = Game._place_block
+        MockGame._aim = lambda self: None
+
+        # 1. Placing a bottom slab in water level <= 4: displaces water -> remains dry slab
+        self.world.set_block(5, 80, 5, STONE)
+        self.world.set_block(5, 81, 5, "water_3")
+        # Place against floor at (5, 80, 5) with ny=1
+        game1 = MockGame(self.world, "smooth_stone_slab")
+        game1.target = {"x": 5, "y": 80, "z": 5, "nx": 0, "ny": 1, "nz": 0}
+        game1._place_block()
+        self.assertEqual(self.world.get_block(5, 81, 5), "smooth_stone_slab")
+
+        # 2. Placing a bottom slab in water level > 4 (e.g. water_6): becomes waterlogged_6
+        self.world.set_block(6, 80, 5, STONE)
+        self.world.set_block(6, 81, 5, "water_6")
+        game2 = MockGame(self.world, "smooth_stone_slab")
+        game2.target = {"x": 6, "y": 80, "z": 5, "nx": 0, "ny": 1, "nz": 0}
+        game2._place_block()
+        self.assertEqual(self.world.get_block(6, 81, 5), "smooth_stone_slab_waterlogged_6")
+
+        # 3. Placing a bottom slab in water source: becomes waterlogged source
+        self.world.set_block(7, 80, 5, STONE)
+        self.world.set_block(7, 81, 5, "water")
+        game3 = MockGame(self.world, "smooth_stone_slab")
+        game3.target = {"x": 7, "y": 80, "z": 5, "nx": 0, "ny": 1, "nz": 0}
+        game3._place_block()
+        self.assertEqual(self.world.get_block(7, 81, 5), "smooth_stone_slab_waterlogged")
+
+        # 4. Placing a top slab in flowing water level 3: becomes waterlogged top slab level 3
+        self.world.set_block(8, 82, 5, STONE)
+        self.world.set_block(8, 81, 5, "water_3")
+        # Place clicking underside of ceiling at (8, 82, 5) with ny=-1
+        game4 = MockGame(self.world, "smooth_stone_slab")
+        game4.target = {"x": 8, "y": 82, "z": 5, "nx": 0, "ny": -1, "nz": 0}
+        game4._place_block()
+        self.assertEqual(self.world.get_block(8, 81, 5), "smooth_stone_slab_top_waterlogged_3")
+
+        # 5. Placing a vertical slab in flowing water level 5: becomes waterlogged vertical slab level 5
+        self.world.set_block(9, 80, 5, STONE)
+        self.world.set_block(9, 81, 5, "water_5")
+        game5 = MockGame(self.world, "smooth_stone_vertical_slab")
+        game5.target = {"x": 9, "y": 80, "z": 5, "nx": 0, "ny": 1, "nz": 0}
+        game5.player.yaw = 0.0  # looking south -> slab faces north
+        game5._place_block()
+        self.assertEqual(self.world.get_block(9, 81, 5), "smooth_stone_vertical_slab_north_waterlogged_5")
 
 
 if __name__ == "__main__":

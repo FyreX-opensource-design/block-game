@@ -66,7 +66,7 @@ class NetworkClient:
         }
         self._enqueue(packet)
 
-    def send_set_block(self, x, y, z, block_id):
+    def send_set_block(self, x, y, z, block_id, sub_cell=None):
         if not self.connected:
             return
         packet = {
@@ -76,6 +76,8 @@ class NetworkClient:
             "z": int(z),
             "block": str(block_id or ""),
         }
+        if sub_cell is not None:
+            packet["sub_cell"] = sub_cell
         self._enqueue(packet)
 
     def send_hit_block(self, x, y, z, item_id):
@@ -121,13 +123,35 @@ class NetworkClient:
         }
         self._enqueue(packet)
 
-    def send_attack_mob(self, entity_id):
+    def send_eat_item(self, item_id):
+        """Ask the server to feed the local player (authoritative health update)."""
+        if not self.connected:
+            return
+        packet = {
+            "type": "eat_item",
+            "item": str(item_id or ""),
+        }
+        self._enqueue(packet)
+
+    def send_attack_mob(self, entity_id, item_id=""):
         """Send attack mob packet to the server."""
         if not self.connected:
             return
         packet = {
             "type": "attack_entity",
             "id": int(entity_id),
+            "item": str(item_id or ""),
+        }
+        self._enqueue(packet)
+
+    def send_attack_player(self, target_uuid, item_id=""):
+        """Send attack player packet to the server."""
+        if not self.connected:
+            return
+        packet = {
+            "type": "attack_player",
+            "uuid": str(target_uuid),
+            "item": str(item_id or ""),
         }
         self._enqueue(packet)
 

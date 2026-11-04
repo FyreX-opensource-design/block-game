@@ -1,0 +1,11 @@
+{
+  "id": "planks_slab_from_planks_vertical_slab",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "planks_vertical_slab"
+  ],
+  "result": {
+    "item": "planks_slab",
+    "count": 1
+  }
+}

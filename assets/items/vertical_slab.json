@@ -1,0 +1,16 @@
+{
+  "id": "vertical_slab",
+  "name": "Vertical Slab",
+  "tab": ["materials"],
+  "model": "block",
+  "block": "vertical_slab",
+  "texture": "vertical_slab",
+  "max_stack": 64,
+  "left": "none",
+  "right": "place",
+  "durability": 0,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 1,
+  "tool": "pickaxe"
+}

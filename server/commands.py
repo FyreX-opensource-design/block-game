@@ -139,6 +139,12 @@ class CommandHandler:
             usage="/gamemode <creative | survival> [player]",
         )
         self.register(
+            "gm",
+            self._cmd_gamemode,
+            "Alias for /gamemode.",
+            usage="/gm <creative | survival> [player]",
+        )
+        self.register(
             "spawnpoint",
             self._cmd_spawnpoint,
             "Sets your personal spawn point, used when you join the world and by /home.",
@@ -550,12 +556,17 @@ class CommandHandler:
         if not args:
             ctx.error("Usage: /gamemode <creative | survival> [player]")
             return
-        mode = str(args[0]).lower()
-        if mode not in ("creative", "survival"):
+        raw = str(args[0]).lower()
+        if raw in ("creative", "c", "1"):
+            mode = "creative"
+        elif raw in ("survival", "s", "0"):
+            mode = "survival"
+        else:
             ctx.error("Game mode must be creative or survival.")
             return
 
         player = ctx.player
+        target_name = None
         if len(args) > 1:
             server = ctx.server
             clients = getattr(server, "clients", None) if server is not None else None
@@ -569,16 +580,27 @@ class CommandHandler:
             if target_client is None or not getattr(target_client, "uuid", None):
                 ctx.error(f"Player not found: {args[1]}")
                 return
+            target_name = getattr(target_client, "username", args[1])
             player = ctx.world.players.get(getattr(target_client, "uuid", "")) if ctx.world is not None else None
             if player is None:
                 ctx.error(f"Player not found: {args[1]}")
                 return
 
-        if player is None or getattr(player, "uuid", None) is None:
+        if player is None:
             ctx.error("Player not available.")
             return
 
         player.gamemode = mode
+
+        app = getattr(ctx, "app", None)
+        if app is not None:
+            app.gamemode = mode
+            if hasattr(app, "_reset_breaking"):
+                app._reset_breaking()
+            if getattr(app, "info", None) is not None:
+                app.info.gamemode = mode
+                if getattr(app, "catalog", None) is not None:
+                    app.catalog.write(app.info)
 
         client = None
         server = ctx.server
@@ -589,8 +611,15 @@ class CommandHandler:
                     break
         if client is not None:
             client.send({"type": "gamemode", "gamemode": mode})
+            if ctx.player is not player:
+                client.send({
+                    "type": "chat",
+                    "sender": "",
+                    "text": f"Your game mode has been set to {mode}.",
+                })
 
         if ctx.player is player:
             ctx.reply(f"Game mode set to {mode}.")
         else:
-            ctx.reply(f"Game mode set to {mode} for {getattr(player, 'uuid', args[1])}.")
+            name = target_name or getattr(player, "username", None) or getattr(player, "uuid", args[1])
+            ctx.reply(f"Game mode set to {mode} for {name}.")

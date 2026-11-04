@@ -1,0 +1,19 @@
+{
+  "id": "sandstone_vertical_slab",
+  "lang": "block.sandstone_vertical_slab",
+  "type": "vertical_slab",
+  "tab": [
+    "building"
+  ],
+  "model": "vertical_slab",
+  "hardness": 1.0,
+  "tool": "axe",
+  "mining_level": 0,
+  "loot_table": "blocks/sandstone_vertical_slab",
+  "full_block": "sandstone",
+  "textures": {
+    "top": "sandstone",
+    "side": "sandstone",
+    "bottom": "sandstone"
+  }
+}

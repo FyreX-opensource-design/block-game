@@ -8,10 +8,11 @@
   "texture": "raw_porkchop",
   "max_stack": 64,
   "left": "none",
-  "right": "none",
+  "right": "eat",
   "durability": 0,
   "mining_level": 0,
   "mining_speed": 1,
   "attack": 1,
-  "food": 3
+  "food": 3,
+  "lang": "item.raw_porkchop"
 }

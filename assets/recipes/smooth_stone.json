@@ -1,0 +1,11 @@
+{
+  "id": "smooth_stone",
+  "type": "smelting",
+  "ingredient": "stone",
+  "result": {
+    "item": "smooth_stone",
+    "count": 1
+  },
+  "cookingtime": 10.0,
+  "experience": 0.1
+}

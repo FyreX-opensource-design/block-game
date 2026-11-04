@@ -294,7 +294,7 @@ Defines inventory items, hand models, and tool behaviors.
 - `mining_level` (int, optional): Tool material tier.
 - `mining_speed` (float, optional): Breaking speed multiplier.
 - `durability` (int, optional): Uses before breaking.
-- `food` (dict, optional): `{"nutrition": 4, "saturation": 0.6}` for edible items.
+- `food` (int, optional): Health points restored by the item when eaten (e.g. `4` for an apple). Defaults to `0` for inedible items. Items set their right-click action to `eat` to be edible.
 
 ### Example (`raw_iron.json`)
 ```json

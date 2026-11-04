@@ -7,7 +7,7 @@ from server.blocks import ASSETS, BLOCKS, CHUNK_SIZE, FACE_INDEX, HOTBAR_SLOTS
 from server.images import read_png
 from server.items import ITEMS
 from server.mesh import CORNERS
-from server.stacks import stack_id
+from server.stacks import stack_damage, stack_id
 
 from client.geom import ortho, write_matrix
 from client.player_render import (
@@ -36,6 +36,19 @@ HEART_PATTERN = (
 )
 HEART_PATTERN_WIDTH = len(HEART_PATTERN[0])
 HEART_PATTERN_HEIGHT = len(HEART_PATTERN)
+
+# A small pixel-art drumstick used for the survival hunger bar.
+DRUMSTICK_PATTERN = (
+    "0111000",
+    "1111100",
+    "1111100",
+    "1111000",
+    "0110000",
+    "0001010",
+    "0000111",
+)
+DRUMSTICK_PATTERN_WIDTH = len(DRUMSTICK_PATTERN[0])
+DRUMSTICK_PATTERN_HEIGHT = len(DRUMSTICK_PATTERN)
 
 WORLD_VERT = """
 #version 330 core
@@ -1243,7 +1256,7 @@ class Renderer:
         vbo.release()
         self.ctx.enable(moderngl.CULL_FACE)
 
-    def draw_hud(self, width, height, hotbar, selected, crosshair, break_progress=0.0, health=None, max_health=20.0):
+    def draw_hud(self, width, height, hotbar, selected, crosshair, break_progress=0.0, health=None, max_health=20.0, hunger=None, max_hunger=20.0):
         self.ctx.disable(moderngl.DEPTH_TEST)
         self.ctx.disable(moderngl.CULL_FACE)
         self.ctx.enable(moderngl.BLEND)
@@ -1252,6 +1265,8 @@ class Renderer:
         self._hotbar(projection, width, height, hotbar, selected)
         if health is not None:
             self._hearts(projection, width, height, health, max_health)
+        if hunger is not None:
+            self._hunger(projection, width, height, hunger, max_hunger)
         if crosshair:
             self._crosshair(projection, width, height)
             if break_progress > 0.0:
@@ -1306,6 +1321,50 @@ class Renderer:
                     continue
                 px = x + col * scale
                 py = y + (HEART_PATTERN_HEIGHT - 1 - row) * scale
+                floats.extend(_quad(px, py, px + scale, py + scale))
+        if floats:
+            self._tris(projection, floats, color)
+
+    def _hunger(self, projection, width, height, hunger, max_hunger):
+        try:
+            hunger = float(hunger)
+            max_hunger = float(max_hunger)
+        except (TypeError, ValueError):
+            return
+        if max_hunger <= 0.0:
+            return
+        shanks = max(1, int(math.ceil(max_hunger / 2.0)))
+        slot = 50
+        gap = 8
+        total = HOTBAR_SLOTS * slot + (HOTBAR_SLOTS - 1) * gap
+        x0 = (width - total) / 2
+        x_right = x0 + total
+        y0 = 28 + slot + 10
+        scale = 3
+        spacing = 2
+        drumstick_width = DRUMSTICK_PATTERN_WIDTH * scale
+        for slot_idx in range(shanks):
+            dx = x_right - (shanks - slot_idx) * drumstick_width - (shanks - 1 - slot_idx) * spacing
+            self._drumstick(projection, dx, y0, scale, (0.18, 0.12, 0.08, 0.9), 1.0)
+            value = max(0.0, min(2.0, hunger - slot_idx * 2.0))
+            if value <= 0.0:
+                continue
+            color = (0.78, 0.46, 0.16, 1.0) if value >= 2.0 else (0.85, 0.58, 0.22, 1.0)
+            self._drumstick(projection, dx, y0, scale, color, value / 2.0)
+
+    def _drumstick(self, projection, x, y, scale, color, fraction):
+        fraction = max(0.0, min(1.0, float(fraction)))
+        if fraction <= 0.0:
+            return
+        floats = []
+        for row, line in enumerate(DRUMSTICK_PATTERN):
+            for col, pixel in enumerate(line):
+                if pixel != "1":
+                    continue
+                if (col + 0.5) / DRUMSTICK_PATTERN_WIDTH > fraction:
+                    continue
+                px = x + col * scale
+                py = y + (DRUMSTICK_PATTERN_HEIGHT - 1 - row) * scale
                 floats.extend(_quad(px, py, px + scale, py + scale))
         if floats:
             self._tris(projection, floats, color)
@@ -1375,8 +1434,11 @@ class Renderer:
         highlight = []
         slots = []
         icons = []
+        durability_bg = []
+        durability_fg = []
         for index in range(HOTBAR_SLOTS):
-            block_id = stack_id(hotbar[index]) if index < len(hotbar) else ""
+            stack = hotbar[index] if index < len(hotbar) else ""
+            block_id = stack_id(stack)
             sx = x + index * (slot + gap)
             if index == selected:
                 highlight.extend(_quad(sx - 4, y - 4, sx + slot + 4, y + slot + 4))
@@ -1386,11 +1448,24 @@ class Renderer:
                 continue
             u0, v0, u1, v1 = item.icon
             icons.extend(_quad_uv(sx + 7, y + 7, sx + slot - 7, y + slot - 7, u0, v0, u1, v1))
+            damage = stack_damage(stack)
+            if getattr(item, "durability", 0) and damage > 0:
+                ratio = max(0.0, min(1.0, 1.0 - damage / item.durability))
+                bar_max_w = slot - 14
+                bar_w = max(1, int(bar_max_w * ratio))
+                durability_bg.extend(_quad(sx + 7, y + 4, sx + slot - 7, y + 7))
+                r = min(1.0, 2.0 * (1.0 - ratio))
+                g = min(1.0, 2.0 * ratio)
+                durability_fg.append((_quad(sx + 7, y + 4, sx + 7 + bar_w, y + 6), (r, g, 0.1, 1.0)))
         if highlight:
             self._tris(projection, highlight, (0.97, 0.97, 0.94, 1.0))
         self._tris(projection, slots, (0.12, 0.1, 0.08, 0.88))
         if icons:
             self._textured(projection, icons, self.items)
+        if durability_bg:
+            self._tris(projection, durability_bg, (0.0, 0.0, 0.0, 0.9))
+        for fg_quads, color in durability_fg:
+            self._tris(projection, fg_quads, color)
 
     def _crosshair(self, projection, width, height):
         cx = width / 2

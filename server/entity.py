@@ -26,6 +26,7 @@ class ItemEntity:
         despawn_timer=DESPAWN_TIME,
         pickup_delay=0.0,
         entity_id=None,
+        damage=0,
     ):
         if entity_id is None:
             self.id = ItemEntity._next_id
@@ -41,6 +42,7 @@ class ItemEntity:
         self.vel = list(vel) if vel is not None else [0.0, 0.0, 0.0]
         self.despawn_timer = float(despawn_timer)
         self.pickup_delay = float(pickup_delay)
+        self.damage = int(damage or 0)
         self.on_ground = False
         self.age = 0.0
         self.radius = 0.15
@@ -314,7 +316,7 @@ class ItemEntity:
         return False
 
     def to_dict(self):
-        return {
+        d = {
             "id": self.id,
             "item": self.item,
             "count": self.count,
@@ -323,6 +325,9 @@ class ItemEntity:
             "despawn_timer": round(self.despawn_timer, 2),
             "pickup_delay": round(self.pickup_delay, 2),
         }
+        if self.damage:
+            d["damage"] = self.damage
+        return d
 
     @classmethod
     def from_dict(cls, data):
@@ -334,6 +339,7 @@ class ItemEntity:
             despawn_timer=data.get("despawn_timer", DESPAWN_TIME),
             pickup_delay=data.get("pickup_delay", 0.0),
             entity_id=data.get("id"),
+            damage=data.get("damage", 0),
         )
 
 
@@ -1015,6 +1021,7 @@ class Sheep(Mob):
 
     def on_death(self, world=None, killer=None):
         if world is not None:
+            super().on_death(world=world, killer=killer)
             if not self.sheared:
                 world.spawn_item(
                     self.wool_block,

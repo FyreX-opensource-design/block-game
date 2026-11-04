@@ -232,7 +232,10 @@ class OreTests(unittest.TestCase):
         self.assertEqual(fuel_burn_time("coal"), 80.0)
 
     def test_max_vein_size_enforced(self):
-        from scipy.ndimage import label
+        try:
+            from scipy.ndimage import label
+        except ImportError:
+            self.skipTest("scipy not installed")
 
         # Ore with max_vein_size of 5 and threshold -1.0 (covers lots of stone)
         capped_ore = Ore(

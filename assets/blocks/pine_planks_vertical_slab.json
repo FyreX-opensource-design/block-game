@@ -1,0 +1,19 @@
+{
+  "id": "pine_planks_vertical_slab",
+  "lang": "block.pine_planks_vertical_slab",
+  "type": "vertical_slab",
+  "tab": [
+    "building"
+  ],
+  "model": "vertical_slab",
+  "hardness": 1.0,
+  "tool": "axe",
+  "mining_level": 0,
+  "loot_table": "blocks/pine_planks_vertical_slab",
+  "full_block": "pine_planks",
+  "textures": {
+    "top": "pine_planks",
+    "side": "pine_planks",
+    "bottom": "pine_planks"
+  }
+}
