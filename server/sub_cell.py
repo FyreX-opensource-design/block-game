@@ -197,7 +197,7 @@ def calculate_sub_cell_placement(
     held_vslab = get_vertical_slab_info(held_block_id)
 
     if not held_slab and not held_vslab:
-        base_mat = held_block_id
+        return None
     elif held_slab:
         base_mat = held_slab["base_id"]
     else:
@@ -339,8 +339,6 @@ def calculate_sub_cell_placement(
             for cy in (0, 1):
                 for cz in (0, 1):
                     needed_octants.append((1, cy, cz))
-    else:
-        needed_octants = [(cx, cy, cz) for cy in (0, 1) for cz in (0, 1) for cx in (0, 1) if sub.get_octant(cx, cy, cz) == ""]
 
     if not needed_octants:
         return None

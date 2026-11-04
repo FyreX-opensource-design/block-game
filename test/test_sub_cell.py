@@ -607,6 +607,30 @@ class TestWorldSubCell(unittest.TestCase):
                 self.assertEqual(sub7.get_octant(ox, oy, 0), "planks")
                 self.assertEqual(sub7.get_octant(ox, oy, 1), "")
 
+    def test_sub_cell_rotated_log_uvs_not_crushed(self):
+        from server.blocks import BLOCKS
+        from server.mesh import octant_face_uvs
+
+        b = BLOCKS["pine_log_x"]
+        for normal_i in range(6):
+            uvs = octant_face_uvs(b, normal_i, 0, 0, 0, off_x=0.0)
+            u_vals = [uv[0] for uv in uvs]
+            v_vals = [uv[1] for uv in uvs]
+            u_range = max(u_vals) - min(u_vals)
+            v_range = max(v_vals) - min(v_vals)
+            self.assertGreater(u_range, 0.0, f"Face {normal_i} u range was 0 (crushed UV)")
+            self.assertGreater(v_range, 0.0, f"Face {normal_i} v range was 0 (crushed UV)")
+
+    def test_clicking_block_below_vertical_slab_does_not_fill_empty_space_with_full_block(self):
+        from server.sub_cell import calculate_sub_cell_placement
+
+        self.world.set_block(5, 4, 5, "gravel")
+        self.world.set_block(5, 5, 5, "pine_planks_vertical_slab_south")
+
+        hit = {"x": 5, "y": 4, "z": 5, "nx": 0, "ny": 1, "nz": 0, "local_y": 1.0}
+        res = calculate_sub_cell_placement(self.world, hit, "pine_log", 0.0)
+        self.assertIsNone(res, "Full block must not be placed into partial sub-cell via calculate_sub_cell_placement")
+
 
 if __name__ == "__main__":
     unittest.main()

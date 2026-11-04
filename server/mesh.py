@@ -322,11 +322,7 @@ def octant_face_uvs(mat_block, normal_i, ox, oy, oz, off_x=None, off_y=None, off
     base_uvs = mat_block.face_uvs[normal_i]
     if base_uvs is None:
         return ((0.0, 0.0), (0.0, 0.0), (0.0, 0.0), (0.0, 0.0))
-    u0, v0 = base_uvs[0]
-    u1 = base_uvs[1][0]
-    v1 = base_uvs[2][1]
-    du = u1 - u0
-    dv = v1 - v0
+    (u0, v0), (u1, v1), (u2, v2), (u3, v3) = base_uvs
     corners = CORNERS[normal_i]
     uvs = []
     for k in range(4):
@@ -345,7 +341,13 @@ def octant_face_uvs(mat_block, normal_i, ox, oy, oz, off_x=None, off_y=None, off
             s, t = X, Y
         else:
             s, t = 1.0 - X, Y
-        uvs.append((float(u0 + s * du), float(v0 + t * dv)))
+        w0 = (1.0 - s) * (1.0 - t)
+        w1 = s * (1.0 - t)
+        w2 = s * t
+        w3 = (1.0 - s) * t
+        u = w0 * u0 + w1 * u1 + w2 * u2 + w3 * u3
+        v = w0 * v0 + w1 * v1 + w2 * v2 + w3 * v3
+        uvs.append((float(u), float(v)))
     return uvs
 
 
