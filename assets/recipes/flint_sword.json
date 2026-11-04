@@ -1,0 +1,18 @@
+{
+  "id": "flint_sword",
+  "type": "crafting_shaped",
+  "pattern": [
+    "F",
+    "F",
+    "P"
+  ],
+  "key": {
+    "F": "knapped_flint",
+    "P": "plant_fiber"
+  },
+  "result": {
+    "item": "flint_sword",
+    "count": 1
+  }
+}
+

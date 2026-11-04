@@ -6,11 +6,10 @@
       "entries": [
         {
           "type": "item",
-          "name": "tall_grass",
-          "count": 1
+          "name": "plant_fiber",
+          "count": [1, 2]
         }
       ]
     }
   ]
 }
-

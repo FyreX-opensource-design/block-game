@@ -1,0 +1,16 @@
+{
+  "id": "plant_fiber",
+  "lang": "item.plant_fiber",
+  "tab": "materials",
+  "model": "flat",
+  "texture": "plant_fiber",
+  "max_stack": 64,
+  "left": "attack",
+  "right": "use",
+  "durability": 0,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 1,
+  "food": 0
+}
+

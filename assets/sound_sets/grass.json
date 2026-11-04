@@ -1,0 +1,11 @@
+{
+  "id": "grass",
+  "walk": [
+    "grass_walking_1",
+    "grass_walking_2"
+  ],
+  "breaking": [
+    "soil_breaking"
+  ]
+}
+

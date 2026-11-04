@@ -1,0 +1,19 @@
+{
+  "id": "flint_pickaxe",
+  "type": "crafting_shaped",
+  "pattern": [
+    "FFF",
+    " P ",
+    " X "
+  ],
+  "key": {
+    "F": "knapped_flint",
+    "P": "plant_fiber",
+    "X": "stick"
+  },
+  "result": {
+    "item": "flint_pickaxe",
+    "count": 1
+  }
+}
+

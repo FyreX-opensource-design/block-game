@@ -12,7 +12,7 @@
             {
               "condition": "match_tool",
               "tool": "pickaxe",
-              "min_level": 1
+              "min_level": 2
             }
           ]
         }
@@ -29,7 +29,7 @@
             {
               "condition": "match_tool",
               "tool": "pickaxe",
-              "min_level": 1
+              "min_level": 2
             }
           ]
         }
@@ -47,7 +47,7 @@
             {
               "condition": "match_tool",
               "tool": "pickaxe",
-              "min_level": 1
+              "min_level": 2
             }
           ]
         }

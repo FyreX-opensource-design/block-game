@@ -34,7 +34,8 @@ class CraftingAndFurnaceTests(unittest.TestCase):
         self.assertIn("crafting_table", shaped_ids)
         self.assertIn("furnace", shaped_ids)
         self.assertIn("stick", shaped_ids)
-        self.assertIn("wood_pickaxe", shaped_ids)
+        self.assertIn("flint_pickaxe", shaped_ids)
+        self.assertIn("stone_pickaxe", shaped_ids)
 
         smelting_ids = {r.id for r in smelting}
         self.assertIn("stone", smelting_ids)
@@ -74,17 +75,38 @@ class CraftingAndFurnaceTests(unittest.TestCase):
         self.assertEqual(res[1], 1)
         self.assertEqual(res[2], [0, 1, 2, 3, 5, 6, 7, 8])
 
-    def test_wood_pickaxe_3x3_crafting(self):
-        grid = (
-            "planks", "planks", "planks",
+    def test_flint_and_stone_pickaxe_3x3_crafting(self):
+        # Flint pickaxe with knapped flint, plant fiber, and stick
+        grid_flint = (
+            "knapped_flint", "knapped_flint", "knapped_flint",
+            "",              "plant_fiber",   "",
+            "",              "stick",         "",
+        )
+        res_flint = craft_match(grid_flint)
+        self.assertIsNotNone(res_flint)
+        self.assertEqual(res_flint[0], "flint_pickaxe")
+        self.assertEqual(res_flint[1], 1)
+        self.assertEqual(res_flint[2], [0, 1, 2, 4, 7])
+
+        # Stone pickaxe with smelted stone (not cobble!) and sticks
+        grid_stone = (
+            "stone", "stone", "stone",
+            "",      "stick", "",
+            "",      "stick", "",
+        )
+        res_stone = craft_match(grid_stone)
+        self.assertIsNotNone(res_stone)
+        self.assertEqual(res_stone[0], "stone_pickaxe")
+        self.assertEqual(res_stone[1], 1)
+        self.assertEqual(res_stone[2], [0, 1, 2, 4, 7])
+
+        # Cobblestone cannot craft stone pickaxe
+        grid_cobble = (
+            "cobble", "cobble", "cobble",
             "",       "stick",  "",
             "",       "stick",  "",
         )
-        res = craft_match(grid)
-        self.assertIsNotNone(res)
-        self.assertEqual(res[0], "wood_pickaxe")
-        self.assertEqual(res[1], 1)
-        self.assertEqual(res[2], [0, 1, 2, 4, 7])
+        self.assertIsNone(craft_match(grid_cobble))
 
     def test_smelting_cobblestone_into_stone(self):
         res = smelt_match("cobble")

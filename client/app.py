@@ -157,6 +157,10 @@ class Game(pyglet.window.Window):
         self.web_companion = None
         if self.settings.get("web_ui_enabled", False):
             self._start_web_companion()
+        from client.sound import SoundManager
+
+        self.sound_manager = SoundManager()
+        self._walk_sound_distance = 0.0
         self.inventory = CreativeInventory()
         self.hotbar = empty_slots(HOTBAR_SLOTS)
         self.storage = empty_slots(INVENTORY_SLOTS)
@@ -217,6 +221,7 @@ class Game(pyglet.window.Window):
         self._gamemode = "survival"
         self._mouse_held_left = False
         self._breaking_block = None
+        self._breaking_target_block = None
         self._break_time = 0.0
         self._break_required = 0.0
         self._break_progress = 0.0
@@ -263,7 +268,9 @@ class Game(pyglet.window.Window):
         if self.mode == "play":
             self._apply_input()
             self._apply_arrow_look(min(dt, 0.05))
+            prev_pos = list(self.player.pos)
             self.player.update(min(dt, 0.05))
+            self._update_walk_sound(prev_pos)
             if self.network_client is None:
                 self._update_local_health(min(dt, 0.05))
         if self.network_client is None:
@@ -344,6 +351,52 @@ class Game(pyglet.window.Window):
                     entity.count = leftover
                     if entity.count <= 0:
                         self.world.remove_entity(entity.id)
+
+    def _get_block_under_player(self):
+        if not getattr(self, "player", None) or self.world is None:
+            return None
+        px, py, pz = self.player.pos
+        bx = math.floor(px)
+        by = math.floor(py - 0.08)
+        bz = math.floor(pz)
+        sub = self.world.get_sub_cell(bx, by, bz)
+        if sub is not None:
+            ox = 1 if (px - bx) >= 0.5 else 0
+            oz = 1 if (pz - bz) >= 0.5 else 0
+            mat = sub.get_octant(ox, 1, oz) or sub.get_octant(ox, 0, oz)
+            if mat:
+                return mat
+
+        block_id = self.world.get_block(bx, by, bz)
+        if block_id and block_id != AIR:
+            return block_id
+
+        by_current = math.floor(py)
+        block_id_curr = self.world.get_block(bx, by_current, bz)
+        if block_id_curr and block_id_curr != AIR:
+            return block_id_curr
+
+        return None
+
+    def _update_walk_sound(self, prev_pos):
+        if not getattr(self, "player", None) or not getattr(self.player, "on_ground", False):
+            return
+        if hasattr(self.player, "in_water") and self.player.in_water():
+            return
+        dx = self.player.pos[0] - prev_pos[0]
+        dz = self.player.pos[2] - prev_pos[2]
+        dist = math.hypot(dx, dz)
+        if dist <= 0:
+            return
+
+        self._walk_sound_distance += dist
+        is_sprint = getattr(self.player.input, "sprint", False) if hasattr(self.player, "input") else False
+        step_threshold = 1.8 if is_sprint else 2.2
+        if self._walk_sound_distance >= step_threshold:
+            self._walk_sound_distance = 0.0
+            block_under = self._get_block_under_player()
+            if block_under and block_under != AIR:
+                self.sound_manager.play_walk_sound(block_under)
 
     def _update_local_health(self, dt):
         if self.player is None or self.gamemode != "survival":
@@ -775,6 +828,8 @@ class Game(pyglet.window.Window):
         """
         if self.world is None or x is None or y is None or z is None:
             return False
+        old_block = self.world.get_block(x, y, z)
+        old_sub = self.world.get_sub_cell(x, y, z)
         if sub_cell is not None:
             from server.sub_cell import SubCell
             self.world.set_sub_cell(x, y, z, SubCell.from_dict(sub_cell))
@@ -782,6 +837,24 @@ class Game(pyglet.window.Window):
             if not self.world.set_block(x, y, z, block):
                 return False
         self._upload_block_change(x, y, z)
+        if getattr(self, "sound_manager", None) and getattr(self, "player", None):
+            is_break = False
+            broken_id = None
+            if block == AIR and old_block and old_block != AIR:
+                is_break = True
+                broken_id = old_block
+            elif sub_cell is not None and old_sub is not None:
+                new_sub_data = sub_cell.get("octants", [])
+                if not any(new_sub_data):
+                    is_break = True
+                    for m in old_sub.octants:
+                        if m:
+                            broken_id = m
+                            break
+            if is_break and broken_id:
+                px, py, pz = self.player.pos
+                if math.hypot(x + 0.5 - px, y + 0.5 - py, z + 0.5 - pz) <= 32:
+                    self.sound_manager.play_break_sound(broken_id)
         return True
 
     def _upload_block_change(self, x, y, z):
@@ -957,9 +1030,12 @@ class Game(pyglet.window.Window):
 
     def _reset_breaking(self):
         self._breaking_block = None
+        self._breaking_target_block = None
         self._break_time = 0.0
         self._break_required = 0.0
         self._break_progress = 0.0
+        if getattr(self, "sound_manager", None):
+            self.sound_manager.stop_breaking_sound()
 
     def _fallen_block_on_player(self):
         """Return the block id of a fallen block at the local player's head height.
@@ -1108,9 +1184,12 @@ class Game(pyglet.window.Window):
             self._reset_breaking()
         else:
             self._breaking_block = target_key
+            self._breaking_target_block = block
             self._break_time = 0.0
             self._break_required = req_time
             self._break_progress = 0.0
+            if getattr(self, "sound_manager", None):
+                self.sound_manager.start_breaking_sound(self._breaking_target_block, loop=True)
 
     def _break_block(self):
         self._aim()
@@ -1230,6 +1309,9 @@ class Game(pyglet.window.Window):
                     if hasattr(self, "_use_held_tool"):
                         self._use_held_tool()
 
+                if getattr(self, "sound_manager", None):
+                    self.sound_manager.play_break_sound(drop_item or broken_mat)
+
                 if self.network_client is not None:
                     if sub.is_empty():
                         self.network_client.send_set_block(x, y, z, AIR)
@@ -1288,6 +1370,9 @@ class Game(pyglet.window.Window):
                 if hasattr(self, "_use_held_tool"):
                     self._use_held_tool()
 
+            if getattr(self, "sound_manager", None):
+                self.sound_manager.play_break_sound(broken_item)
+
             if self.network_client is not None:
                 self.network_client.send_set_block(x, y, z, remaining_block)
             if self.world.set_block(x, y, z, remaining_block):
@@ -1314,6 +1399,9 @@ class Game(pyglet.window.Window):
                 self._spawn_break_drops(drops, x, drop_y, z)
                 if hasattr(self, "_use_held_tool"):
                     self._use_held_tool()
+
+            if getattr(self, "sound_manager", None):
+                self.sound_manager.play_break_sound(broken_item)
 
             if self.network_client is not None:
                 self.network_client.send_set_block(x, y, z, remaining_block)
@@ -1343,6 +1431,9 @@ class Game(pyglet.window.Window):
                 if hasattr(self, "_use_held_tool"):
                     self._use_held_tool()
 
+            if getattr(self, "sound_manager", None):
+                self.sound_manager.play_break_sound(broken_item)
+
             if self.network_client is not None:
                 self.network_client.send_set_block(x, y, z, remaining_block)
             if self.world.set_block(x, y, z, remaining_block):
@@ -1371,6 +1462,9 @@ class Game(pyglet.window.Window):
                 if hasattr(self, "_use_held_tool"):
                     self._use_held_tool()
 
+            if getattr(self, "sound_manager", None):
+                self.sound_manager.play_break_sound(broken_item)
+
             if self.network_client is not None:
                 self.network_client.send_set_block(x, y, z, remaining_block)
             if self.world.set_block(x, y, z, remaining_block):
@@ -1398,6 +1492,9 @@ class Game(pyglet.window.Window):
                 self._spawn_break_drops(drops, x, drop_y, z)
                 if hasattr(self, "_use_held_tool"):
                     self._use_held_tool()
+
+            if getattr(self, "sound_manager", None):
+                self.sound_manager.play_break_sound(broken_item)
 
             if self.network_client is not None:
                 self.network_client.send_set_block(x, y, z, remaining_block)
@@ -1443,6 +1540,9 @@ class Game(pyglet.window.Window):
             self._spawn_break_drops(drops, x, y + 0.3, z)
             if hasattr(self, "_use_held_tool"):
                 self._use_held_tool()
+
+        if getattr(self, "sound_manager", None):
+            self.sound_manager.play_break_sound(broken_id)
 
         if self.network_client is not None:
             self.network_client.send_set_block(x, y, z, next_block)

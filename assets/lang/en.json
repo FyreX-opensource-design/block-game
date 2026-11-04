@@ -35,6 +35,15 @@
   "tab.materials": "Materials",
   "item.stick": "Stick",
   "item.wood_pickaxe": "Wooden Pickaxe",
+  "item.flint_pickaxe": "Flint Pickaxe",
+  "item.flint_axe": "Flint Axe",
+  "item.flint_shovel": "Flint Shovel",
+  "item.flint_sword": "Flint Sword",
+  "item.stone_pickaxe": "Stone Pickaxe",
+  "item.stone_axe": "Stone Axe",
+  "item.stone_shovel": "Stone Shovel",
+  "item.stone_sword": "Stone Sword",
+  "item.plant_fiber": "Plant Fiber",
   "item.debug_axes": "Debug Axes",
   "item.coal": "Coal",
   "item.raw_copper": "Raw Copper",
@@ -140,5 +149,7 @@
   "block.smooth_stone_vertical_slab": "Smooth Stone Vertical Slab",
   "item.smooth_stone_vertical_slab": "Smooth Stone Vertical Slab",
   "block.stone_brick_vertical_slab": "Stone Brick Vertical Slab",
-  "item.stone_brick_vertical_slab": "Stone Brick Vertical Slab"
+  "item.stone_brick_vertical_slab": "Stone Brick Vertical Slab",
+  "item.rotten_flesh": "Rotten Flesh",
+  "entity.zombie": "Zombie"
 }

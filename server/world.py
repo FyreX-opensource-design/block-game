@@ -427,6 +427,11 @@ class World:
         """Advance world time by dt seconds (20 ticks per second, 24000 ticks per day cycle)."""
         self.day_time = (self.day_time + dt * 20.0) % 24000.0
 
+    def is_night(self):
+        """Returns True if it is nightfall / night (day_time between 12000 and 24000)."""
+        t = self.day_time % 24000.0
+        return 12000.0 <= t <= 24000.0
+
     def get_sky_light_level(self):
         """Returns the current world-wide skylight level (7.0 to 15.0) based on day_time."""
         t = (self.day_time / 24000.0) % 1.0
@@ -538,9 +543,9 @@ class World:
         return entity
 
     def spawn_mob(self, mob_or_type, pos=None, vel=None, yaw=0.0, pitch=0.0):
-        from server.entity import Mob, Pig, Sheep
+        from server.entity import Mob, Pig, Sheep, Zombie
 
-        if isinstance(mob_or_type, (Mob, Pig, Sheep)):
+        if isinstance(mob_or_type, (Mob, Pig, Sheep, Zombie)):
             mob = mob_or_type
             if pos is not None:
                 mob.pos = list(pos)
@@ -548,6 +553,8 @@ class World:
             mob = Pig(pos=pos, vel=vel, yaw=yaw, pitch=pitch)
         elif str(mob_or_type) == "sheep":
             mob = Sheep(pos=pos, vel=vel, yaw=yaw, pitch=pitch)
+        elif str(mob_or_type) == "zombie":
+            mob = Zombie(pos=pos, vel=vel, yaw=yaw, pitch=pitch)
         else:
             mob = Mob(mob_type=str(mob_or_type), pos=pos, vel=vel, yaw=yaw, pitch=pitch)
         mob.world = self

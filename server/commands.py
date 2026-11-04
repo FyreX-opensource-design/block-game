@@ -487,6 +487,7 @@ class CommandHandler:
                 {
                     "type": "spawn_mob",
                     "id": mob.id,
+                    "uuid": getattr(mob, "uuid", None),
                     "mob_type": mob.mob_type,
                     "pos": mob.pos,
                     "vel": mob.vel,

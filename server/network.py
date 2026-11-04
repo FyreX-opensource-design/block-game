@@ -254,6 +254,8 @@ class MultiplayerServer:
         return data.get("spawn")
 
     def _setup_world_callbacks(self, world):
+        world.server = self
+
         def _on_block_set(bx, by, bz, b):
             msg = {"type": "block_change", "x": bx, "y": by, "z": bz, "block": b}
             from server.sub_cell import SUB_CELL_BLOCK, is_sub_cell
@@ -1217,6 +1219,7 @@ class MultiplayerServer:
                 {
                     "type": "spawn_mob",
                     "id": entity.id,
+                    "uuid": getattr(entity, "uuid", None),
                     "mob_type": entity.mob_type,
                     "pos": entity.pos,
                     "vel": entity.vel,
