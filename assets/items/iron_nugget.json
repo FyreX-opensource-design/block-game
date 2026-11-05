@@ -1,7 +1,7 @@
 {
   "id": "iron_nugget",
   "lang": "item.iron_nugget",
-  "tab": "natural",
+  "tab": "materials",
   "model": "flat",
   "texture": "iron_nugget",
   "max_stack": 64,

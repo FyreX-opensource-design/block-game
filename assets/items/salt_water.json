@@ -1,7 +1,7 @@
 {
   "id": "salt_water",
   "lang": "block.salt_water",
-  "tab": "natural",
+  "tab": [],
   "model": "block",
   "block": "salt_water",
   "max_stack": 64,

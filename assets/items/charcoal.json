@@ -1,9 +1,9 @@
 {
     "id": "charcoal",
     "lang": "item.charcoal",
-    "tab": "natural",
+    "tab": "materials",
     "model": "flat",
-    "texture": "coal",
+    "texture": "charcoal",
     "max_stack": 64,
     "left": "none",
     "right": "none",

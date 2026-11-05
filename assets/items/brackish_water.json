@@ -1,7 +1,7 @@
 {
   "id": "brackish_water",
   "lang": "block.brackish_water",
-  "tab": "natural",
+  "tab": [],
   "model": "block",
   "block": "brackish_water",
   "max_stack": 64,
