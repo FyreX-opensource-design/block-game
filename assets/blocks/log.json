@@ -11,5 +11,5 @@
   "properties": {
     "rotation": "axis"
   },
-  "textures": {"top": "log_top", "side": "log_side", "bottom": "log_top"}
+  "textures": {"top": "oak_log_top", "side": "oak_log_side", "bottom": "oak_log_top"}
 }
