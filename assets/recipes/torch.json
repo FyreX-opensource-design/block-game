@@ -7,7 +7,7 @@
   ],
   "key": {
     "C": "coal",
-    "S": "stick"
+    "S": "#sticks"
   },
   "result": {
     "item": "torch",

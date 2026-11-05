@@ -3,12 +3,13 @@
   "type": "crafting_shaped",
   "pattern": [
     "F",
-    "F",
-    "P"
+    "P",
+    "S"
   ],
   "key": {
     "F": "knapped_flint",
-    "P": "plant_fiber"
+    "P": "plant_fiber",
+    "S": "#sticks"
   },
   "result": {
     "item": "flint_sword",

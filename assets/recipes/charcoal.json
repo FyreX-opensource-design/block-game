@@ -1,0 +1,12 @@
+{
+    "id": "charcoal",
+    "type": "smelting",
+    "ingredient": "#logs",
+    "result": {
+      "item": "charcoal",
+      "count": 1
+    },
+    "cookingtime": 10.0,
+    "experience": 0.1
+  }
+  

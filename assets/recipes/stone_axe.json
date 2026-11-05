@@ -8,7 +8,7 @@
   ],
   "key": {
     "#": "stone",
-    "X": "stick"
+    "X": "#sticks"
   },
   "result": {
     "item": "stone_axe",
