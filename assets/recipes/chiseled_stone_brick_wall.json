@@ -1,0 +1,15 @@
+{
+  "id": "chiseled_stone_brick_wall",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "###"
+  ],
+  "key": {
+    "#": "chiseled_stone_bricks"
+  },
+  "result": {
+    "item": "chiseled_stone_brick_wall",
+    "count": 6
+  }
+}

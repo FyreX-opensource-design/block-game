@@ -68,7 +68,63 @@ class TestFences(unittest.TestCase):
         self.assertFalse(can_fence_connect(AIR))
         self.assertFalse(can_fence_connect("water"))
         self.assertFalse(can_fence_connect("planks_slab"))
-        self.assertFalse(can_fence_connect("vertical_slab"))
+        self.assertFalse(can_fence_connect("cobble_vertical_slab"))
+
+    def test_fence_connect_to_double_slabs(self):
+        # Fences connect to double horizontal slabs and double vertical slabs
+        self.assertTrue(can_fence_connect("double_slab_planks_slab"))
+        self.assertTrue(can_fence_connect("double_slab_cobble_slab"))
+        self.assertTrue(can_fence_connect("double_vertical_slab_z_cobble_vertical_slab"))
+        self.assertTrue(can_fence_connect("double_vertical_slab_x_planks_vertical_slab"))
+
+        # Verify in-world connection to double slab
+        world = self._create_world()
+        world.set_block(5, 60, 5, "wooden_fence")
+        world.set_block(6, 60, 5, "double_slab_planks_slab")
+
+        elements = get_fence_elements(world, 5, 60, 5, BLOCKS["wooden_fence"])
+        # Post (1) + east rails (2) = 3 elements
+        self.assertEqual(len(elements), 3)
+
+        boxes = world.get_collision_boxes(5, 60, 5)
+        # Collision extends towards east neighbor (> 5.7)
+        self.assertTrue(any(bx1 > 5.7 for _, _, _, bx1, _, _ in boxes))
+
+    def test_fence_connect_to_vertical_slabs_with_back_to_fence(self):
+        # Vertical slab has solid half flush against fence (back to fence):
+        # North neighbor (dir "north"): solid half on south side (facing "south")
+        self.assertTrue(can_fence_connect("cobble_vertical_slab_south", "north"))
+        # South neighbor (dir "south"): solid half on north side (facing "north")
+        self.assertTrue(can_fence_connect("cobble_vertical_slab_north", "south"))
+        # West neighbor (dir "west"): solid half on east side (facing "east")
+        self.assertTrue(can_fence_connect("cobble_vertical_slab_east", "west"))
+        # East neighbor (dir "east"): solid half on west side (facing "west")
+        self.assertTrue(can_fence_connect("cobble_vertical_slab_west", "east"))
+
+        # When front or side faces the fence, there is an air gap: must NOT connect
+        self.assertFalse(can_fence_connect("cobble_vertical_slab_north", "north"))
+        self.assertFalse(can_fence_connect("cobble_vertical_slab_south", "south"))
+        self.assertFalse(can_fence_connect("cobble_vertical_slab_west", "west"))
+        self.assertFalse(can_fence_connect("cobble_vertical_slab_east", "east"))
+        self.assertFalse(can_fence_connect("cobble_vertical_slab_north", "east"))
+        self.assertFalse(can_fence_connect("cobble_vertical_slab_east", "north"))
+
+        # In-world verification:
+        world = self._create_world()
+        world.set_block(5, 60, 5, "wooden_fence")
+        # Place west-facing vertical slab to the East: solid side touches fence at x=6.0
+        world.set_block(6, 60, 5, "cobble_vertical_slab_west")
+
+        elements = get_fence_elements(world, 5, 60, 5, BLOCKS["wooden_fence"])
+        self.assertEqual(len(elements), 3)
+
+        boxes = world.get_collision_boxes(5, 60, 5)
+        self.assertTrue(any(bx1 > 5.7 for _, _, _, bx1, _, _ in boxes))
+
+        # If east neighbor faces away (facing "east"), fence should NOT connect to it
+        world.set_block(6, 60, 5, "cobble_vertical_slab_east")
+        elements_no_connect = get_fence_elements(world, 5, 60, 5, BLOCKS["wooden_fence"])
+        self.assertEqual(len(elements_no_connect), 1)  # post only
 
     def test_fence_collision_1_5_blocks_tall(self):
         world = self._create_world()

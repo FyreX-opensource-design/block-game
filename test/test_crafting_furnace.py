@@ -78,9 +78,9 @@ class CraftingAndFurnaceTests(unittest.TestCase):
     def test_flint_and_stone_pickaxe_3x3_crafting(self):
         # Flint pickaxe with knapped flint, plant fiber, and stick
         grid_flint = (
-            "knapped_flint", "knapped_flint", "knapped_flint",
-            "",              "plant_fiber",   "",
-            "",              "stick",         "",
+            "knapped_flint", "plant_fiber", "knapped_flint",
+            "",              "stick",       "",
+            "",              "stick",       "",
         )
         res_flint = craft_match(grid_flint)
         self.assertIsNotNone(res_flint)

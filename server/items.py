@@ -215,6 +215,8 @@ def _picture(entry, item):
     if not model_name:
         if block_entry.get("type") == "fence" or block_entry.get("model") == "fence_post":
             model_name = "fence_inventory"
+        elif block_entry.get("type") == "wall" or block_entry.get("model") == "wall_post" or "wall" in entry.get("id", ""):
+            model_name = "wall_inventory"
         elif block_entry.get("model") and block_entry["model"] not in ("cube", "orientable") and block_entry.get("type") != "slab":
             model_name = block_entry["model"]
 

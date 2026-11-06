@@ -1,0 +1,23 @@
+{
+  "id": "stone_wall",
+  "lang": "block.stone_wall",
+  "tab": [
+    "building"
+  ],
+  "model": "wall_post",
+  "type": "wall",
+  "solid": true,
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "sound": "stone",
+  "loot_table": "blocks/stone_wall",
+  "properties": {
+    "wall": true
+  },
+  "textures": {
+    "top": "stone",
+    "side": "stone",
+    "texture": "stone"
+  }
+}

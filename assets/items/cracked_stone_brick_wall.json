@@ -1,0 +1,14 @@
+{
+  "id": "cracked_stone_brick_wall",
+  "lang": "item.cracked_stone_brick_wall",
+  "tab": [
+    "building"
+  ],
+  "model": "block",
+  "item_model": "wall_inventory",
+  "block": "cracked_stone_brick_wall",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}

@@ -105,6 +105,8 @@ def get_block_opacity(block_obj):
         return 0
     if props.get("fence") or getattr(block_obj, "fence", False) or "fence" in bid:
         return 0
+    if props.get("wall") or getattr(block_obj, "wall", False) or ("wall" in bid and "torch" not in bid):
+        return 0
     if getattr(block_obj, "full_cube", False):
         return 15
     opacity = getattr(block_obj, "opacity", 1.0)
@@ -475,6 +477,16 @@ class LightingSystem:
 
         chunk.light_valid = True
 
+        # Save boundary blocklight faces before update to detect any decreases
+        old_bl_faces = {
+            (cx + 1, cy, cz): chunk.blocklight[:, :, -1].copy() if hasattr(chunk, "blocklight") else None,
+            (cx - 1, cy, cz): chunk.blocklight[:, :, 0].copy() if hasattr(chunk, "blocklight") else None,
+            (cx, cy, cz + 1): chunk.blocklight[:, -1, :].copy() if hasattr(chunk, "blocklight") else None,
+            (cx, cy, cz - 1): chunk.blocklight[:, 0, :].copy() if hasattr(chunk, "blocklight") else None,
+            (cx, cy - 1, cz): chunk.blocklight[0, :, :].copy() if hasattr(chunk, "blocklight") else None,
+            (cx, cy + 1, cz): chunk.blocklight[-1, :, :].copy() if hasattr(chunk, "blocklight") else None,
+        }
+
         # Propagate boundary skylight spillover into neighbors
         sky_spill = (
             (cx + 1, cy, cz, chunk.skylight[:, :, -1], lambda ch: ch.skylight[:, :, 0], lambda ch: ch.data[:, :, 0]),
@@ -496,7 +508,7 @@ class LightingSystem:
                         self.world.mark_dirty(ncx, ncy, ncz)
 
         # Propagate boundary blocklight spillover into neighbors
-        if has_emit:
+        if has_emit or any(v is not None and np.any(v > 0) for v in old_bl_faces.values()):
             bl_spill = (
                 (cx + 1, cy, cz, chunk.blocklight[:, :, -1], lambda ch: ch.blocklight[:, :, 0], lambda ch: ch.data[:, :, 0]),
                 (cx - 1, cy, cz, chunk.blocklight[:, :, 0], lambda ch: ch.blocklight[:, :, -1], lambda ch: ch.data[:, :, -1]),
@@ -509,12 +521,18 @@ class LightingSystem:
                 if 0 <= ncy < SECTION_COUNT:
                     nch = self.world.chunks.get((ncx, ncy, ncz))
                     if nch is not None and getattr(nch, "light_valid", False):
-                        n_step = np.maximum(1, op_lut[n_data_fn(nch)])[..., None]
-                        potential = np.maximum(0, edge.astype(np.int16) - n_step)
-                        diff = potential - n_fn(nch).astype(np.int16)
-                        if np.any(diff > 0):
+                        old_edge = old_bl_faces.get((ncx, ncy, ncz))
+                        decreased = old_edge is not None and np.any(edge < old_edge)
+                        if decreased:
                             nch.light_valid = False
                             self.world.mark_dirty(ncx, ncy, ncz)
+                        else:
+                            n_step = np.maximum(1, op_lut[n_data_fn(nch)])[..., None]
+                            potential = np.maximum(0, edge.astype(np.int16) - n_step)
+                            diff = potential - n_fn(nch).astype(np.int16)
+                            if np.any(diff > 0):
+                                nch.light_valid = False
+                                self.world.mark_dirty(ncx, ncy, ncz)
 
     def on_block_changed(self, x, y, z, was_emitter=False):
         """Called when a block is placed, broken, or updated at (x, y, z)."""
@@ -543,17 +561,10 @@ class LightingSystem:
         elif ly == CHUNK_SIZE - 1 and cy < SECTION_COUNT - 1:
             affected.add((cx, cy + 1, cz))
 
-        # Check if block emits light, previously emitted light, or if chunk has active blocklight
+        # Check if block emits light, previously emitted light, or is a registered light source
         emit = self.get_emission(x, y, z)
-        cur_ch = self.world.chunks.get((cx, cy, cz))
-        had_local_bl = (
-            cur_ch is not None
-            and hasattr(cur_ch, "blocklight")
-            and bool(np.any(cur_ch.blocklight > 0))
-        )
         is_emitter = (
             was_emitter
-            or had_local_bl
             or any(v > 0 for v in emit)
             or (int(x), int(y), int(z)) in self.light_sources
         )
@@ -591,6 +602,18 @@ class LightingSystem:
                 re_invalidated = [
                     ckey for ckey in valid_keys
                     if not getattr(self.world.chunks[ckey], "light_valid", False)
+                ]
+                if not re_invalidated:
+                    break
+                for ckey in re_invalidated:
+                    self.compute_chunk_lighting(*ckey)
+        else:
+            # Recompute any adjacent face neighbor chunk that was invalidated due to spill or decrease
+            for _ in range(2):
+                re_invalidated = [
+                    ckey for ckey in self.world.chunks
+                    if not getattr(self.world.chunks[ckey], "light_valid", False)
+                    and abs(ckey[0] - cx) <= 1 and abs(ckey[1] - cy) <= 1 and abs(ckey[2] - cz) <= 1
                 ]
                 if not re_invalidated:
                     break

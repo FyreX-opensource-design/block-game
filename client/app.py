@@ -885,7 +885,9 @@ class Game(pyglet.window.Window):
             k for k in self.world.dirty
             if abs(k[0] - cx) <= 1 and abs(k[1] - cy) <= 1 and abs(k[2] - cz) <= 1
         ]
-        for k in adjacent_dirty:
+        # Upload up to 2 closest adjacent dirty chunks synchronously to keep frame latency smooth;
+        # any remaining dirty chunks will be budgeted and uploaded by update() via take_dirty(4).
+        for k in sorted(adjacent_dirty, key=lambda k: abs(k[0] - cx) + abs(k[1] - cy) + abs(k[2] - cz))[:2]:
             if k in self.world.chunks:
                 self._upload(k)
                 self.world.dirty.discard(k)
@@ -1983,6 +1985,60 @@ class Game(pyglet.window.Window):
                 self.sound_manager.play_walk_sound("planks")
             return
 
+        from server.blocks import is_fence_gate, get_fence_gate_info, get_fence_gate_block, fence_gate_bounds
+        if is_fence_gate(held.block):
+            target_id = self.world.get_block(hit["x"], hit["y"], hit["z"])
+            from server.fluid import is_water
+            if target_id in ("", AIR, None) or is_water(target_id) or getattr(BLOCKS.get(target_id), "plant", False):
+                px, py, pz = hit["x"], hit["y"], hit["z"]
+            else:
+                px = hit["x"] + hit["nx"]
+                py = hit["y"] + hit["ny"]
+                pz = hit["z"] + hit["nz"]
+
+            if py < 0 or py >= WORLD_HEIGHT:
+                return
+
+            dest_b = self.world.get_block(px, py, pz)
+            if not (dest_b in ("", AIR, None) or is_water(dest_b) or getattr(BLOCKS.get(dest_b), "plant", False)):
+                return
+
+            fg_info = get_fence_gate_info(held.block)
+            base_id = fg_info["base_id"] if fg_info else held.block
+
+            player_yaw = self.player.yaw if self.player is not None else 0.0
+            facing = player_facing_from_yaw(player_yaw)
+
+            fg_box = fence_gate_bounds(px, py, pz, facing, is_open=False)
+            if self.player is not None and fg_box is not None:
+                pl_x, pl_y, pl_z = self.player.pos
+                rad, hgt = self.player.radius, self.player.height
+                p_min_x, p_max_x = pl_x - rad, pl_x + rad
+                p_min_y, p_max_y = pl_y, pl_y + hgt
+                p_min_z, p_max_z = pl_z - rad, pl_z + rad
+                bx0, by0, bz0, bx1, by1, bz1 = fg_box
+                if p_max_x > bx0 and p_min_x < bx1 and p_max_y > by0 and p_min_y < by1 and p_max_z > bz0 and p_min_z < bz1:
+                    return
+
+            placed_id = get_fence_gate_block(base_id, facing, open=False)
+            if self.network_client is not None:
+                self.network_client.send_set_block(px, py, pz, placed_id)
+
+            if self.world.set_block(px, py, pz, placed_id):
+                self._upload_block_change(px, py, pz)
+
+            if self.gamemode == "survival":
+                cur_slot = self.hotbar[self.selected]
+                c = stack_count(cur_slot)
+                if c > 1:
+                    self.hotbar[self.selected] = make_stack(stack_id(cur_slot), c - 1)
+                else:
+                    self.hotbar[self.selected] = empty_stack()
+
+            if getattr(self, "sound_manager", None):
+                self.sound_manager.play_walk_sound("planks")
+            return
+
         # 1. Try combining with targeted block if it's a single slab or an uncapped offset block
         target_pos = (hit["x"], hit["y"], hit["z"])
         target_block = self.world.get_block(*target_pos)
@@ -2756,9 +2812,11 @@ class Game(pyglet.window.Window):
                 offset_info = get_offset_info(block_to_place)
                 torch_info = get_offset_torch_info(block_to_place)
                 v_info = get_vertical_slab_info(block_to_place)
-                from server.blocks import is_fence, fence_collision_boxes
+                from server.blocks import fence_collision_boxes, is_fence, is_wall, wall_collision_boxes
                 if is_fence(block_to_place):
                     b_boxes = fence_collision_boxes(self.world, x, y, z)
+                elif is_wall(block_to_place):
+                    b_boxes = wall_collision_boxes(self.world, x, y, z)
                 elif torch_info is not None and torch_info["capped"]:
                     b_boxes = [(float(x), float(y) + 0.5, float(z), float(x + 1), float(y) + 1.0, float(z + 1))]
                 elif v_off_info is not None:
@@ -3790,6 +3848,34 @@ class Game(pyglet.window.Window):
         if getattr(self, "sound_manager", None):
             self.sound_manager.play_walk_sound("planks")
 
+    def _toggle_fence_gate(self, x, y, z):
+        from server.blocks import get_fence_gate_block, get_fence_gate_info
+        block_id = self.world.get_block(x, y, z)
+        info = get_fence_gate_info(block_id)
+        if info is None:
+            return
+        base_id = info["base_id"]
+        new_open = not info["open"]
+        if new_open:
+            if self.player is not None:
+                pl_x, _, pl_z = self.player.pos
+                if info["facing"] in ("north", "south"):
+                    new_facing = "north" if pl_z > z + 0.5 else "south"
+                else:
+                    new_facing = "west" if pl_x > x + 0.5 else "east"
+            else:
+                new_facing = info["facing"]
+        else:
+            new_facing = info["facing"]
+
+        new_block = get_fence_gate_block(base_id, new_facing, new_open)
+        if self.network_client is not None:
+            self.network_client.send_set_block(x, y, z, new_block)
+        if self.world.set_block(x, y, z, new_block):
+            self._upload_block_change(x, y, z)
+        if getattr(self, "sound_manager", None):
+            self.sound_manager.play_walk_sound("planks")
+
     def _on_right_click(self, modifiers=0):
         if self._handle_mob_interaction():
             return
@@ -3798,7 +3884,7 @@ class Game(pyglet.window.Window):
         if hit is not None:
             is_shift = bool(modifiers & key.MOD_SHIFT) if hasattr(key, "MOD_SHIFT") else False
             target_block = self.world.get_block(hit["x"], hit["y"], hit["z"])
-            from server.blocks import is_door, is_trapdoor
+            from server.blocks import is_door, is_fence_gate, is_trapdoor
             if is_door(target_block):
                 held_slot = self.hotbar[self.selected] if self.selected < len(self.hotbar) else empty_stack()
                 held_id = stack_id(held_slot)
@@ -3811,6 +3897,13 @@ class Game(pyglet.window.Window):
                 held_id = stack_id(held_slot)
                 if not is_shift or not held_id:
                     self._toggle_trapdoor(hit["x"], hit["y"], hit["z"])
+                    return
+
+            if is_fence_gate(target_block):
+                held_slot = self.hotbar[self.selected] if self.selected < len(self.hotbar) else empty_stack()
+                held_id = stack_id(held_slot)
+                if not is_shift or not held_id:
+                    self._toggle_fence_gate(hit["x"], hit["y"], hit["z"])
                     return
 
             if not is_shift and self.world is not None:

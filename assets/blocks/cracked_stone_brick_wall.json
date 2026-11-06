@@ -1,0 +1,23 @@
+{
+  "id": "cracked_stone_brick_wall",
+  "lang": "block.cracked_stone_brick_wall",
+  "tab": [
+    "building"
+  ],
+  "model": "wall_post",
+  "type": "wall",
+  "solid": true,
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "sound": "stone",
+  "loot_table": "blocks/cracked_stone_brick_wall",
+  "properties": {
+    "wall": true
+  },
+  "textures": {
+    "top": "cracked_stone_bricks",
+    "side": "cracked_stone_bricks",
+    "texture": "cracked_stone_bricks"
+  }
+}

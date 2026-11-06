@@ -10,6 +10,7 @@
   "tool": "pickaxe",
   "mining_level": 1,
   "loot_table": "blocks/smooth_stone_slab",
+  "sound": "stone",
   "textures": {
     "top": "smooth_stone",
     "side": "smooth_stone",

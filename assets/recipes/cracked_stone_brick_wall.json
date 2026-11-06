@@ -1,0 +1,15 @@
+{
+  "id": "cracked_stone_brick_wall",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "###"
+  ],
+  "key": {
+    "#": "cracked_stone_bricks"
+  },
+  "result": {
+    "item": "cracked_stone_brick_wall",
+    "count": 6
+  }
+}

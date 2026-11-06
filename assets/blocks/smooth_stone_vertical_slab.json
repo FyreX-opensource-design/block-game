@@ -11,6 +11,7 @@
   "mining_level": 1,
   "loot_table": "blocks/smooth_stone_vertical_slab",
   "full_block": "smooth_stone",
+  "sound": "stone",
   "textures": {
     "top": "smooth_stone",
     "side": "smooth_stone",

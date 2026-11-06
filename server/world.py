@@ -886,7 +886,9 @@ class World:
         from server.blocks import (
             door_bounds,
             fence_collision_boxes,
+            fence_gate_collision_boxes,
             get_door_info,
+            get_fence_gate_info,
             get_offset_info,
             get_offset_torch_info,
             get_slab_info,
@@ -894,9 +896,12 @@ class World:
             get_vertical_slab_info,
             get_vertical_slab_offset_info,
             is_fence,
+            is_fence_gate,
+            is_wall,
             trapdoor_bounds,
             vertical_slab_bounds,
             vertical_slab_offset_bounds,
+            wall_collision_boxes,
         )
 
         t_info = get_offset_torch_info(b_obj)
@@ -944,6 +949,12 @@ class World:
 
         if is_fence(b_obj):
             return fence_collision_boxes(self, x, y, z)
+
+        if is_fence_gate(b_obj):
+            return fence_gate_collision_boxes(self, x, y, z)
+
+        if is_wall(b_obj):
+            return wall_collision_boxes(self, x, y, z)
 
         return [(float(x), float(y), float(z), float(x + 1), float(y + 1), float(z + 1))]
 
@@ -1851,6 +1862,7 @@ class World:
             from server.fluid import is_fluid
             from server.blocks import (
                 door_bounds,
+                fence_gate_raycast_boxes,
                 fence_raycast_boxes,
                 get_door_info,
                 get_double_vertical_slab_info,
@@ -1861,12 +1873,15 @@ class World:
                 get_vertical_slab_offset_info,
                 get_vertical_slab_torch_info,
                 is_fence,
+                is_fence_gate,
                 is_offset_block,
                 is_offset_torch,
                 is_slab,
                 is_vertical_slab_offset,
+                is_wall,
                 trapdoor_bounds,
                 vertical_slab_bounds,
+                wall_raycast_boxes,
             )
 
             blk = self.get_block(x, y, z)
@@ -2236,6 +2251,12 @@ class World:
                             )
                         elif is_fence(b_obj):
                             for r_box in fence_raycast_boxes(self, x, y, z):
+                                boxes.append(r_box)
+                        elif is_fence_gate(b_obj):
+                            for r_box in fence_gate_raycast_boxes(self, x, y, z):
+                                boxes.append(r_box)
+                        elif is_wall(b_obj):
+                            for r_box in wall_raycast_boxes(self, x, y, z):
                                 boxes.append(r_box)
                         elif b_obj is not None and b_obj.properties.get("torch") and b_obj.elements:
                             el = b_obj.elements[0]

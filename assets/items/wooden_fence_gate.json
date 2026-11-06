@@ -1,0 +1,12 @@
+{
+  "id": "wooden_fence_gate",
+  "lang": "item.wooden_fence_gate",
+  "tab": ["building"],
+  "model": "block",
+  "item_model": "fence_gate_inventory",
+  "block": "wooden_fence_gate",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}

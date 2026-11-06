@@ -7,6 +7,11 @@
   "tool": "pickaxe",
   "mining_level": 1,
   "loot_table": "blocks/smooth_sandstone",
+  "sound": "stone",
   "gravity": false,
-  "textures": {"top": "smooth_sandstone", "side": "smooth_sandstone", "bottom": "smooth_sandstone"}
+  "textures": {
+    "top": "smooth_sandstone",
+    "side": "smooth_sandstone",
+    "bottom": "smooth_sandstone"
+  }
 }

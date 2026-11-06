@@ -1,0 +1,14 @@
+{
+  "id": "stone_wall",
+  "lang": "item.stone_wall",
+  "tab": [
+    "building"
+  ],
+  "model": "block",
+  "item_model": "wall_inventory",
+  "block": "stone_wall",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}
