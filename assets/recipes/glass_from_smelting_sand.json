@@ -1,0 +1,12 @@
+{
+  "id": "glass_from_smelting_sand",
+  "type": "smelting",
+  "ingredient": "sand",
+  "result": {
+    "item": "glass",
+    "count": 1
+  },
+  "cookingtime": 10.0,
+  "experience": 0.1
+}
+

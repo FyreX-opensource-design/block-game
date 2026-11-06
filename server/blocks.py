@@ -50,6 +50,16 @@ FACE_INDEX = {
     "cross_b": 7,
 }
 ASSETS = Path(__file__).resolve().parents[1] / "assets"
+FACE_UV_VECTORS = (
+    ((0, 0, -1), (0, 1, 0)),   # 0: +X (East): right=-Z, up=+Y
+    ((0, 0, 1), (0, 1, 0)),    # 1: -X (West): right=+Z, up=+Y
+    ((1, 0, 0), (0, 0, -1)),   # 2: +Y (Up): right=+X, up=-Z
+    ((1, 0, 0), (0, 0, 1)),    # 3: -Y (Down): right=+X, up=+Z
+    ((1, 0, 0), (0, 1, 0)),    # 4: +Z (South): right=+X, up=+Y
+    ((-1, 0, 0), (0, 1, 0)),   # 5: -Z (North): right=-X, up=+Y
+)
+GLASS_CTM_UVS = ()
+GLASS_CTM_RECTS = {}
 
 
 class Tab:
@@ -286,6 +296,63 @@ def is_sub_cell(block_or_id):
     if block is None:
         return False
     return bool(block.properties.get("sub_cell"))
+
+
+def is_glass(block_or_id):
+    if not block_or_id:
+        return False
+    block = BLOCKS.get(block_or_id) if isinstance(block_or_id, str) else block_or_id
+    if block is None:
+        return isinstance(block_or_id, str) and block_or_id in ("glass", "glass_slab", "glass_vertical_slab")
+    props = getattr(block, "properties", {})
+    if props.get("double_slab"):
+        bottom_id = props.get("bottom", "")
+        top_id = props.get("top", "")
+        return is_glass(bottom_id) and is_glass(top_id)
+    if props.get("double_vertical_slab"):
+        pos_id = props.get("positive_block") or props.get("positive", "")
+        neg_id = props.get("negative_block") or props.get("negative", "")
+        return is_glass(pos_id) and is_glass(neg_id)
+    return bool(
+        getattr(block, "glass", False)
+        or props.get("glass", False)
+        or getattr(block, "id", "") in ("glass", "glass_slab", "glass_vertical_slab")
+    )
+
+
+def is_face_glass(block_or_id, normal_i):
+    if not block_or_id:
+        return False
+    block = BLOCKS.get(block_or_id) if isinstance(block_or_id, str) else block_or_id
+    if block is None:
+        return False
+    if is_glass(block):
+        return True
+    props = getattr(block, "properties", {})
+    if props.get("double_slab"):
+        if normal_i == 2:
+            return is_glass(props.get("top", ""))
+        elif normal_i == 3:
+            return is_glass(props.get("bottom", ""))
+        return False
+    if props.get("double_vertical_slab"):
+        pos_facing = props.get("positive_facing")
+        neg_facing = props.get("negative_facing")
+        if pos_facing and normal_i == FACE_INDEX.get(pos_facing):
+            return is_glass(props.get("positive_block") or props.get("positive", ""))
+        if neg_facing and normal_i == FACE_INDEX.get(neg_facing):
+            return is_glass(props.get("negative_block") or props.get("negative", ""))
+        return False
+    return False
+
+
+def get_glass_ctm_uv(mask, model_uv=(0, 0, 16, 16)):
+    rect = GLASS_CTM_RECTS.get(mask)
+    if rect is not None:
+        return _map_uv(rect, model_uv)
+    if GLASS_CTM_UVS and 0 <= mask < len(GLASS_CTM_UVS):
+        return GLASS_CTM_UVS[mask]
+    return None
 
 
 def is_slab(block_or_id):
@@ -582,6 +649,519 @@ def vertical_slab_offset_bounds(x, y, z, facing):
     """World-space AABB for the solid half of an uncapped vertical slab offset block."""
     vx0, _, vz0, vx1, _, vz1 = vertical_slab_bounds(x, y, z, facing)
     return (vx0, float(y) - 0.5, vz0, vx1, float(y) + 0.5, vz1)
+
+
+def door_bounds(x, y, z, facing, is_open=False, hinge="left"):
+    """World-space AABB for a door block (lower or upper half)."""
+    x = float(x)
+    y = float(y)
+    z = float(z)
+    t = 3.0 / 16.0
+    if not is_open:
+        if facing == "north":
+            return (x, y, z, x + 1.0, y + 1.0, z + t)
+        elif facing == "south":
+            return (x, y, z + 1.0 - t, x + 1.0, y + 1.0, z + 1.0)
+        elif facing == "west":
+            return (x, y, z, x + t, y + 1.0, z + 1.0)
+        else:  # east
+            return (x + 1.0 - t, y, z, x + 1.0, y + 1.0, z + 1.0)
+    else:
+        if facing == "north":
+            return (
+                (x, y, z, x + t, y + 1.0, z + 1.0)
+                if hinge == "left"
+                else (x + 1.0 - t, y, z, x + 1.0, y + 1.0, z + 1.0)
+            )
+        elif facing == "south":
+            return (
+                (x + 1.0 - t, y, z, x + 1.0, y + 1.0, z + 1.0)
+                if hinge == "left"
+                else (x, y, z, x + t, y + 1.0, z + 1.0)
+            )
+        elif facing == "west":
+            return (
+                (x, y, z + 1.0 - t, x + 1.0, y + 1.0, z + 1.0)
+                if hinge == "left"
+                else (x, y, z, x + 1.0, y + 1.0, z + t)
+            )
+        else:  # east
+            return (
+                (x, y, z, x + 1.0, y + 1.0, z + t)
+                if hinge == "left"
+                else (x, y, z + 1.0 - t, x + 1.0, y + 1.0, z + 1.0)
+            )
+
+
+def get_door_relative_offsets(facing):
+    """Return ((left_dx, left_dz), (right_dx, right_dz)) relative to the given facing."""
+    if facing == "north":
+        return (-1, 0), (1, 0)
+    elif facing == "south":
+        return (1, 0), (-1, 0)
+    elif facing == "west":
+        return (0, 1), (0, -1)
+    else:  # east
+        return (0, -1), (0, 1)
+
+
+def is_door(block_or_id):
+    """Return True if block_or_id is a door (any half, facing, or open state)."""
+    if not block_or_id:
+        return False
+    block = BLOCKS.get(block_or_id) if isinstance(block_or_id, str) else block_or_id
+    if block is None:
+        return False
+    props = getattr(block, "properties", {})
+    b_id = getattr(block, "id", str(block_or_id))
+    if props.get("trapdoor") or getattr(block, "trapdoor", False) or "trapdoor" in b_id:
+        return False
+    if props.get("door") or getattr(block, "door", False):
+        return True
+    return "door" in b_id
+
+
+def get_door_info(block_or_id):
+    """Return door metadata or None if not a door:
+    {
+        "base_id": str,
+        "half": "lower" | "upper",
+        "facing": "north" | "south" | "east" | "west",
+        "hinge": "left" | "right",
+        "open": bool,
+    }
+    """
+    if not block_or_id:
+        return None
+    block = BLOCKS.get(block_or_id) if isinstance(block_or_id, str) else block_or_id
+    if block is None:
+        return None
+    props = getattr(block, "properties", {})
+    b_id = getattr(block, "id", str(block_or_id))
+    if props.get("trapdoor") or getattr(block, "trapdoor", False) or "trapdoor" in b_id:
+        return None
+    if not (props.get("door") or getattr(block, "door", False) or "door" in b_id):
+        return None
+
+    base_id = getattr(block, "base_id", None)
+    if not base_id or base_id == b_id:
+        parts = b_id.split("_")
+        door_idx = next((i for i, p in enumerate(parts) if "door" in p), -1)
+        if door_idx != -1:
+            base_id = "_".join(parts[: door_idx + 1])
+        else:
+            base_id = "wooden_door"
+
+    half = props.get("half")
+    if half is None:
+        half = "upper" if "_upper" in b_id else "lower"
+
+    facing = props.get("facing")
+    if facing is None:
+        for f in ("north", "south", "east", "west"):
+            if f"_{f}" in b_id:
+                facing = f
+                break
+        if facing is None:
+            facing = "south"
+
+    hinge = props.get("hinge")
+    if hinge is None:
+        hinge = "right" if "_right" in b_id else "left"
+
+    is_open = props.get("open")
+    if is_open is None:
+        is_open = b_id.endswith("_open")
+
+    return {
+        "base_id": base_id,
+        "half": half,
+        "facing": facing,
+        "hinge": hinge,
+        "open": bool(is_open),
+    }
+
+
+def get_door_block(base_id, half="lower", facing="south", open=False, hinge="left"):
+    """Return the block ID string for a door variant."""
+    hinge_str = "_right" if hinge == "right" else ""
+    open_suffix = "_open" if open else ""
+    return f"{base_id}_{half}_{facing}{hinge_str}{open_suffix}"
+
+
+def _get_door_elements(
+    uv_main_front,
+    uv_main_back,
+    uv_edge_h,
+    uv_edge_h_z,
+    uv_edge_v0,
+    uv_edge_v1,
+    facing,
+    is_open=False,
+    hinge="left",
+):
+    t = 3.0
+    faces = {}
+    if not is_open:
+        if facing == "north":
+            origin, extent = [0.0, 0.0, 0.0], [16.0, 16.0, t]
+            if hinge == "left":
+                faces[FACE_INDEX["north"]] = uv_main_front
+                faces[FACE_INDEX["south"]] = uv_main_back
+                faces[FACE_INDEX["west"]] = uv_edge_v0
+                faces[FACE_INDEX["east"]] = uv_edge_v1
+            else:
+                faces[FACE_INDEX["north"]] = uv_main_back
+                faces[FACE_INDEX["south"]] = uv_main_front
+                faces[FACE_INDEX["west"]] = uv_edge_v1
+                faces[FACE_INDEX["east"]] = uv_edge_v0
+            faces[FACE_INDEX["up"]] = uv_edge_h
+            faces[FACE_INDEX["down"]] = uv_edge_h
+        elif facing == "south":
+            origin, extent = [0.0, 0.0, 16.0 - t], [16.0, 16.0, 16.0]
+            if hinge == "left":
+                faces[FACE_INDEX["south"]] = uv_main_front
+                faces[FACE_INDEX["north"]] = uv_main_back
+                faces[FACE_INDEX["west"]] = uv_edge_v1
+                faces[FACE_INDEX["east"]] = uv_edge_v0
+            else:
+                faces[FACE_INDEX["south"]] = uv_main_back
+                faces[FACE_INDEX["north"]] = uv_main_front
+                faces[FACE_INDEX["west"]] = uv_edge_v0
+                faces[FACE_INDEX["east"]] = uv_edge_v1
+            faces[FACE_INDEX["up"]] = uv_edge_h
+            faces[FACE_INDEX["down"]] = uv_edge_h
+        elif facing == "west":
+            origin, extent = [0.0, 0.0, 0.0], [t, 16.0, 16.0]
+            if hinge == "left":
+                faces[FACE_INDEX["west"]] = uv_main_front
+                faces[FACE_INDEX["east"]] = uv_main_back
+                faces[FACE_INDEX["south"]] = uv_edge_v0
+                faces[FACE_INDEX["north"]] = uv_edge_v1
+            else:
+                faces[FACE_INDEX["west"]] = uv_main_back
+                faces[FACE_INDEX["east"]] = uv_main_front
+                faces[FACE_INDEX["south"]] = uv_edge_v1
+                faces[FACE_INDEX["north"]] = uv_edge_v0
+            faces[FACE_INDEX["up"]] = uv_edge_h_z
+            faces[FACE_INDEX["down"]] = uv_edge_h_z
+        else:  # east
+            origin, extent = [16.0 - t, 0.0, 0.0], [16.0, 16.0, 16.0]
+            if hinge == "left":
+                faces[FACE_INDEX["east"]] = uv_main_front
+                faces[FACE_INDEX["west"]] = uv_main_back
+                faces[FACE_INDEX["north"]] = uv_edge_v0
+                faces[FACE_INDEX["south"]] = uv_edge_v1
+            else:
+                faces[FACE_INDEX["east"]] = uv_main_back
+                faces[FACE_INDEX["west"]] = uv_main_front
+                faces[FACE_INDEX["north"]] = uv_edge_v1
+                faces[FACE_INDEX["south"]] = uv_edge_v0
+            faces[FACE_INDEX["up"]] = uv_edge_h_z
+            faces[FACE_INDEX["down"]] = uv_edge_h_z
+    else:
+        if facing == "north":
+            if hinge == "left":
+                origin, extent = [0.0, 0.0, 0.0], [t, 16.0, 16.0]
+                faces[FACE_INDEX["west"]] = uv_main_front
+                faces[FACE_INDEX["east"]] = uv_main_back
+            else:
+                origin, extent = [16.0 - t, 0.0, 0.0], [16.0, 16.0, 16.0]
+                faces[FACE_INDEX["east"]] = uv_main_back
+                faces[FACE_INDEX["west"]] = uv_main_front
+            faces[FACE_INDEX["up"]] = uv_edge_h_z
+            faces[FACE_INDEX["down"]] = uv_edge_h_z
+            faces[FACE_INDEX["north"]] = uv_edge_v0
+            faces[FACE_INDEX["south"]] = uv_edge_v1
+        elif facing == "south":
+            if hinge == "left":
+                origin, extent = [16.0 - t, 0.0, 0.0], [16.0, 16.0, 16.0]
+                faces[FACE_INDEX["east"]] = uv_main_front
+                faces[FACE_INDEX["west"]] = uv_main_back
+            else:
+                origin, extent = [0.0, 0.0, 0.0], [t, 16.0, 16.0]
+                faces[FACE_INDEX["west"]] = uv_main_back
+                faces[FACE_INDEX["east"]] = uv_main_front
+            faces[FACE_INDEX["up"]] = uv_edge_h_z
+            faces[FACE_INDEX["down"]] = uv_edge_h_z
+            faces[FACE_INDEX["south"]] = uv_edge_v0
+            faces[FACE_INDEX["north"]] = uv_edge_v1
+        elif facing == "west":
+            if hinge == "left":
+                origin, extent = [0.0, 0.0, 16.0 - t], [16.0, 16.0, 16.0]
+                faces[FACE_INDEX["south"]] = uv_main_front
+                faces[FACE_INDEX["north"]] = uv_main_back
+            else:
+                origin, extent = [0.0, 0.0, 0.0], [16.0, 16.0, t]
+                faces[FACE_INDEX["north"]] = uv_main_back
+                faces[FACE_INDEX["south"]] = uv_main_front
+            faces[FACE_INDEX["up"]] = uv_edge_h
+            faces[FACE_INDEX["down"]] = uv_edge_h
+            faces[FACE_INDEX["west"]] = uv_edge_v0
+            faces[FACE_INDEX["east"]] = uv_edge_v1
+        else:  # east
+            if hinge == "left":
+                origin, extent = [0.0, 0.0, 0.0], [16.0, 16.0, t]
+                faces[FACE_INDEX["north"]] = uv_main_front
+                faces[FACE_INDEX["south"]] = uv_main_back
+            else:
+                origin, extent = [0.0, 0.0, 16.0 - t], [16.0, 16.0, 16.0]
+                faces[FACE_INDEX["south"]] = uv_main_back
+                faces[FACE_INDEX["north"]] = uv_main_front
+            faces[FACE_INDEX["up"]] = uv_edge_h
+            faces[FACE_INDEX["down"]] = uv_edge_h
+            faces[FACE_INDEX["east"]] = uv_edge_v0
+            faces[FACE_INDEX["west"]] = uv_edge_v1
+
+    return [{"from": origin, "to": extent, "faces": faces}]
+
+    return [{"from": origin, "to": extent, "faces": faces}]
+
+
+def trapdoor_bounds(x, y, z, half="bottom", facing="north", is_open=False):
+    """World-space AABB for a trapdoor block."""
+    x = float(x)
+    y = float(y)
+    z = float(z)
+    t = 3.0 / 16.0
+    if not is_open:
+        if half == "bottom":
+            return (x, y, z, x + 1.0, y + t, z + 1.0)
+        else:
+            return (x, y + 1.0 - t, z, x + 1.0, y + 1.0, z + 1.0)
+    else:
+        if facing == "north":
+            return (x, y, z, x + 1.0, y + 1.0, z + t)
+        elif facing == "south":
+            return (x, y, z + 1.0 - t, x + 1.0, y + 1.0, z + 1.0)
+        elif facing == "west":
+            return (x, y, z, x + t, y + 1.0, z + 1.0)
+        else:  # east
+            return (x + 1.0 - t, y, z, x + 1.0, y + 1.0, z + 1.0)
+
+
+def is_trapdoor(block_or_id):
+    """Return True if block_or_id is a trapdoor."""
+    if not block_or_id:
+        return False
+    block = BLOCKS.get(block_or_id) if isinstance(block_or_id, str) else block_or_id
+    if block is None:
+        return False
+    props = getattr(block, "properties", {})
+    if props.get("trapdoor") or getattr(block, "trapdoor", False):
+        return True
+    b_id = getattr(block, "id", str(block_or_id))
+    return "trapdoor" in b_id
+
+
+def get_trapdoor_info(block_or_id):
+    """Return trapdoor metadata or None if not a trapdoor:
+    {
+        "base_id": str,
+        "half": "bottom" | "top",
+        "facing": "north" | "south" | "east" | "west",
+        "open": bool,
+    }
+    """
+    if not block_or_id:
+        return None
+    block = BLOCKS.get(block_or_id) if isinstance(block_or_id, str) else block_or_id
+    if block is None:
+        return None
+    props = getattr(block, "properties", {})
+    b_id = getattr(block, "id", str(block_or_id))
+    if not (props.get("trapdoor") or getattr(block, "trapdoor", False) or "trapdoor" in b_id):
+        return None
+
+    base_id = getattr(block, "base_id", None)
+    if not base_id or base_id == b_id:
+        parts = b_id.split("_")
+        td_idx = next((i for i, p in enumerate(parts) if "trapdoor" in p), -1)
+        if td_idx != -1:
+            base_id = "_".join(parts[: td_idx + 1])
+        else:
+            base_id = "wooden_trapdoor"
+
+    half = props.get("half")
+    if half is None:
+        half = "top" if "_top" in b_id else "bottom"
+
+    facing = props.get("facing")
+    if facing is None:
+        for f in ("north", "south", "east", "west"):
+            if f"_{f}" in b_id:
+                facing = f
+                break
+        if facing is None:
+            facing = "north"
+
+    is_open = props.get("open")
+    if is_open is None:
+        is_open = b_id.endswith("_open")
+
+    return {
+        "base_id": base_id,
+        "half": half,
+        "facing": facing,
+        "open": bool(is_open),
+    }
+
+
+def get_trapdoor_block(base_id, half="bottom", facing="north", open=False):
+    """Return the block ID string for a trapdoor variant."""
+    open_suffix = "_open" if open else ""
+    return f"{base_id}_{half}_{facing}{open_suffix}"
+
+
+def _get_trapdoor_elements(
+    uv_main,
+    uv_edge_h,
+    uv_edge_h_z,
+    uv_edge_v0,
+    uv_edge_v1,
+    half="bottom",
+    facing="north",
+    is_open=False,
+):
+    t = 3.0
+    faces = {}
+    if not is_open:
+        if half == "bottom":
+            origin, extent = [0.0, 0.0, 0.0], [16.0, t, 16.0]
+        else:
+            origin, extent = [0.0, 16.0 - t, 0.0], [16.0, 16.0, 16.0]
+        faces[FACE_INDEX["up"]] = uv_main
+        faces[FACE_INDEX["down"]] = uv_main
+        faces[FACE_INDEX["north"]] = uv_edge_h
+        faces[FACE_INDEX["south"]] = uv_edge_h
+        faces[FACE_INDEX["west"]] = uv_edge_h_z
+        faces[FACE_INDEX["east"]] = uv_edge_h_z
+    else:
+        if facing == "north":
+            origin, extent = [0.0, 0.0, 0.0], [16.0, 16.0, t]
+            faces[FACE_INDEX["north"]] = uv_main
+            faces[FACE_INDEX["south"]] = uv_main
+            faces[FACE_INDEX["up"]] = uv_edge_h
+            faces[FACE_INDEX["down"]] = uv_edge_h
+            faces[FACE_INDEX["west"]] = uv_edge_v0
+            faces[FACE_INDEX["east"]] = uv_edge_v1
+        elif facing == "south":
+            origin, extent = [0.0, 0.0, 16.0 - t], [16.0, 16.0, 16.0]
+            faces[FACE_INDEX["south"]] = uv_main
+            faces[FACE_INDEX["north"]] = uv_main
+            faces[FACE_INDEX["up"]] = uv_edge_h
+            faces[FACE_INDEX["down"]] = uv_edge_h
+            faces[FACE_INDEX["west"]] = uv_edge_v1
+            faces[FACE_INDEX["east"]] = uv_edge_v0
+        elif facing == "west":
+            origin, extent = [0.0, 0.0, 0.0], [t, 16.0, 16.0]
+            faces[FACE_INDEX["west"]] = uv_main
+            faces[FACE_INDEX["east"]] = uv_main
+            faces[FACE_INDEX["up"]] = uv_edge_h_z
+            faces[FACE_INDEX["down"]] = uv_edge_h_z
+            faces[FACE_INDEX["south"]] = uv_edge_v0
+            faces[FACE_INDEX["north"]] = uv_edge_v1
+        else:  # east
+            origin, extent = [16.0 - t, 0.0, 0.0], [16.0, 16.0, 16.0]
+            faces[FACE_INDEX["east"]] = uv_main
+            faces[FACE_INDEX["west"]] = uv_main
+            faces[FACE_INDEX["up"]] = uv_edge_h_z
+            faces[FACE_INDEX["down"]] = uv_edge_h_z
+            faces[FACE_INDEX["north"]] = uv_edge_v0
+            faces[FACE_INDEX["south"]] = uv_edge_v1
+
+    return [{"from": origin, "to": extent, "faces": faces}]
+
+
+def is_fence(block_or_id):
+    """Return True if block_or_id is a fence block."""
+    if not block_or_id:
+        return False
+    block = BLOCKS.get(block_or_id) if isinstance(block_or_id, str) else block_or_id
+    if block is None:
+        return False
+    props = getattr(block, "properties", {})
+    if props.get("fence") or getattr(block, "fence", False):
+        return True
+    b_id = getattr(block, "id", str(block_or_id))
+    return "fence" in b_id and "gate" not in b_id
+
+
+def can_fence_connect(block_or_id):
+    """Return True if a fence should connect to the block at this position."""
+    if not block_or_id:
+        return False
+    block = BLOCKS.get(block_or_id) if isinstance(block_or_id, str) else block_or_id
+    if block is None:
+        return False
+    if is_fence(block):
+        return True
+    props = getattr(block, "properties", {})
+    # Connects to solid, full-cube blocks (e.g. wood planks, stone, etc.)
+    return bool(block.solid and block.full_cube and not props.get("slab") and not props.get("vertical_slab"))
+
+
+def fence_collision_boxes(world, x, y, z):
+    """World-space collision boxes for a fence block at (x, y, z).
+    Acts as 1.5 blocks tall!
+    """
+    x = float(x)
+    y = float(y)
+    z = float(z)
+    h = 1.5
+
+    # Center post (4x4 pixels centered)
+    boxes = [(x + 6.0 / 16.0, y, z + 6.0 / 16.0, x + 10.0 / 16.0, y + h, z + 10.0 / 16.0)]
+
+    if world is not None:
+        ix, iy, iz = int(x), int(y), int(z)
+        if can_fence_connect(world.get_block(ix, iy, iz - 1)):
+            boxes.append((x + 6.0 / 16.0, y, z, x + 10.0 / 16.0, y + h, z + 6.0 / 16.0))
+        if can_fence_connect(world.get_block(ix, iy, iz + 1)):
+            boxes.append((x + 6.0 / 16.0, y, z + 10.0 / 16.0, x + 10.0 / 16.0, y + h, z + 1.0))
+        if can_fence_connect(world.get_block(ix - 1, iy, iz)):
+            boxes.append((x, y, z + 6.0 / 16.0, x + 6.0 / 16.0, y + h, z + 10.0 / 16.0))
+        if can_fence_connect(world.get_block(ix + 1, iy, iz)):
+            boxes.append((x + 10.0 / 16.0, y, z + 6.0 / 16.0, x + 1.0, y + h, z + 10.0 / 16.0))
+
+    return boxes
+
+
+def fence_raycast_boxes(world, x, y, z):
+    """World-space selection/hit boxes for raycasting a fence block at (x, y, z).
+    Height is 1.0 block tall so that placing a block above targets (x, y + 1, z).
+    """
+    ix, iy, iz = int(x), int(y), int(z)
+    fx, fy, fz = float(x), float(y), float(z)
+
+    boxes = [(ix, iy, iz, "fence_post", (fx + 6.0 / 16.0, fy, fz + 6.0 / 16.0, fx + 10.0 / 16.0, fy + 1.0, fz + 10.0 / 16.0))]
+
+    if world is not None:
+        if can_fence_connect(world.get_block(ix, iy, iz - 1)):
+            boxes.append((ix, iy, iz, "fence_north", (fx + 6.0 / 16.0, fy, fz, fx + 10.0 / 16.0, fy + 1.0, fz + 6.0 / 16.0)))
+        if can_fence_connect(world.get_block(ix, iy, iz + 1)):
+            boxes.append((ix, iy, iz, "fence_south", (fx + 6.0 / 16.0, fy, fz + 10.0 / 16.0, fx + 10.0 / 16.0, fy + 1.0, fz + 1.0)))
+        if can_fence_connect(world.get_block(ix - 1, iy, iz)):
+            boxes.append((ix, iy, iz, "fence_west", (fx, fy, fz + 6.0 / 16.0, fx + 6.0 / 16.0, fy + 1.0, fz + 10.0 / 16.0)))
+        if can_fence_connect(world.get_block(ix + 1, iy, iz)):
+            boxes.append((ix, iy, iz, "fence_east", (fx + 10.0 / 16.0, fy, fz + 6.0 / 16.0, fx + 1.0, fy + 1.0, fz + 10.0 / 16.0)))
+
+    return boxes
+
+
+def get_fence_elements(world, wx, wy, wz, block):
+    """Return model elements for a fence at (wx, wy, wz), including connecting rails."""
+    elements = list(block.elements)
+    if world is not None and hasattr(block, "fence_rails"):
+        if can_fence_connect(world.get_block(wx, wy, wz - 1)):
+            elements.extend(block.fence_rails["north"])
+        if can_fence_connect(world.get_block(wx, wy, wz + 1)):
+            elements.extend(block.fence_rails["south"])
+        if can_fence_connect(world.get_block(wx - 1, wy, wz)):
+            elements.extend(block.fence_rails["west"])
+        if can_fence_connect(world.get_block(wx + 1, wy, wz)):
+            elements.extend(block.fence_rails["east"])
+    return elements
 
 
 def get_waterlogged_slab(base_id, half="bottom", level=8):
@@ -944,6 +1524,8 @@ def can_support_torch(block_or_id, mount="up"):
         if mount in ("up", "up_offset"):
             return False
         return mount != OPPOSITE_FACING[v_info["facing"]]
+    if is_fence(block):
+        return mount == "up"
     return bool(block.full_cube)
 
 
@@ -1253,6 +1835,11 @@ def _load_registry():
                 texture_names.append(texture_name)
         prepared.append((entry, _load_model(entry["model"]), textures, _block_name(entry, lang)))
 
+    for m in range(16):
+        ctm_name = f"glass_{m}"
+        if ctm_name not in texture_names and (ASSETS / "textures" / f"{ctm_name}.png").is_file():
+            texture_names.append(ctm_name)
+
     images = {}
     for texture_name in texture_names:
         path = ASSETS / "textures" / f"{texture_name}.png"
@@ -1260,6 +1847,20 @@ def _load_registry():
             raise FileNotFoundError(path)
         images[texture_name] = read_png(path)
     atlas, rects = _pack_atlas(images)
+
+    global GLASS_CTM_UVS, GLASS_CTM_RECTS
+    glass_ctm_uvs = []
+    glass_ctm_rects = {}
+    for m in range(16):
+        c_name = f"glass_{m}"
+        if c_name in rects:
+            glass_ctm_rects[m] = rects[c_name]
+            glass_ctm_uvs.append(_map_uv(rects[c_name], [0, 0, 16, 16]))
+        elif "glass" in rects:
+            glass_ctm_rects[m] = rects["glass"]
+            glass_ctm_uvs.append(_map_uv(rects["glass"], [0, 0, 16, 16]))
+    GLASS_CTM_UVS = tuple(glass_ctm_uvs)
+    GLASS_CTM_RECTS = glass_ctm_rects
 
     blocks = {}
     by_index = [None]
@@ -1272,18 +1873,21 @@ def _load_registry():
             origin = [float(value) for value in element["from"]]
             extent = [float(value) for value in element["to"]]
             faces = {}
+            face_uv_specs = {}
             for face_name, spec in element["faces"].items():
                 if face_name not in FACE_INDEX:
                     raise ValueError(f"{entry['id']} has an unknown face {face_name}")
                 texture_name = _resolve_texture(spec["texture"], textures, entry["id"])
                 if texture_name not in rects:
                     raise KeyError(f"{entry['id']} texture {texture_name} was not loaded")
-                uv = _map_uv(rects[texture_name], spec.get("uv", [0, 0, 16, 16]))
+                spec_uv = spec.get("uv", [0, 0, 16, 16])
+                uv = _map_uv(rects[texture_name], spec_uv)
                 index = FACE_INDEX[face_name]
                 faces[index] = uv
+                face_uv_specs[index] = spec_uv
                 if face_uvs[index] is None:
                     face_uvs[index] = uv
-            resolved.append({"from": origin, "to": extent, "faces": faces})
+            resolved.append({"from": origin, "to": extent, "faces": faces, "face_uv_specs": face_uv_specs})
         full_cube = (
             len(resolved) == 1
             and resolved[0]["from"] == [0.0, 0.0, 0.0]
@@ -1311,6 +1915,9 @@ def _load_registry():
         properties = dict(entry.get("properties") or {})
         is_slab_type = entry.get("type") == "slab" or properties.get("slab", False) or entry.get("model") == "slab"
         is_vertical_slab_type = entry.get("type") == "vertical_slab" or entry.get("model") == "vertical_slab"
+        is_door_type = entry.get("type") == "door" or properties.get("door", False)
+        is_trapdoor_type = entry.get("type") == "trapdoor" or properties.get("trapdoor", False)
+        is_fence_type = entry.get("type") == "fence" or properties.get("fence", False) or entry.get("model") == "fence_post"
         rotation_type = properties.get("rotation") or entry.get("rotation")
         if not rotation_type and entry.get("model") == "orientable":
             rotation_type = "horizontal"
@@ -1326,6 +1933,21 @@ def _load_registry():
             base_props["vertical_slab"] = True
             base_props["rotation"] = "horizontal"
             base_props["facing"] = properties.get("facing", "south")
+            full_cube = False
+        if is_door_type:
+            base_props["door"] = True
+            base_props["half"] = properties.get("half", "lower")
+            base_props["facing"] = properties.get("facing", "south")
+            base_props["open"] = properties.get("open", False)
+            full_cube = False
+        if is_trapdoor_type:
+            base_props["trapdoor"] = True
+            base_props["half"] = properties.get("half", "bottom")
+            base_props["facing"] = properties.get("facing", "north")
+            base_props["open"] = properties.get("open", False)
+            full_cube = False
+        if is_fence_type:
+            base_props["fence"] = True
             full_cube = False
         tint_val = entry.get("tint") or properties.get("tint")
         if tint_val is None and entry["id"] in ("grass", "muddy_grass"):
@@ -1589,6 +2211,325 @@ def _load_registry():
                     cook_speed=block.cook_speed,
                 )
                 _register_block(variant_id, var_block)
+
+        if is_door_type:
+            lower_tex = textures.get("lower", entry["id"])
+            upper_tex = textures.get("upper", entry["id"])
+            edge_tex = textures.get("edge") or textures.get("side")
+            if not edge_tex or edge_tex not in rects:
+                if "planks" in rects and "wood" in entry["id"]:
+                    edge_tex = "planks"
+                elif lower_tex in rects:
+                    edge_tex = lower_tex
+                else:
+                    edge_tex = next(iter(rects))
+
+            uv_edge_h = _map_uv(rects[edge_tex], [0, 0, 16, 3])
+            uv_edge_h_z = _map_uv(rects[edge_tex], [0, 0, 3, 16])
+            uv_edge_v0 = _map_uv(rects[edge_tex], [0, 0, 3, 16])
+            uv_edge_v1 = _map_uv(rects[edge_tex], [13, 0, 16, 16])
+
+            tex_map = {
+                "lower": lower_tex,
+                "upper": upper_tex,
+            }
+            for half in ("lower", "upper"):
+                tex_name = tex_map.get(half, lower_tex)
+                if tex_name not in rects:
+                    tex_name = lower_tex if lower_tex in rects else next(iter(rects))
+                uv_main_front = _map_uv(rects[tex_name], [0, 0, 16, 16])
+                uv_main_back = _map_uv(rects[tex_name], [16, 0, 0, 16])
+
+                for facing in ("north", "south", "east", "west"):
+                    for hinge in ("left", "right"):
+                        for is_open in (False, True):
+                            var_id = get_door_block(block.id, half, facing, is_open, hinge)
+                            if var_id == block.id:
+                                continue
+                            var_elements = _get_door_elements(
+                                uv_main_front,
+                                uv_main_back,
+                                uv_edge_h,
+                                uv_edge_h_z,
+                                uv_edge_v0,
+                                uv_edge_v1,
+                                facing,
+                                is_open,
+                                hinge,
+                            )
+                            var_face_uvs = [
+                                var_elements[0]["faces"].get(i, uv_main_front)
+                                for i in range(len(FACE_INDEX))
+                            ]
+                            var_props = dict(base_props)
+                            var_props["door"] = True
+                            var_props["half"] = half
+                            var_props["facing"] = facing
+                            var_props["hinge"] = hinge
+                            var_props["open"] = is_open
+                            open_str = " (Open)" if is_open else ""
+                            hinge_str = " Right" if hinge == "right" else ""
+                            var_name = f"{name} {half.capitalize()} ({facing.capitalize()}){hinge_str}{open_str}"
+                            var_block = Block(
+                                var_id,
+                                var_name,
+                                True,
+                                False,
+                                var_face_uvs,
+                                var_elements,
+                                cutout=True,
+                                opacity=1.0,
+                                tabs=(),
+                                properties=var_props,
+                                base_id=block.id,
+                                is_variant=True,
+                                hardness=block.hardness,
+                                tool=block.tool,
+                                mining_level=block.mining_level,
+                                loot_table=block.loot_table,
+                                sound=sound_val,
+                                sounds=sounds_val,
+                            )
+                            _register_block(var_id, var_block)
+                            if hinge == "left":
+                                left_alias = f"{block.id}_{half}_{facing}_left{'_open' if is_open else ''}"
+                                _register_block(left_alias, var_block)
+
+        if is_trapdoor_type:
+            tex_name = textures.get("texture") or textures.get("top") or entry["id"]
+            edge_tex = textures.get("edge") or textures.get("side") or textures.get("planks")
+            if not edge_tex or edge_tex not in rects:
+                if "planks" in rects and "wood" in entry["id"]:
+                    edge_tex = "planks"
+                elif tex_name in rects:
+                    edge_tex = tex_name
+                else:
+                    edge_tex = next(iter(rects))
+
+            if tex_name not in rects:
+                tex_name = entry["id"] if entry["id"] in rects else next(iter(rects))
+
+            uv_main = _map_uv(rects[tex_name], [0, 0, 16, 16])
+            uv_edge_h = _map_uv(rects[edge_tex], [0, 0, 16, 3])
+            uv_edge_h_z = _map_uv(rects[edge_tex], [0, 0, 3, 16])
+            uv_edge_v0 = _map_uv(rects[edge_tex], [0, 0, 3, 16])
+            uv_edge_v1 = _map_uv(rects[edge_tex], [13, 0, 16, 16])
+
+            for half in ("bottom", "top"):
+                for facing in ("north", "south", "east", "west"):
+                    for is_open in (False, True):
+                        var_id = get_trapdoor_block(block.id, half, facing, is_open)
+                        if var_id == block.id:
+                            continue
+                        var_elements = _get_trapdoor_elements(
+                            uv_main,
+                            uv_edge_h,
+                            uv_edge_h_z,
+                            uv_edge_v0,
+                            uv_edge_v1,
+                            half,
+                            facing,
+                            is_open,
+                        )
+                        var_face_uvs = [
+                            var_elements[0]["faces"].get(i, uv_main)
+                            for i in range(len(FACE_INDEX))
+                        ]
+                        var_props = dict(base_props)
+                        var_props["trapdoor"] = True
+                        var_props["half"] = half
+                        var_props["facing"] = facing
+                        var_props["open"] = is_open
+                        open_str = " (Open)" if is_open else ""
+                        var_name = f"{name} {half.capitalize()} ({facing.capitalize()}){open_str}"
+                        var_block = Block(
+                            var_id,
+                            var_name,
+                            True,
+                            False,
+                            var_face_uvs,
+                            var_elements,
+                            cutout=True,
+                            opacity=1.0,
+                            tabs=(),
+                            properties=var_props,
+                            base_id=block.id,
+                            is_variant=True,
+                            hardness=block.hardness,
+                            tool=block.tool,
+                            mining_level=block.mining_level,
+                            loot_table=block.loot_table,
+                            sound=sound_val,
+                            sounds=sounds_val,
+                        )
+                        _register_block(var_id, var_block)
+
+        if is_fence_type:
+            tex_name = textures.get("texture") or textures.get("side") or textures.get("top") or entry["id"]
+            if tex_name not in rects:
+                tex_name = "planks" if "planks" in rects else next(iter(rects))
+
+            uv_side = _map_uv(rects[tex_name], [0, 0, 6, 3])
+            uv_top = _map_uv(rects[tex_name], [7, 0, 9, 6])
+            uv_end = _map_uv(rects[tex_name], [7, 0, 9, 3])
+            uv_top_we = _map_uv(rects[tex_name], [0, 7, 6, 9])
+
+            block.fence_rails = {
+                "north": [
+                    {
+                        "from": [7.0, 12.0, 0.0],
+                        "to": [9.0, 15.0, 6.0],
+                        "faces": {
+                            FACE_INDEX["north"]: uv_end,
+                            FACE_INDEX["south"]: uv_end,
+                            FACE_INDEX["west"]: uv_side,
+                            FACE_INDEX["east"]: uv_side,
+                            FACE_INDEX["up"]: uv_top,
+                            FACE_INDEX["down"]: uv_top,
+                        },
+                    },
+                    {
+                        "from": [7.0, 6.0, 0.0],
+                        "to": [9.0, 9.0, 6.0],
+                        "faces": {
+                            FACE_INDEX["north"]: uv_end,
+                            FACE_INDEX["south"]: uv_end,
+                            FACE_INDEX["west"]: uv_side,
+                            FACE_INDEX["east"]: uv_side,
+                            FACE_INDEX["up"]: uv_top,
+                            FACE_INDEX["down"]: uv_top,
+                        },
+                    },
+                ],
+                "south": [
+                    {
+                        "from": [7.0, 12.0, 10.0],
+                        "to": [9.0, 15.0, 16.0],
+                        "faces": {
+                            FACE_INDEX["north"]: uv_end,
+                            FACE_INDEX["south"]: uv_end,
+                            FACE_INDEX["west"]: uv_side,
+                            FACE_INDEX["east"]: uv_side,
+                            FACE_INDEX["up"]: uv_top,
+                            FACE_INDEX["down"]: uv_top,
+                        },
+                    },
+                    {
+                        "from": [7.0, 6.0, 10.0],
+                        "to": [9.0, 9.0, 16.0],
+                        "faces": {
+                            FACE_INDEX["north"]: uv_end,
+                            FACE_INDEX["south"]: uv_end,
+                            FACE_INDEX["west"]: uv_side,
+                            FACE_INDEX["east"]: uv_side,
+                            FACE_INDEX["up"]: uv_top,
+                            FACE_INDEX["down"]: uv_top,
+                        },
+                    },
+                ],
+                "west": [
+                    {
+                        "from": [0.0, 12.0, 7.0],
+                        "to": [6.0, 15.0, 9.0],
+                        "faces": {
+                            FACE_INDEX["west"]: uv_end,
+                            FACE_INDEX["east"]: uv_end,
+                            FACE_INDEX["north"]: uv_side,
+                            FACE_INDEX["south"]: uv_side,
+                            FACE_INDEX["up"]: uv_top_we,
+                            FACE_INDEX["down"]: uv_top_we,
+                        },
+                    },
+                    {
+                        "from": [0.0, 6.0, 7.0],
+                        "to": [6.0, 9.0, 9.0],
+                        "faces": {
+                            FACE_INDEX["west"]: uv_end,
+                            FACE_INDEX["east"]: uv_end,
+                            FACE_INDEX["north"]: uv_side,
+                            FACE_INDEX["south"]: uv_side,
+                            FACE_INDEX["up"]: uv_top_we,
+                            FACE_INDEX["down"]: uv_top_we,
+                        },
+                    },
+                ],
+                "east": [
+                    {
+                        "from": [10.0, 12.0, 7.0],
+                        "to": [16.0, 15.0, 9.0],
+                        "faces": {
+                            FACE_INDEX["west"]: uv_end,
+                            FACE_INDEX["east"]: uv_end,
+                            FACE_INDEX["north"]: uv_side,
+                            FACE_INDEX["south"]: uv_side,
+                            FACE_INDEX["up"]: uv_top_we,
+                            FACE_INDEX["down"]: uv_top_we,
+                        },
+                    },
+                    {
+                        "from": [10.0, 6.0, 7.0],
+                        "to": [16.0, 9.0, 9.0],
+                        "faces": {
+                            FACE_INDEX["west"]: uv_end,
+                            FACE_INDEX["east"]: uv_end,
+                            FACE_INDEX["north"]: uv_side,
+                            FACE_INDEX["south"]: uv_side,
+                            FACE_INDEX["up"]: uv_top_we,
+                            FACE_INDEX["down"]: uv_top_we,
+                        },
+                    },
+                ],
+            }
+            block.inventory_elements = [
+                {
+                    "from": [0.0, 0.0, 6.0],
+                    "to": [4.0, 16.0, 10.0],
+                    "faces": {
+                        FACE_INDEX["down"]: _map_uv(rects[tex_name], [0.0, 6.0, 4.0, 10.0]),
+                        FACE_INDEX["up"]: _map_uv(rects[tex_name], [0.0, 6.0, 4.0, 10.0]),
+                        FACE_INDEX["north"]: _map_uv(rects[tex_name], [0.0, 0.0, 4.0, 16.0]),
+                        FACE_INDEX["south"]: _map_uv(rects[tex_name], [0.0, 0.0, 4.0, 16.0]),
+                        FACE_INDEX["west"]: _map_uv(rects[tex_name], [6.0, 0.0, 10.0, 16.0]),
+                        FACE_INDEX["east"]: _map_uv(rects[tex_name], [6.0, 0.0, 10.0, 16.0]),
+                    },
+                },
+                {
+                    "from": [12.0, 0.0, 6.0],
+                    "to": [16.0, 16.0, 10.0],
+                    "faces": {
+                        FACE_INDEX["down"]: _map_uv(rects[tex_name], [12.0, 6.0, 16.0, 10.0]),
+                        FACE_INDEX["up"]: _map_uv(rects[tex_name], [12.0, 6.0, 16.0, 10.0]),
+                        FACE_INDEX["north"]: _map_uv(rects[tex_name], [12.0, 0.0, 16.0, 16.0]),
+                        FACE_INDEX["south"]: _map_uv(rects[tex_name], [12.0, 0.0, 16.0, 16.0]),
+                        FACE_INDEX["west"]: _map_uv(rects[tex_name], [6.0, 0.0, 10.0, 16.0]),
+                        FACE_INDEX["east"]: _map_uv(rects[tex_name], [6.0, 0.0, 10.0, 16.0]),
+                    },
+                },
+                {
+                    "from": [4.0, 12.0, 7.0],
+                    "to": [12.0, 15.0, 9.0],
+                    "faces": {
+                        FACE_INDEX["down"]: _map_uv(rects[tex_name], [4.0, 7.0, 12.0, 9.0]),
+                        FACE_INDEX["up"]: _map_uv(rects[tex_name], [4.0, 7.0, 12.0, 9.0]),
+                        FACE_INDEX["north"]: _map_uv(rects[tex_name], [4.0, 1.0, 12.0, 4.0]),
+                        FACE_INDEX["south"]: _map_uv(rects[tex_name], [4.0, 1.0, 12.0, 4.0]),
+                        FACE_INDEX["west"]: _map_uv(rects[tex_name], [7.0, 1.0, 9.0, 4.0]),
+                        FACE_INDEX["east"]: _map_uv(rects[tex_name], [7.0, 1.0, 9.0, 4.0]),
+                    },
+                },
+                {
+                    "from": [4.0, 6.0, 7.0],
+                    "to": [12.0, 9.0, 9.0],
+                    "faces": {
+                        FACE_INDEX["down"]: _map_uv(rects[tex_name], [4.0, 7.0, 12.0, 9.0]),
+                        FACE_INDEX["up"]: _map_uv(rects[tex_name], [4.0, 7.0, 12.0, 9.0]),
+                        FACE_INDEX["north"]: _map_uv(rects[tex_name], [4.0, 7.0, 12.0, 10.0]),
+                        FACE_INDEX["south"]: _map_uv(rects[tex_name], [4.0, 7.0, 12.0, 10.0]),
+                        FACE_INDEX["west"]: _map_uv(rects[tex_name], [7.0, 7.0, 9.0, 10.0]),
+                        FACE_INDEX["east"]: _map_uv(rects[tex_name], [7.0, 7.0, 9.0, 10.0]),
+                    },
+                },
+            ]
 
         fluid_type = properties.get("fluid") if isinstance(properties.get("fluid"), str) else ("water" if entry.get("id") == "water" else None)
         if fluid_type:
@@ -1938,14 +2879,28 @@ def _load_registry():
     for slab_a, slab_b in itertools.product(slab_blocks, slab_blocks):
         double_id = f"double_slab_{slab_a.id}_{slab_b.id}"
         slab_b_top = blocks[f"{slab_b.id}_top"]
+        a_glass = bool(slab_a.properties.get("glass") or getattr(slab_a, "glass", False) or slab_a.id == "glass_slab")
+        b_glass = bool(slab_b.properties.get("glass") or getattr(slab_b, "glass", False) or slab_b.id == "glass_slab")
         bottom_elements = []
         for el in slab_a.elements:
-            faces = {k: v for k, v in el["faces"].items() if k != 2}
-            bottom_elements.append({"from": list(el["from"]), "to": list(el["to"]), "faces": faces})
+            faces = {k: v for k, v in el["faces"].items() if k != 2 or (not a_glass and b_glass)}
+            el_dict = dict(el)
+            el_dict["from"] = list(el["from"])
+            el_dict["to"] = list(el["to"])
+            el_dict["faces"] = faces
+            el_dict["glass"] = a_glass
+            el_dict["cutout"] = bool(slab_a.cutout)
+            bottom_elements.append(el_dict)
         top_elements = []
         for el in slab_b_top.elements:
-            faces = {k: v for k, v in el["faces"].items() if k != 3}
-            top_elements.append({"from": list(el["from"]), "to": list(el["to"]), "faces": faces})
+            faces = {k: v for k, v in el["faces"].items() if k != 3 or (not b_glass and a_glass)}
+            el_dict = dict(el)
+            el_dict["from"] = list(el["from"])
+            el_dict["to"] = list(el["to"])
+            el_dict["faces"] = faces
+            el_dict["glass"] = b_glass
+            el_dict["cutout"] = bool(slab_b.cutout)
+            top_elements.append(el_dict)
         double_elements = bottom_elements + top_elements
         double_props = {
             "double_slab": True,
@@ -1954,6 +2909,8 @@ def _load_registry():
             "bottom": slab_a.id,
             "top": slab_b.id,
         }
+        if a_glass and b_glass:
+            double_props["glass"] = True
         d_name = (
             f"{slab_a.name} / {slab_b.name} Double Slab"
             if slab_a.id != slab_b.id
@@ -1969,8 +2926,8 @@ def _load_registry():
             True,
             double_face_uvs,
             double_elements,
-            cutout=False,
-            opacity=1.0,
+            cutout=slab_a.cutout or slab_b.cutout,
+            opacity=1.0 if not (slab_a.cutout and slab_b.cutout) else 0.0,
             properties=double_props,
             base_id=slab_a.id,
             is_variant=True,
@@ -2305,11 +3262,14 @@ def _load_registry():
                     f"double_vertical_slab_{axis}_"
                     f"{positive_block.base_id}_{negative_block.base_id}"
                 )
+                pos_glass = bool(positive_block.properties.get("glass") or getattr(positive_block, "glass", False) or "glass" in positive_block.base_id)
+                neg_glass = bool(negative_block.properties.get("glass") or getattr(negative_block, "glass", False) or "glass" in negative_block.base_id)
                 double_elements = []
-                for source, hidden_face in (
-                    (positive_block, positive_face),
-                    (negative_block, negative_face),
+                for source, other_glass, hidden_face in (
+                    (positive_block, neg_glass, positive_face),
+                    (negative_block, pos_glass, negative_face),
                 ):
+                    src_glass = bool(source.properties.get("glass") or getattr(source, "glass", False) or "glass" in source.base_id)
                     for element in source.elements:
                         element_copy = dict(element)
                         element_copy["from"] = list(element["from"])
@@ -2317,8 +3277,10 @@ def _load_registry():
                         element_copy["faces"] = {
                             face: uv
                             for face, uv in element.get("faces", {}).items()
-                            if face != hidden_face
+                            if face != hidden_face or (not src_glass and other_glass)
                         }
+                        element_copy["glass"] = src_glass
+                        element_copy["cutout"] = bool(source.cutout)
                         double_elements.append(element_copy)
                 double_props = {
                     "vertical_slab": True,
@@ -2331,6 +3293,8 @@ def _load_registry():
                     "positive_facing": positive_facing,
                     "negative_facing": negative_facing,
                 }
+                if pos_glass and neg_glass:
+                    double_props["glass"] = True
                 same_material = positive_block.base_id == negative_block.base_id
                 double_name = (
                     f"{positive_block.name} Double Vertical Slab"
@@ -2344,8 +3308,8 @@ def _load_registry():
                     True,
                     list(positive_block.face_uvs),
                     double_elements,
-                    cutout=False,
-                    opacity=1.0,
+                    cutout=bool(positive_block.cutout or negative_block.cutout),
+                    opacity=1.0 if not (positive_block.cutout and negative_block.cutout) else 0.0,
                     properties=double_props,
                     base_id=positive_block.base_id,
                     is_variant=True,
@@ -2390,8 +3354,8 @@ def _load_registry():
                     False,
                     list(positive_block.face_uvs),
                     off_double_elements,
-                    cutout=False,
-                    opacity=1.0,
+                    cutout=bool(positive_block.cutout or negative_block.cutout),
+                    opacity=1.0 if not (positive_block.cutout and negative_block.cutout) else 0.0,
                     properties=off_double_props,
                     base_id=positive_block.base_id,
                     is_variant=True,
@@ -2423,20 +3387,23 @@ def _load_registry():
                         continue
 
                     bot_els = []
+                    h_is_glass = bool(h_slab.properties.get("glass") or getattr(h_slab, "glass", False) or "glass" in h_slab.id)
                     for element in off_double_elements:
                         b_el = dict(element)
-                        b_el["faces"] = {k: v for k, v in element["faces"].items() if k != 2}
+                        b_glass = b_el.get("glass", False)
+                        b_el["faces"] = {k: v for k, v in element["faces"].items() if k != 2 or (not b_glass and h_is_glass)}
                         bot_els.append(b_el)
 
                     top_els = []
                     for element in h_top_block.elements:
-                        t_faces = {k: v for k, v in element["faces"].items() if k != 3}
+                        t_faces = {k: v for k, v in element["faces"].items() if k != 3 or (not h_is_glass and any(e.get("glass") for e in off_double_elements))}
                         top_els.append({
                             "from": list(element["from"]),
                             "to": list(element["to"]),
                             "faces": t_faces,
                             "tint": h_slab.tint,
-                            "cutout": element.get("cutout", False),
+                            "glass": h_is_glass,
+                            "cutout": bool(h_slab.cutout),
                         })
 
                     capped_double_elements = bot_els + top_els
@@ -2563,23 +3530,27 @@ def _load_registry():
                     continue
 
                 # Bottom part: offset vertical slab elements
+                vs_is_glass = bool(vs.properties.get("glass") or getattr(vs, "glass", False) or "glass" in vs.id)
+                h_is_glass = bool(h_slab.properties.get("glass") or getattr(h_slab, "glass", False) or "glass" in h_slab.id)
                 bot_elements = []
                 for el in off_elements:
                     bot_el = dict(el)
-                    # face 2 (up) at y=8 touches top slab face 3 (down) at y=8
-                    bot_el["faces"] = {k: v for k, v in el["faces"].items() if k != 2 or vs.cutout}
+                    bot_el["faces"] = {k: v for k, v in el["faces"].items() if k != 2 or (not vs_is_glass and h_is_glass)}
+                    bot_el["glass"] = vs_is_glass
+                    bot_el["cutout"] = bool(vs.cutout)
                     bot_elements.append(bot_el)
 
                 # Top part: horizontal top slab elements at [0, 8, 0] to [16, 16, 16]
                 top_els = []
                 for el in h_top_block.elements:
-                    t_faces = {k: v for k, v in el["faces"].items() if k != 3 or vs.cutout}
+                    t_faces = {k: v for k, v in el["faces"].items() if k != 3 or (not h_is_glass and vs_is_glass)}
                     top_els.append({
                         "from": list(el["from"]),
                         "to": list(el["to"]),
                         "faces": t_faces,
                         "tint": h_slab.tint,
-                        "cutout": el.get("cutout", False),
+                        "glass": h_is_glass,
+                        "cutout": bool(h_slab.cutout),
                     })
 
                 capped_elements = bot_elements + top_els

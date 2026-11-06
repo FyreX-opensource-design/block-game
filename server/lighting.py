@@ -71,6 +71,8 @@ def get_block_opacity(block_obj):
     if not getattr(block_obj, "solid", True):
         return 0
     props = getattr(block_obj, "properties", None) or {}
+    if props.get("glass") or getattr(block_obj, "glass", False) or "glass" in bid or "glass" in str(base):
+        return 0
     if (
         (
             getattr(block_obj, "vertical_slab", False)
@@ -96,6 +98,12 @@ def get_block_opacity(block_obj):
     if bid == "sub_cell" or props.get("sub_cell") or base == "sub_cell":
         # Sub-cells contain open octants (full sub-cells collapse to their full block).
         # Like horizontal slabs and vertical slabs, they must not extinguish light in the whole cell.
+        return 0
+    if props.get("door") or getattr(block_obj, "door", False) or ("door" in bid and "trapdoor" not in bid):
+        return 0
+    if props.get("trapdoor") or getattr(block_obj, "trapdoor", False) or "trapdoor" in bid or "trapdoor" in str(base):
+        return 0
+    if props.get("fence") or getattr(block_obj, "fence", False) or "fence" in bid:
         return 0
     if getattr(block_obj, "full_cube", False):
         return 15

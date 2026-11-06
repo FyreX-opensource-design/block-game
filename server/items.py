@@ -4,7 +4,7 @@ import re
 import numpy as np
 
 from server.blocks import ASSETS, BLOCKS, BY_INDEX, TABS, _block_name, _load_lang
-from server.icons import ICON_SIZE, render_block_icon, render_flat_icon
+from server.icons import ICON_SIZE, render_block_icon, render_flat_icon, render_model_icon
 from server.images import read_png
 
 _ID = re.compile(r"[a-z0-9_]+")
@@ -207,10 +207,41 @@ def _picture(entry, item):
         block = BLOCKS.get(item.block)
         if block and getattr(block, "base_id", None):
             block_path = ASSETS / "blocks" / f"{block.base_id}.json"
-    block_entry = json.loads(block_path.read_text())
-    textures = block_entry["textures"]
-    top_name = textures.get("top") or textures.get("side") or item.texture
-    side_name = textures.get("side") or top_name
+    block_entry = json.loads(block_path.read_text()) if block_path.is_file() else {}
+    textures = block_entry.get("textures", {})
+
+    # Check for custom model (e.g. fence_inventory, or non-cube block models)
+    model_name = entry.get("item_model")
+    if not model_name:
+        if block_entry.get("type") == "fence" or block_entry.get("model") == "fence_post":
+            model_name = "fence_inventory"
+        elif block_entry.get("model") and block_entry["model"] not in ("cube", "orientable") and block_entry.get("type") != "slab":
+            model_name = block_entry["model"]
+
+    if model_name:
+        model_path = ASSETS / "models" / f"{model_name}.json"
+        if model_path.is_file():
+            model_doc = json.loads(model_path.read_text())
+            elements = model_doc.get("elements", [])
+            if elements:
+                loaded_textures = {}
+                default_tex = None
+                for k, v in textures.items():
+                    tex_file = ASSETS / "textures" / f"{v}.png"
+                    if tex_file.is_file():
+                        tex_img = read_png(tex_file)
+                        loaded_textures[k] = tex_img
+                        if default_tex is None or k in ("texture", "side", "top"):
+                            default_tex = tex_img
+                if default_tex is None and item.texture:
+                    tex_file = ASSETS / "textures" / f"{item.texture}.png"
+                    if tex_file.is_file():
+                        default_tex = read_png(tex_file)
+                if default_tex is not None:
+                    return render_model_icon(elements, loaded_textures, default_texture=default_tex)
+
+    top_name = textures.get("top") or textures.get("side") or textures.get("texture") or item.texture or item.id
+    side_name = textures.get("side") or textures.get("texture") or top_name
     is_slab = (
         block_entry.get("type") == "slab"
         or "slab" in block_entry.get("model", "")

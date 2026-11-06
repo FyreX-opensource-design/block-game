@@ -1,0 +1,15 @@
+{
+  "id": "glass_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###"
+  ],
+  "key": {
+    "#": "glass"
+  },
+  "result": {
+    "item": "glass_slab",
+    "count": 6
+  }
+}
+

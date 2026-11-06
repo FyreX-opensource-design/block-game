@@ -884,11 +884,17 @@ class World:
             return []
 
         from server.blocks import (
+            door_bounds,
+            fence_collision_boxes,
+            get_door_info,
             get_offset_info,
             get_offset_torch_info,
             get_slab_info,
+            get_trapdoor_info,
             get_vertical_slab_info,
             get_vertical_slab_offset_info,
+            is_fence,
+            trapdoor_bounds,
             vertical_slab_bounds,
             vertical_slab_offset_bounds,
         )
@@ -928,6 +934,17 @@ class World:
         if v_info is not None:
             return [vertical_slab_bounds(x, y, z, v_info["facing"])]
 
+        d_info = get_door_info(b_obj)
+        if d_info is not None:
+            return [door_bounds(x, y, z, d_info["facing"], d_info["open"], d_info.get("hinge", "left"))]
+
+        td_info = get_trapdoor_info(b_obj)
+        if td_info is not None:
+            return [trapdoor_bounds(x, y, z, td_info["half"], td_info["facing"], td_info["open"])]
+
+        if is_fence(b_obj):
+            return fence_collision_boxes(self, x, y, z)
+
         return [(float(x), float(y), float(z), float(x + 1), float(y + 1), float(z + 1))]
 
     def collides_box(self, min_x, min_y, min_z, max_x, max_y, max_z):
@@ -938,7 +955,7 @@ class World:
         iz0 = math.floor(min_z)
         iz1 = math.floor(max_z - 1e-6)
 
-        for y in range(iy0, iy1 + 2):
+        for y in range(iy0 - 1, iy1 + 2):
             for z in range(iz0, iz1 + 1):
                 for x in range(ix0, ix1 + 1):
                     boxes = self.get_collision_boxes(x, y, z)
@@ -1062,11 +1079,40 @@ class World:
                 self.leaf_decay.schedule_neighbors(x, y, z, radius=2)
         if getattr(self, "saplings", None) is not None:
             self.saplings.on_block_set(x, y, z, block_id if block_id not in ("", None) else AIR)
+        if simulate and old_block:
+            from server.blocks import get_door_info
+            old_d_info = get_door_info(old_block)
+            if old_d_info is not None and (block_id in ("", AIR, None) or get_door_info(block_id) is None):
+                other_y = y + 1 if old_d_info["half"] == "lower" else y - 1
+                if 0 < other_y < WORLD_HEIGHT:
+                    other_block = self.get_block(x, other_y, z)
+                    other_info = get_door_info(other_block)
+                    if other_info is not None and other_info["base_id"] == old_d_info["base_id"]:
+                        self.set_block(x, other_y, z, AIR)
+
         self.notify_neighbors_falling(x, y, z)
         self.check_plant_support(x, y + 1, z)
+        self.check_door_support(x, y + 1, z)
         for tx, ty, tz in ((x, y + 1, z), (x + 1, y, z), (x - 1, y, z), (x, y, z + 1), (x, y, z - 1)):
             self.check_torch_support(tx, ty, tz)
         return True
+
+    def check_door_support(self, x, y, z):
+        if y <= 0 or y >= WORLD_HEIGHT:
+            return
+        d_id = self.get_block(x, y, z)
+        if not d_id or d_id == AIR:
+            return
+        from server.blocks import BLOCKS, get_door_info
+        d_info = get_door_info(d_id)
+        if d_info is not None and d_info["half"] == "lower":
+            if not self.is_solid(x, y - 1, z):
+                from server.loot import get_block_drops
+                drops = get_block_drops(BLOCKS.get(d_info["base_id"]))
+                for drop_id, count in drops:
+                    if count > 0:
+                        self.spawn_item(drop_id, count=count, pos=(x + 0.5, y + 0.5, z + 0.5))
+                self.set_block(x, y, z, AIR)
 
     def check_torch_support(self, x, y, z):
         if y <= 0 or y >= WORLD_HEIGHT:
@@ -1804,16 +1850,22 @@ class World:
         for _ in range(limit):
             from server.fluid import is_fluid
             from server.blocks import (
+                door_bounds,
+                fence_raycast_boxes,
+                get_door_info,
                 get_double_vertical_slab_info,
                 get_offset_info,
                 get_offset_torch_info,
                 get_slab_info,
+                get_trapdoor_info,
                 get_vertical_slab_offset_info,
                 get_vertical_slab_torch_info,
+                is_fence,
                 is_offset_block,
                 is_offset_torch,
                 is_slab,
                 is_vertical_slab_offset,
+                trapdoor_bounds,
                 vertical_slab_bounds,
             )
 
@@ -2162,6 +2214,29 @@ class World:
                                     vertical_slab_bounds(x, y, z, v_info["facing"]),
                                 )
                             )
+                        elif (d_info := get_door_info(b_obj)) is not None:
+                            boxes.append(
+                                (
+                                    x,
+                                    y,
+                                    z,
+                                    d_info["half"],
+                                    door_bounds(x, y, z, d_info["facing"], d_info["open"], d_info.get("hinge", "left")),
+                                )
+                            )
+                        elif (td_info := get_trapdoor_info(b_obj)) is not None:
+                            boxes.append(
+                                (
+                                    x,
+                                    y,
+                                    z,
+                                    td_info["half"],
+                                    trapdoor_bounds(x, y, z, td_info["half"], td_info["facing"], td_info["open"]),
+                                )
+                            )
+                        elif is_fence(b_obj):
+                            for r_box in fence_raycast_boxes(self, x, y, z):
+                                boxes.append(r_box)
                         elif b_obj is not None and b_obj.properties.get("torch") and b_obj.elements:
                             el = b_obj.elements[0]
                             fx0, fy0, fz0 = el["from"]

@@ -1,0 +1,15 @@
+{
+  "id": "wooden_trapdoor",
+  "name": "Wooden Trapdoor",
+  "sound": "wood",
+  "hardness": 3.0,
+  "tool": "axe",
+  "openable_by_hand": true,
+  "item": "wooden_trapdoor",
+  "loot_table": "blocks/wooden_trapdoor",
+  "textures": {
+    "texture": "wooden_trapdoor",
+    "edge": "planks"
+  }
+}
+

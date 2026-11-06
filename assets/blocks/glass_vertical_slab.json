@@ -1,0 +1,23 @@
+{
+  "id": "glass_vertical_slab",
+  "lang": "block.glass_vertical_slab",
+  "tab": ["building"],
+  "type": "vertical_slab",
+  "model": "vertical_slab",
+  "render": "cutout",
+  "solid": true,
+  "hardness": 0.3,
+  "tool": "none",
+  "mining_level": 0,
+  "loot_table": "blocks/glass_vertical_slab",
+  "full_block": "glass",
+  "properties": {
+    "glass": true
+  },
+  "textures": {
+    "top": "glass",
+    "side": "glass",
+    "bottom": "glass"
+  }
+}
+
