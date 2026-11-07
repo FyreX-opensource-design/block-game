@@ -1,0 +1,15 @@
+{
+  "id": "pine_fence_gate",
+  "lang": "item.pine_fence_gate",
+  "tab": [
+    "building"
+  ],
+  "model": "block",
+  "item_model": "fence_gate_inventory",
+  "block": "pine_fence_gate",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}
+

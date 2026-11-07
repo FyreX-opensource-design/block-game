@@ -1,0 +1,18 @@
+{
+  "id": "stone_brick_stairs",
+  "lang": "block.stone_brick_stairs",
+  "tab": [
+    "building"
+  ],
+  "model": "block",
+  "block": "stone_brick_stairs",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0,
+  "mining_level": 1,
+  "mining_speed": 1,
+  "attack": 1,
+  "food": 0
+}
+

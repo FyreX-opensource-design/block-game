@@ -956,6 +956,10 @@ class World:
         if is_wall(b_obj):
             return wall_collision_boxes(self, x, y, z)
 
+        from server.blocks import is_stairs, stair_collision_boxes
+        if is_stairs(b_obj):
+            return stair_collision_boxes(self, x, y, z, b_obj)
+
         return [(float(x), float(y), float(z), float(x + 1), float(y + 1), float(z + 1))]
 
     def collides_box(self, min_x, min_y, min_z, max_x, max_y, max_z):
@@ -2257,6 +2261,9 @@ class World:
                                 boxes.append(r_box)
                         elif is_wall(b_obj):
                             for r_box in wall_raycast_boxes(self, x, y, z):
+                                boxes.append(r_box)
+                        elif (from_blocks := __import__('server.blocks', fromlist=['is_stairs', 'stair_raycast_boxes'])).is_stairs(b_obj):
+                            for r_box in from_blocks.stair_raycast_boxes(self, x, y, z, b_obj):
                                 boxes.append(r_box)
                         elif b_obj is not None and b_obj.properties.get("torch") and b_obj.elements:
                             el = b_obj.elements[0]

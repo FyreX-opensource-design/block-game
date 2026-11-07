@@ -544,6 +544,13 @@ class LightingTests(unittest.TestCase):
         world.set_block(6, 20, 5, AIR)
         self.assertEqual(world.get_blocklight(7, 20, 5)[0], light_before)
 
+    def test_stairs_light_opacity_is_zero(self):
+        from server.lighting import get_block_opacity
+        from server.blocks import BLOCKS
+        self.assertEqual(get_block_opacity(BLOCKS["planks_stairs"]), 0)
+        self.assertEqual(get_block_opacity(BLOCKS["planks_stairs_north_top"]), 0)
+        self.assertEqual(get_block_opacity(BLOCKS["stone_stairs"]), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

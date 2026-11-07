@@ -1,0 +1,20 @@
+{
+  "id": "sandstone_stairs",
+  "lang": "block.sandstone_stairs",
+  "type": "stairs",
+  "tab": [
+    "building"
+  ],
+  "model": "stairs",
+  "hardness": 1.0,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "sound": "stone",
+  "loot_table": "blocks/sandstone_stairs",
+  "textures": {
+    "top": "sandstone",
+    "side": "sandstone",
+    "bottom": "sandstone"
+  }
+}
+

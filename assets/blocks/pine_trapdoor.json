@@ -1,0 +1,27 @@
+{
+  "id": "pine_trapdoor",
+  "lang": "block.pine_trapdoor",
+  "tab": [
+    "building"
+  ],
+  "model": "trapdoor",
+  "type": "trapdoor",
+  "render": "cutout",
+  "solid": true,
+  "hardness": 3.0,
+  "tool": "axe",
+  "mining_level": 0,
+  "sound": "wood",
+  "loot_table": "blocks/pine_trapdoor",
+  "properties": {
+    "trapdoor": true,
+    "half": "bottom",
+    "facing": "north",
+    "open": false
+  },
+  "textures": {
+    "texture": "pine_trapdoor",
+    "edge": "pine_doors_side"
+  }
+}
+

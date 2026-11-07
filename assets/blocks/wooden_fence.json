@@ -1,7 +1,9 @@
 {
   "id": "wooden_fence",
   "lang": "block.wooden_fence",
-  "tab": ["building"],
+  "tab": [
+    "building"
+  ],
   "model": "fence_post",
   "type": "fence",
   "solid": true,
@@ -14,8 +16,8 @@
     "fence": true
   },
   "textures": {
-    "top": "planks",
-    "side": "planks",
-    "texture": "planks"
+    "top": "oak_planks",
+    "side": "oak_planks",
+    "texture": "oak_planks"
   }
 }

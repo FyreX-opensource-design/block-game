@@ -242,8 +242,59 @@ def _picture(entry, item):
                 if default_tex is not None:
                     return render_model_icon(elements, loaded_textures, default_texture=default_tex)
 
-    top_name = textures.get("top") or textures.get("side") or textures.get("texture") or item.texture or item.id
-    side_name = textures.get("side") or textures.get("texture") or top_name
+    def _find_tex_name(*candidates):
+        for name in candidates:
+            if name and (ASSETS / "textures" / f"{name}.png").is_file():
+                return name
+        return None
+
+    top_name = _find_tex_name(
+        textures.get("top"),
+        textures.get("up"),
+        textures.get("side"),
+        textures.get("texture"),
+        item.texture,
+        item.id,
+    )
+    if not top_name:
+        for val in textures.values():
+            if _find_tex_name(val):
+                top_name = val
+                break
+
+    south_name = (
+        _find_tex_name(
+            textures.get("south"),
+            textures.get("front"),
+            textures.get("side"),
+            textures.get("texture"),
+            textures.get("north"),
+            textures.get("west"),
+            textures.get("east"),
+            top_name,
+        )
+        or top_name
+    )
+    east_name = (
+        _find_tex_name(
+            textures.get("east"),
+            textures.get("right"),
+            textures.get("side"),
+            textures.get("texture"),
+            textures.get("west"),
+            south_name,
+        )
+        or south_name
+    )
+
+    top_name = top_name or item.texture or item.id
+    south_name = south_name or top_name
+    east_name = east_name or south_name
+
+    top_img = read_png(ASSETS / "textures" / f"{top_name}.png")
+    south_img = read_png(ASSETS / "textures" / f"{south_name}.png")
+    east_img = read_png(ASSETS / "textures" / f"{east_name}.png")
+
     is_slab = (
         block_entry.get("type") == "slab"
         or "slab" in block_entry.get("model", "")
@@ -251,8 +302,9 @@ def _picture(entry, item):
     )
     height_scale = 0.5 if is_slab else 1.0
     return render_block_icon(
-        read_png(ASSETS / "textures" / f"{top_name}.png"),
-        read_png(ASSETS / "textures" / f"{side_name}.png"),
+        top_img,
+        south_img,
+        side_east=east_img,
         height_scale=height_scale,
     )
 

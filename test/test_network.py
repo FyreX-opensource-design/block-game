@@ -221,13 +221,18 @@ class NetworkIntegrationTests(unittest.TestCase):
 
             # Clean disconnect
             client2.disconnect()
-            time.sleep(0.1)
 
             # Client 1 should observe player_leave for Client 2
             c1_saw_leave = False
-            for pkt in client1.poll_events():
-                if pkt.get("type") == "player_leave" and pkt.get("uuid") == uuid2:
-                    c1_saw_leave = True
+            t_leave = time.time()
+            while time.time() - t_leave < 2.0:
+                for pkt in client1.poll_events():
+                    if pkt.get("type") == "player_leave" and pkt.get("uuid") == uuid2:
+                        c1_saw_leave = True
+                        break
+                if c1_saw_leave:
+                    break
+                time.sleep(0.05)
             self.assertTrue(c1_saw_leave)
             self.assertNotIn(uuid2, server.clients)
 

@@ -70,6 +70,39 @@ class TestFenceGates(unittest.TestCase):
         drops = get_block_drops(gate)
         self.assertEqual(drops, [("wooden_fence_gate", 1)])
 
+    def test_pine_fence_gate_registration(self):
+        self.assertIn("pine_fence_gate", BLOCKS)
+        self.assertIn("pine_fence_gate", ITEMS)
+
+        gate = BLOCKS["pine_fence_gate"]
+        self.assertTrue(gate.solid)
+        self.assertFalse(gate.full_cube)
+        self.assertTrue(is_fence_gate(gate))
+        self.assertTrue(is_fence_gate("pine_fence_gate"))
+
+        for facing in ("north", "south", "east", "west"):
+            for is_open in (False, True):
+                var_id = get_fence_gate_block("pine_fence_gate", facing, is_open)
+                self.assertIn(var_id, BLOCKS)
+                var_block = BLOCKS[var_id]
+                self.assertTrue(is_fence_gate(var_block))
+                info = get_fence_gate_info(var_block)
+                self.assertIsNotNone(info)
+                self.assertEqual(info["facing"], facing)
+                self.assertEqual(info["open"], is_open)
+                self.assertEqual(info["base_id"], "pine_fence_gate")
+
+        item = ITEMS["pine_fence_gate"]
+        self.assertEqual(item.block, "pine_fence_gate")
+
+        recipe = next((r for r in RECIPES if getattr(r, "id", "") == "pine_fence_gate"), None)
+        self.assertIsNotNone(recipe)
+        self.assertEqual(recipe.result, "pine_fence_gate")
+        self.assertEqual(recipe.count, 1)
+
+        drops = get_block_drops(gate)
+        self.assertEqual(drops, [("pine_fence_gate", 1)])
+
     def test_collision_boxes_closed_and_open(self):
         world = self._create_world()
         # Closed gate facing north: 1.5 blocks high

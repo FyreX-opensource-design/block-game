@@ -56,6 +56,28 @@ class TestFences(unittest.TestCase):
         drops = get_block_drops(fence)
         self.assertEqual(drops, [("wooden_fence", 1)])
 
+    def test_pine_fence_registration(self):
+        self.assertIn("pine_fence", BLOCKS)
+        self.assertIn("pine_fence", ITEMS)
+
+        fence = BLOCKS["pine_fence"]
+        self.assertTrue(fence.solid)
+        self.assertFalse(fence.full_cube)
+        self.assertTrue(is_fence(fence))
+        self.assertTrue(is_fence("pine_fence"))
+
+        item = ITEMS["pine_fence"]
+        self.assertEqual(item.block, "pine_fence")
+        self.assertEqual(item.right, "place")
+
+        recipe = next((r for r in RECIPES if getattr(r, "id", "") == "pine_fence"), None)
+        self.assertIsNotNone(recipe)
+        self.assertEqual(recipe.result, "pine_fence")
+        self.assertEqual(recipe.count, 3)
+
+        drops = get_block_drops(fence)
+        self.assertEqual(drops, [("pine_fence", 1)])
+
     def test_fence_connection_rules(self):
         # Other fences connect
         self.assertTrue(can_fence_connect("wooden_fence"))

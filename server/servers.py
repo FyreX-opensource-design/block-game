@@ -62,8 +62,11 @@ def parse_address(address, default_port=DEFAULT_PORT):
         host = host.strip() or "127.0.0.1"
         try:
             port = int(port_str.strip())
-            return host, port
         except ValueError:
-            return host, default_port
-    return raw, default_port
+            port = default_port
+    else:
+        host, port = raw, default_port
+    if host == "0.0.0.0":
+        host = "127.0.0.1"
+    return host, port
 

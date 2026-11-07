@@ -1,0 +1,13 @@
+{
+    "id": "tin",
+    "block": "tin_ore",
+    "target": "stone",
+    "min_y": 25,
+    "max_y": 100,
+    "scale": 0.135,
+    "threshold": 0.63,
+    "octaves": 2,
+    "seed_offset": 200,
+    "max_vein_size": 14,
+    "enabled": true
+}

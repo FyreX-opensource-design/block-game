@@ -1063,8 +1063,8 @@ def _get_trapdoor_elements(
         faces[FACE_INDEX["down"]] = uv_main
         faces[FACE_INDEX["north"]] = uv_edge_h
         faces[FACE_INDEX["south"]] = uv_edge_h
-        faces[FACE_INDEX["west"]] = uv_edge_h_z
-        faces[FACE_INDEX["east"]] = uv_edge_h_z
+        faces[FACE_INDEX["west"]] = uv_edge_h
+        faces[FACE_INDEX["east"]] = uv_edge_h
     else:
         if facing == "north":
             origin, extent = [0.0, 0.0, 0.0], [16.0, 16.0, t]
@@ -1745,6 +1745,332 @@ def get_wall_elements(world, wx, wy, wz, block):
     return elements
 
 
+_STAIR_STEP_QUADRANTS = {
+    ("north", "straight"): ("NW", "NE"),
+    ("north", "outer_left"): ("NW",),
+    ("north", "outer_right"): ("NE",),
+    ("north", "inner_left"): ("NW", "NE", "SW"),
+    ("north", "inner_right"): ("NW", "NE", "SE"),
+
+    ("south", "straight"): ("SW", "SE"),
+    ("south", "outer_left"): ("SE",),
+    ("south", "outer_right"): ("SW",),
+    ("south", "inner_left"): ("SW", "SE", "NE"),
+    ("south", "inner_right"): ("SW", "SE", "NW"),
+
+    ("west", "straight"): ("NW", "SW"),
+    ("west", "outer_left"): ("SW",),
+    ("west", "outer_right"): ("NW",),
+    ("west", "inner_left"): ("NW", "SW", "SE"),
+    ("west", "inner_right"): ("NW", "SW", "NE"),
+
+    ("east", "straight"): ("NE", "SE"),
+    ("east", "outer_left"): ("NE",),
+    ("east", "outer_right"): ("SE",),
+    ("east", "inner_left"): ("NE", "SE", "NW"),
+    ("east", "inner_right"): ("NE", "SE", "SW"),
+}
+
+
+def is_stairs(block_or_id):
+    """Return True if block_or_id is a stairs block."""
+    if not block_or_id:
+        return False
+    block = BLOCKS.get(block_or_id) if isinstance(block_or_id, str) else block_or_id
+    if block is None:
+        return False
+    props = getattr(block, "properties", {})
+    if props.get("stairs") or getattr(block, "stairs", False):
+        return True
+    b_id = getattr(block, "id", str(block_or_id))
+    return "stairs" in b_id
+
+
+def get_stairs_info(block_or_id):
+    """Return stairs metadata dict or None if not stairs:
+    {
+        "is_stairs": True,
+        "base_id": str,
+        "facing": 'north' | 'south' | 'east' | 'west',
+        "half": 'bottom' | 'top',
+        "waterlogged": bool,
+    }
+    """
+    if not is_stairs(block_or_id):
+        return None
+    block = BLOCKS.get(block_or_id) if isinstance(block_or_id, str) else block_or_id
+    props = getattr(block, "properties", {})
+    facing = props.get("facing")
+    if not facing:
+        b_id = getattr(block, "id", "")
+        for f in ("north", "south", "east", "west"):
+            if f"_{f}" in b_id:
+                facing = f
+                break
+        if not facing:
+            facing = "north"
+    half = props.get("half")
+    if not half:
+        b_id = getattr(block, "id", "")
+        half = "top" if "_top" in b_id else "bottom"
+
+    return {
+        "is_stairs": True,
+        "base_id": getattr(block, "base_id", getattr(block, "id", str(block_or_id))),
+        "facing": facing,
+        "half": half,
+        "waterlogged": bool(props.get("waterlogged", False)),
+    }
+
+
+def get_stairs_block(base_id, facing="north", half="bottom"):
+    """Return variant ID for stairs given base ID, facing, and half."""
+    if facing == "north" and half == "bottom":
+        return base_id
+    if half == "bottom":
+        return f"{base_id}_{facing}"
+    if facing == "north":
+        return f"{base_id}_north_top"
+    return f"{base_id}_{facing}_top"
+
+
+def _can_take_shape(world, wx, wy, wz, check_dir, facing, half):
+    dx, dz = {
+        "north": (0, -1),
+        "south": (0, 1),
+        "west": (-1, 0),
+        "east": (1, 0),
+    }[check_dir]
+    info = get_stairs_info(world.get_block(wx + dx, wy, wz + dz))
+    if not info:
+        return True
+    return not (info["facing"] == facing and info["half"] == half)
+
+
+def get_stair_shape(world, wx, wy, wz, facing, half):
+    """Return stair shape: 'straight', 'inner_left', 'inner_right', 'outer_left', or 'outer_right'."""
+    if world is None:
+        return "straight"
+
+    behind_pos = {
+        "north": (wx, wy, wz - 1),
+        "south": (wx, wy, wz + 1),
+        "west": (wx - 1, wy, wz),
+        "east": (wx + 1, wy, wz),
+    }[facing]
+
+    front_pos = {
+        "north": (wx, wy, wz + 1),
+        "south": (wx, wy, wz - 1),
+        "west": (wx + 1, wy, wz),
+        "east": (wx - 1, wy, wz),
+    }[facing]
+
+    behind_info = get_stairs_info(world.get_block(*behind_pos))
+    front_info = get_stairs_info(world.get_block(*front_pos))
+
+    # Outer corner: connected to perpendicular stair behind (high side)
+    if behind_info and behind_info["half"] == half:
+        b_facing = behind_info["facing"]
+        if facing in ("north", "south") and b_facing in ("west", "east"):
+            opp_dir = "east" if b_facing == "west" else "west"
+            if _can_take_shape(world, wx, wy, wz, opp_dir, facing, half):
+                if facing == "north":
+                    return "outer_left" if b_facing == "west" else "outer_right"
+                else:
+                    return "outer_left" if b_facing == "east" else "outer_right"
+        elif facing in ("west", "east") and b_facing in ("north", "south"):
+            opp_dir = "south" if b_facing == "north" else "north"
+            if _can_take_shape(world, wx, wy, wz, opp_dir, facing, half):
+                if facing == "west":
+                    return "outer_left" if b_facing == "south" else "outer_right"
+                else:
+                    return "outer_left" if b_facing == "north" else "outer_right"
+
+    # Inner corner: connected to perpendicular stair in front (low side)
+    if front_info and front_info["half"] == half:
+        f_facing = front_info["facing"]
+        if facing in ("north", "south") and f_facing in ("west", "east"):
+            if _can_take_shape(world, wx, wy, wz, f_facing, facing, half):
+                if facing == "north":
+                    return "inner_left" if f_facing == "west" else "inner_right"
+                else:
+                    return "inner_left" if f_facing == "east" else "inner_right"
+        elif facing in ("west", "east") and f_facing in ("north", "south"):
+            if _can_take_shape(world, wx, wy, wz, f_facing, facing, half):
+                if facing == "west":
+                    return "inner_left" if f_facing == "south" else "inner_right"
+                else:
+                    return "inner_left" if f_facing == "north" else "inner_right"
+
+    return "straight"
+
+
+def _stair_boxes_local(facing, half, shape="straight"):
+    """Return local 0..16 bounding boxes [(x0, y0, z0, x1, y1, z1), ...] for stair."""
+    base_box = (0.0, 0.0, 0.0, 16.0, 8.0, 16.0) if half == "bottom" else (0.0, 8.0, 0.0, 16.0, 16.0, 16.0)
+    y0, y1 = (8.0, 16.0) if half == "bottom" else (0.0, 8.0)
+    quads = _STAIR_STEP_QUADRANTS.get((facing, shape), ("NW", "NE"))
+
+    quad_boxes = {
+        "NW": (0.0, y0, 0.0, 8.0, y1, 8.0),
+        "NE": (8.0, y0, 0.0, 16.0, y1, 8.0),
+        "SW": (0.0, y0, 8.0, 8.0, y1, 16.0),
+        "SE": (8.0, y0, 8.0, 16.0, y1, 16.0),
+    }
+
+    if set(quads) == {"NW", "NE"}:
+        step_boxes = [(0.0, y0, 0.0, 16.0, y1, 8.0)]
+    elif set(quads) == {"SW", "SE"}:
+        step_boxes = [(0.0, y0, 8.0, 16.0, y1, 16.0)]
+    elif set(quads) == {"NW", "SW"}:
+        step_boxes = [(0.0, y0, 0.0, 8.0, y1, 16.0)]
+    elif set(quads) == {"NE", "SE"}:
+        step_boxes = [(8.0, y0, 0.0, 16.0, y1, 16.0)]
+    elif len(quads) == 1:
+        step_boxes = [quad_boxes[quads[0]]]
+    elif len(quads) == 3:
+        if "NW" in quads and "NE" in quads:
+            rem = (set(quads) - {"NW", "NE"}).pop()
+            step_boxes = [(0.0, y0, 0.0, 16.0, y1, 8.0), quad_boxes[rem]]
+        elif "SW" in quads and "SE" in quads:
+            rem = (set(quads) - {"SW", "SE"}).pop()
+            step_boxes = [(0.0, y0, 8.0, 16.0, y1, 16.0), quad_boxes[rem]]
+        elif "NW" in quads and "SW" in quads:
+            rem = (set(quads) - {"NW", "SW"}).pop()
+            step_boxes = [(0.0, y0, 0.0, 8.0, y1, 16.0), quad_boxes[rem]]
+        else:
+            rem = (set(quads) - {"NE", "SE"}).pop()
+            step_boxes = [(8.0, y0, 0.0, 16.0, y1, 16.0), quad_boxes[rem]]
+    else:
+        step_boxes = [quad_boxes[q] for q in quads]
+
+    return [base_box] + step_boxes
+
+
+def _make_stair_element(x0, y0, z0, x1, y1, z1, top_rect, bottom_rect, side_rect, omit_faces=()):
+    faces = {}
+    if "down" not in omit_faces:
+        faces[FACE_INDEX["down"]] = _map_uv(bottom_rect, [x0, z0, x1, z1])
+    if "up" not in omit_faces:
+        faces[FACE_INDEX["up"]] = _map_uv(top_rect, [x0, z0, x1, z1])
+    if "north" not in omit_faces:
+        faces[FACE_INDEX["north"]] = _map_uv(side_rect, [16 - x1, 16 - y1, 16 - x0, 16 - y0])
+    if "south" not in omit_faces:
+        faces[FACE_INDEX["south"]] = _map_uv(side_rect, [x0, 16 - y1, x1, 16 - y0])
+    if "west" not in omit_faces:
+        faces[FACE_INDEX["west"]] = _map_uv(side_rect, [z0, 16 - y1, z1, 16 - y0])
+    if "east" not in omit_faces:
+        faces[FACE_INDEX["east"]] = _map_uv(side_rect, [16 - z1, 16 - y1, 16 - z0, 16 - y0])
+    return {
+        "from": [float(x0), float(y0), float(z0)],
+        "to": [float(x1), float(y1), float(z1)],
+        "faces": faces,
+    }
+
+
+def _make_stair_elements_for_state(facing, half, shape, top_rect, bottom_rect, side_rect):
+    """Generate model elements for a stair state, omitting internal duplicate/touching faces."""
+    base_box = (0.0, 0.0, 0.0, 16.0, 8.0, 16.0) if half == "bottom" else (0.0, 8.0, 0.0, 16.0, 16.0, 16.0)
+    base_el = _make_stair_element(*base_box, top_rect, bottom_rect, side_rect)
+
+    y0, y1 = (8.0, 16.0) if half == "bottom" else (0.0, 8.0)
+    quads = _STAIR_STEP_QUADRANTS.get((facing, shape), ("NW", "NE"))
+
+    quad_coords = {
+        "NW": (0.0, 0.0, 8.0, 8.0),
+        "NE": (8.0, 0.0, 16.0, 8.0),
+        "SW": (0.0, 8.0, 8.0, 16.0),
+        "SE": (8.0, 8.0, 16.0, 16.0),
+    }
+
+    step_elements = []
+    if shape == "straight":
+        if set(quads) == {"NW", "NE"}:
+            s_box = (0.0, y0, 0.0, 16.0, y1, 8.0)
+        elif set(quads) == {"SW", "SE"}:
+            s_box = (0.0, y0, 8.0, 16.0, y1, 16.0)
+        elif set(quads) == {"NW", "SW"}:
+            s_box = (0.0, y0, 0.0, 8.0, y1, 16.0)
+        else:
+            s_box = (8.0, y0, 0.0, 16.0, y1, 16.0)
+        omit = ("down",) if half == "bottom" else ("up",)
+        step_elements.append(_make_stair_element(*s_box, top_rect, bottom_rect, side_rect, omit_faces=omit))
+    else:
+        for q in quads:
+            x0, z0, x1, z1 = quad_coords[q]
+            omit = set()
+            if half == "bottom":
+                omit.add("down")
+            else:
+                omit.add("up")
+            if q == "NW":
+                if "NE" in quads:
+                    omit.add("east")
+                if "SW" in quads:
+                    omit.add("south")
+            elif q == "NE":
+                if "NW" in quads:
+                    omit.add("west")
+                if "SE" in quads:
+                    omit.add("south")
+            elif q == "SW":
+                if "SE" in quads:
+                    omit.add("east")
+                if "NW" in quads:
+                    omit.add("north")
+            elif q == "SE":
+                if "SW" in quads:
+                    omit.add("west")
+                if "NE" in quads:
+                    omit.add("north")
+            step_elements.append(_make_stair_element(x0, y0, z0, x1, y1, z1, top_rect, bottom_rect, side_rect, omit_faces=omit))
+
+    return [base_el] + step_elements
+
+
+def get_stair_elements(world, wx, wy, wz, block):
+    """Return model elements for a stair at (wx, wy, wz), adapting to corner connections."""
+    info = get_stairs_info(block)
+    facing = info["facing"] if info else "north"
+    half = info["half"] if info else "bottom"
+    shape = get_stair_shape(world, wx, wy, wz, facing, half)
+    if shape == "straight" and hasattr(block, "elements") and block.elements:
+        return list(block.elements)
+
+    rects = getattr(block, "stair_rects", None)
+    if not rects:
+        return list(block.elements) if (hasattr(block, "elements") and block.elements) else []
+    top_rect, bottom_rect, side_rect = rects
+
+    return _make_stair_elements_for_state(facing, half, shape, top_rect, bottom_rect, side_rect)
+
+
+def stair_collision_boxes(world, x, y, z, block):
+    """World-space collision boxes for a stair block at (x, y, z)."""
+    info = get_stairs_info(block)
+    facing = info["facing"] if info else "north"
+    half = info["half"] if info else "bottom"
+    shape = get_stair_shape(world, int(x), int(y), int(z), facing, half)
+    local_boxes = _stair_boxes_local(facing, half, shape)
+    fx, fy, fz = float(x), float(y), float(z)
+    return [
+        (fx + b[0] / 16.0, fy + b[1] / 16.0, fz + b[2] / 16.0, fx + b[3] / 16.0, fy + b[4] / 16.0, fz + b[5] / 16.0)
+        for b in local_boxes
+    ]
+
+
+def stair_raycast_boxes(world, x, y, z, block):
+    """World-space selection/hit boxes for raycasting a stair block at (x, y, z)."""
+    c_boxes = stair_collision_boxes(world, x, y, z, block)
+    ix, iy, iz = int(x), int(y), int(z)
+    boxes = []
+    for idx, c_box in enumerate(c_boxes):
+        part = "base" if idx == 0 else f"step_{idx}"
+        boxes.append((ix, iy, iz, part, c_box))
+    return boxes
+
+
 def get_waterlogged_slab(base_id, half="bottom", level=8):
     s_info = get_slab_info(base_id)
     b_id = s_info["base_id"] if s_info else base_id
@@ -1986,6 +2312,10 @@ def rotation_variant(block_id, axis_or_facing):
         return block_id
     base = getattr(block, "base_id", block_id)
     val = str(axis_or_facing).lower()
+    if is_stairs(block):
+        st_info = get_stairs_info(block)
+        half = st_info["half"] if st_info else "bottom"
+        return get_stairs_block(base, facing=val, half=half)
     if val in ("y", "south", "none", "", "default"):
         return base
     variant = f"{base}_{val}"
@@ -2107,6 +2437,9 @@ def can_support_torch(block_or_id, mount="up"):
         return mount != OPPOSITE_FACING[v_info["facing"]]
     if is_fence(block) or is_wall(block):
         return mount == "up"
+    if is_stairs(block):
+        st_info = get_stairs_info(block)
+        return mount == "up" and bool(st_info and st_info["half"] == "top")
     return bool(block.full_cube)
 
 
@@ -2114,6 +2447,22 @@ def placement_block(block_id, normal, yaw=None, local_y=None):
     block = BLOCKS.get(block_id)
     if block is None:
         return block_id
+    if is_stairs(block):
+        if yaw is not None:
+            facing = player_facing_from_yaw(yaw)
+        else:
+            nx, ny, nz = normal
+            if abs(nx) > 0:
+                facing = "east" if nx > 0 else "west"
+            elif abs(nz) > 0:
+                facing = "south" if nz > 0 else "north"
+            else:
+                facing = "north"
+        nx, ny, nz = normal
+        is_top = (ny < 0) or (ny == 0 and local_y is not None and local_y >= 0.5)
+        half = "top" if is_top else "bottom"
+        base = getattr(block, "base_id", block.id)
+        return get_stairs_block(base, facing=facing, half=half)
     if is_torch(block):
         nx, ny, nz = normal
         base = getattr(block, "base_id", block_id)
@@ -2271,12 +2620,46 @@ def uninstall(block_id):
             BY_INDEX[slot] = None
 
 
-def _resolve_texture(token, mapping, block_name):
+_FACE_ALIASES = {
+    "up": ("up", "top"),
+    "down": ("down", "bottom"),
+    "north": ("north", "back"),
+    "south": ("south", "front"),
+    "east": ("east", "right"),
+    "west": ("west", "left"),
+}
+
+
+def _resolve_texture(token, mapping, block_name, face_name=None):
+    if face_name in _FACE_ALIASES:
+        for alias in _FACE_ALIASES[face_name]:
+            if alias in mapping:
+                return mapping[alias]
+
     if str(token).startswith("#"):
         key = token[1:]
-        if key not in mapping:
-            raise KeyError(f"{block_name} model uses #{key}, which is not in its textures")
-        return mapping[key]
+        if key in mapping:
+            return mapping[key]
+
+        # Contextual face fallbacks if the model's token was not in mapping
+        if face_name in ("north", "south", "east", "west") and "side" in mapping:
+            return mapping["side"]
+        if face_name == "down":
+            if "bottom" in mapping:
+                return mapping["bottom"]
+            if "top" in mapping:
+                return mapping["top"]
+        if face_name == "up" and "top" in mapping:
+            return mapping["top"]
+
+        # Universal fallback for any face
+        if "texture" in mapping:
+            return mapping["texture"]
+        if "all" in mapping:
+            return mapping["all"]
+
+        raise KeyError(f"{block_name} model uses #{key}, which is not in its textures")
+
     return token
 
 
@@ -2472,7 +2855,7 @@ def _load_registry():
             for face_name, spec in element["faces"].items():
                 if face_name not in FACE_INDEX:
                     raise ValueError(f"{entry['id']} has an unknown face {face_name}")
-                texture_name = _resolve_texture(spec["texture"], textures, entry["id"])
+                texture_name = _resolve_texture(spec["texture"], textures, entry["id"], face_name=face_name)
                 if texture_name not in rects:
                     raise KeyError(f"{entry['id']} texture {texture_name} was not loaded")
                 spec_uv = spec.get("uv", [0, 0, 16, 16])
@@ -2516,6 +2899,7 @@ def _load_registry():
         is_fence_gate_type = entry.get("type") == "fence_gate" or properties.get("fence_gate", False) or entry.get("model") == "fence_gate"
         is_fence_type = (entry.get("type") == "fence" or properties.get("fence", False) or entry.get("model") == "fence_post") and not is_fence_gate_type
         is_wall_type = entry.get("type") == "wall" or properties.get("wall", False) or entry.get("model") == "wall_post"
+        is_stairs_type = entry.get("type") == "stairs" or properties.get("stairs", False) or entry.get("model") == "stairs"
         rotation_type = properties.get("rotation") or entry.get("rotation")
         if not rotation_type and entry.get("model") == "orientable":
             rotation_type = "horizontal"
@@ -2555,6 +2939,12 @@ def _load_registry():
         if is_wall_type:
             base_props["wall"] = True
             full_cube = False
+        if is_stairs_type:
+            base_props["stairs"] = True
+            base_props["facing"] = properties.get("facing", "north")
+            base_props["half"] = properties.get("half", "bottom")
+            base_props["rotation"] = "horizontal"
+            full_cube = False
         tint_val = entry.get("tint") or properties.get("tint")
         if tint_val is None and entry["id"] in ("grass", "muddy_grass"):
             tint_val = "grass"
@@ -2563,7 +2953,7 @@ def _load_registry():
         if rotation_type in ("axis", "xyz") or "axis" in properties:
             base_props["rotation"] = "axis"
             base_props["axis"] = "y"
-        elif rotation_type in ("horizontal", "cardinal", "facing") or "facing" in properties:
+        elif (rotation_type in ("horizontal", "cardinal", "facing") or "facing" in properties) and not is_stairs_type:
             base_props["rotation"] = "horizontal"
             base_props["facing"] = properties.get("facing", "south")
         hardness = float(entry.get("hardness", 1.0))
@@ -2725,13 +3115,7 @@ def _load_registry():
                 )
                 _register_block(variant_id, var_block)
 
-        elif rotation_type in ("horizontal", "cardinal", "facing") or "facing" in properties:
-            top_uv = face_uvs[FACE_INDEX["up"]]
-            bottom_uv = face_uvs[FACE_INDEX["down"]]
-            front_uv = face_uvs[FACE_INDEX["south"]]
-            side_uv = face_uvs[FACE_INDEX["east"]] or face_uvs[FACE_INDEX["north"]] or face_uvs[FACE_INDEX["west"]]
-            back_uv = face_uvs[FACE_INDEX["north"]] or side_uv
-
+        elif (rotation_type in ("horizontal", "cardinal", "facing") or "facing" in properties) and not is_stairs_type:
             for facing in ("north", "east", "west"):
                 variant_id = f"{block.id}_{facing}"
                 if is_vertical_slab_type:
@@ -2773,20 +3157,27 @@ def _load_registry():
                 var_props = dict(properties)
                 var_props["rotation"] = "horizontal"
                 var_props["facing"] = facing
-                if facing == "north":
-                    var_face_uvs = [side_uv, side_uv, top_uv, bottom_uv, back_uv, front_uv]
-                elif facing == "east":
-                    var_face_uvs = [front_uv, back_uv, top_uv, bottom_uv, side_uv, side_uv]
-                elif facing == "west":
-                    var_face_uvs = [back_uv, front_uv, top_uv, bottom_uv, side_uv, side_uv]
+                face_map = _VERTICAL_SLAB_FACE_MAPS[facing]
+                var_face_uvs = [face_uvs[old] for old in face_map]
 
-                var_resolved = [
-                    {
-                        "from": [0.0, 0.0, 0.0],
-                        "to": [16.0, 16.0, 16.0],
-                        "faces": {i: var_face_uvs[i] for i in range(6)},
+                var_element = {
+                    "from": [0.0, 0.0, 0.0],
+                    "to": [16.0, 16.0, 16.0],
+                    "faces": {i: var_face_uvs[i] for i in range(6)},
+                }
+                if resolved and "texture_rects" in resolved[0]:
+                    var_element["texture_rects"] = {
+                        i: resolved[0]["texture_rects"][face_map[i]]
+                        for i in range(6)
+                        if face_map[i] in resolved[0]["texture_rects"]
                     }
-                ]
+                if resolved and "face_uv_specs" in resolved[0]:
+                    var_element["face_uv_specs"] = {
+                        i: resolved[0]["face_uv_specs"][face_map[i]]
+                        for i in range(6)
+                        if face_map[i] in resolved[0]["face_uv_specs"]
+                    }
+                var_resolved = [var_element]
                 var_block = Block(
                     variant_id,
                     f"{name} ({facing.capitalize()})",
@@ -3012,7 +3403,98 @@ def _load_registry():
                     )
                     _register_block(var_id, var_block)
                     if facing == "north" and not is_open:
-                        _register_block(block.id, var_block)
+                        base_gate = Block(
+                            block.id,
+                            name,
+                            True,
+                            False,
+                            var_face_uvs,
+                            var_elements,
+                            cutout=True,
+                            opacity=1.0,
+                            tabs=block.tabs,
+                            properties=var_props,
+                            base_id=block.id,
+                            is_variant=False,
+                            hardness=block.hardness,
+                            tool=block.tool,
+                            mining_level=block.mining_level,
+                            loot_table=block.loot_table,
+                            sound=sound_val,
+                            sounds=sounds_val,
+                        )
+                        _register_block(block.id, base_gate)
+
+        if is_stairs_type:
+            top_tex = textures.get("top") or textures.get("up") or textures.get("texture") or textures.get("side") or entry["id"]
+            bottom_tex = textures.get("bottom") or textures.get("down") or top_tex
+            side_tex = textures.get("side") or top_tex
+            if top_tex not in rects:
+                top_tex = next(iter(rects))
+            if bottom_tex not in rects:
+                bottom_tex = top_tex
+            if side_tex not in rects:
+                side_tex = top_tex
+
+            top_rect = rects[top_tex]
+            bottom_rect = rects[bottom_tex]
+            side_rect = rects[side_tex]
+            stair_rects = (top_rect, bottom_rect, side_rect)
+            block.stair_rects = stair_rects
+
+            for half in ("bottom", "top"):
+                for facing in ("north", "south", "east", "west"):
+                    var_id = get_stairs_block(block.id, facing, half)
+                    if var_id == block.id:
+                        continue
+                    var_elements = _make_stair_elements_for_state(
+                        facing, half, "straight", top_rect, bottom_rect, side_rect
+                    )
+                    var_props = dict(base_props)
+                    var_props["facing"] = facing
+                    var_props["half"] = half
+                    var_props["rotation"] = "horizontal"
+                    half_str = " (Top)" if half == "top" else ""
+                    var_name = f"{name} ({facing.capitalize()}){half_str}"
+
+                    var_block = Block(
+                        var_id,
+                        var_name,
+                        block.solid,
+                        False,
+                        face_uvs,
+                        var_elements,
+                        cutout,
+                        opacity,
+                        membership,
+                        properties=var_props,
+                        base_id=block.id,
+                        is_variant=True,
+                        hardness=block.hardness,
+                        tool=block.tool,
+                        mining_level=block.mining_level,
+                        loot_table=block.loot_table,
+                        emission=block.emission,
+                        gravity=block.gravity,
+                        fluid_breakable=block.fluid_breakable,
+                        soil=block.soil,
+                        plant=block.plant,
+                        requires_soil=block.requires_soil,
+                        valid_ground=block.valid_ground,
+                        tint=block.tint,
+                        station=block.station,
+                        recipe_types=block.recipe_types,
+                        cook_speed=block.cook_speed,
+                        sound=sound_val,
+                        sounds=sounds_val,
+                    )
+                    var_block.stair_rects = stair_rects
+                    _register_block(var_id, var_block)
+
+            top_alias = f"{block.id}_top"
+            north_top = f"{block.id}_north_top"
+            if north_top in blocks and top_alias not in blocks:
+                blocks[top_alias] = blocks[north_top]
 
         if is_fence_type:
             tex_name = textures.get("texture") or textures.get("side") or textures.get("top") or entry["id"]
@@ -3592,7 +4074,7 @@ def _load_registry():
                 faces = {}
                 face_uv_specs = {}
                 for face_name, spec in element["faces"].items():
-                    texture_name = _resolve_texture(spec["texture"], textures, entry["id"])
+                    texture_name = _resolve_texture(spec["texture"], textures, entry["id"], face_name=face_name)
                     spec_uv = spec.get("uv", [0, 0, 16, 16])
                     uv = _map_uv(rects[texture_name], spec_uv)
                     index = FACE_INDEX[face_name]

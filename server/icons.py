@@ -4,11 +4,11 @@ ICON_SIZE = 32
 _SCALE = 15.0 / 16.0
 
 
-def render_block_icon(top, side, height_scale=1.0, width_scale=1.0):
+def render_block_icon(top, side, side_east=None, height_scale=1.0, width_scale=1.0):
     image = np.zeros((ICON_SIZE, ICON_SIZE, 4), dtype=np.uint8)
     # Left = south, right = east, top last (painter order).
     _paint_face(image, side, "south", 0.84, height_scale=height_scale, width_scale=width_scale)
-    _paint_face(image, side, "east", 0.62, height_scale=height_scale, width_scale=width_scale)
+    _paint_face(image, side_east if side_east is not None else side, "east", 0.62, height_scale=height_scale, width_scale=width_scale)
     _paint_face(image, top, "up", 1.0, height_scale=height_scale, width_scale=width_scale)
     return _seal(image)
 

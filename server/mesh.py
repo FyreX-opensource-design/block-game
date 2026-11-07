@@ -758,11 +758,13 @@ def build_chunk_mesh(world, cx, cy, cz):
                     cursor_cutout,
                 )
             continue
-        from server.blocks import is_fence, get_fence_elements, is_wall, get_wall_elements
+        from server.blocks import is_fence, get_fence_elements, is_wall, get_wall_elements, is_stairs, get_stair_elements
         if is_fence(block):
             elements = get_fence_elements(world, wx, wy, wz, block)
         elif is_wall(block):
             elements = get_wall_elements(world, wx, wy, wz, block)
+        elif is_stairs(block):
+            elements = get_stair_elements(world, wx, wy, wz, block)
         else:
             elements = block.elements
         for element in elements:
@@ -1412,7 +1414,11 @@ def _get_world_elements(world, bx, by, bz):
         return tuple(results)
     b_glass = is_glass(b_obj)
     results = []
-    for el in getattr(b_obj, "elements", ()):
+    els = getattr(b_obj, "elements", ())
+    from server.blocks import is_stairs, get_stair_elements
+    if is_stairs(b_obj):
+        els = get_stair_elements(world, bx, by, bz, b_obj)
+    for el in els:
         x0 = bx + el["from"][0] / 16.0
         x1 = bx + el["to"][0] / 16.0
         y0 = by + el["from"][1] / 16.0

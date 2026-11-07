@@ -2812,11 +2812,13 @@ class Game(pyglet.window.Window):
                 offset_info = get_offset_info(block_to_place)
                 torch_info = get_offset_torch_info(block_to_place)
                 v_info = get_vertical_slab_info(block_to_place)
-                from server.blocks import fence_collision_boxes, is_fence, is_wall, wall_collision_boxes
+                from server.blocks import fence_collision_boxes, is_fence, is_stairs, is_wall, stair_collision_boxes, wall_collision_boxes
                 if is_fence(block_to_place):
                     b_boxes = fence_collision_boxes(self.world, x, y, z)
                 elif is_wall(block_to_place):
                     b_boxes = wall_collision_boxes(self.world, x, y, z)
+                elif is_stairs(block_to_place):
+                    b_boxes = stair_collision_boxes(self.world, x, y, z, block_to_place)
                 elif torch_info is not None and torch_info["capped"]:
                     b_boxes = [(float(x), float(y) + 0.5, float(z), float(x + 1), float(y) + 1.0, float(z + 1))]
                 elif v_off_info is not None:
@@ -3112,10 +3114,11 @@ class Game(pyglet.window.Window):
             self.mode = "servers"
             self.menu.screen = "servers"
             self.menu.servers = load_servers()
-            self.menu.selected = -1
+            self.menu.selected = 0 if self.menu.servers else -1
             self.menu._row_click = 0.0
             self.menu.scroll = 0
             self.menu.message = ""
+            self.menu.local_ips = get_local_ips()
         elif action == "add-server":
             self.mode = "add_server"
             self.menu.screen = "add_server"
@@ -3148,6 +3151,7 @@ class Game(pyglet.window.Window):
             self.menu.server_address = "127.0.0.1:25565"
             self.menu.focus = "server_address"
             self.menu.message = ""
+            self.menu.local_ips = get_local_ips()
         elif action == "cancel-direct":
             self.mode = "servers"
             self.menu.screen = "servers"
@@ -4679,7 +4683,22 @@ def main(argv=None):
     parser.add_argument("--username", default=None, help="Player username")
     parser.add_argument("--uuid", default=None, help="Player UUID")
     parser.add_argument("--title", default=None, help="Custom window title")
-    parser.add_argument("--connect", default=None, help="Auto-connect to server address (e.g. 127.0.0.1:25565)")
+    parser.add_argument(
+        "--connect",
+        nargs="?",
+        const="127.0.0.1:25565",
+        default=None,
+        help="Auto-connect to server address (default: 127.0.0.1:25565)",
+    )
+    parser.add_argument(
+        "-m",
+        "--multiplayer",
+        nargs="?",
+        const="127.0.0.1:25565",
+        default=None,
+        dest="multiplayer",
+        help="Auto-connect to multiplayer server (default: 127.0.0.1:25565)",
+    )
     parser.add_argument("--width", type=int, default=1280, help="Window width")
     parser.add_argument("--height", type=int, default=720, help="Window height")
     parser.add_argument("--pos", default=None, help="Window position X,Y (e.g. 50,50)")
@@ -4696,6 +4715,7 @@ def main(argv=None):
             pass
 
     saves_dir = tempfile.mkdtemp(prefix="blockgame-") if parsed.smoke else parsed.saves_dir
+    connect_addr = parsed.connect or parsed.multiplayer
     game = Game(
         smoke=parsed.smoke,
         saves_dir=saves_dir,
@@ -4706,7 +4726,7 @@ def main(argv=None):
         width=parsed.width,
         height=parsed.height,
         window_pos=window_pos,
-        connect=parsed.connect,
+        connect=connect_addr,
     )
     if parsed.smoke:
         return game.run_smoke()

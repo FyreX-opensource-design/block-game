@@ -48,6 +48,22 @@ class TestDoors(unittest.TestCase):
         drops = get_block_drops(BLOCKS["wooden_door"])
         self.assertEqual(drops, [("wooden_door", 1)])
 
+    def test_pine_door_blocks_and_item_registered(self):
+        self.assertIn("pine_door", BLOCKS)
+        self.assertIn("pine_door", ITEMS)
+
+        door_item = ITEMS["pine_door"]
+        self.assertEqual(door_item.right, "place")
+        self.assertEqual(door_item.block, "pine_door")
+
+        recipe = next((r for r in RECIPES if getattr(r, "id", "") == "pine_door"), None)
+        self.assertIsNotNone(recipe)
+        self.assertEqual(recipe.result, "pine_door")
+        self.assertEqual(recipe.count, 3)
+
+        drops = get_block_drops(BLOCKS["pine_door"])
+        self.assertEqual(drops, [("pine_door", 1)])
+
     def test_door_variants_and_info(self):
         for half in ("lower", "upper"):
             for facing in ("north", "south", "east", "west"):

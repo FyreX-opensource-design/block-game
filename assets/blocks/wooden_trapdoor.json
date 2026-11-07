@@ -1,7 +1,9 @@
 {
   "id": "wooden_trapdoor",
   "lang": "block.wooden_trapdoor",
-  "tab": ["building"],
+  "tab": [
+    "building"
+  ],
   "model": "trapdoor",
   "type": "trapdoor",
   "render": "cutout",
@@ -18,8 +20,7 @@
     "open": false
   },
   "textures": {
-    "texture": "wooden_trapdoor",
-    "edge": "planks"
+    "texture": "oak_door_top",
+    "edge": "oak_doors_side"
   }
 }
-

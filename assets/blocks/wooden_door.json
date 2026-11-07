@@ -1,7 +1,9 @@
 {
   "id": "wooden_door",
   "lang": "block.wooden_door",
-  "tab": ["building"],
+  "tab": [
+    "building"
+  ],
   "model": "door_lower",
   "type": "door",
   "render": "cutout",
@@ -18,8 +20,8 @@
     "open": false
   },
   "textures": {
-    "lower": "wooden_door_lower",
-    "upper": "wooden_door_upper",
-    "edge": "planks"
+    "lower": "oak_door_bottom",
+    "upper": "oak_door_top",
+    "edge": "oak_doors_side"
   }
 }

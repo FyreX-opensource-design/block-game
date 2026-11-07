@@ -1,0 +1,20 @@
+{
+  "id": "stone_brick_stairs",
+  "lang": "block.stone_brick_stairs",
+  "type": "stairs",
+  "tab": [
+    "building"
+  ],
+  "model": "stairs",
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "sound": "stone",
+  "loot_table": "blocks/stone_brick_stairs",
+  "textures": {
+    "top": "stone_bricks",
+    "side": "stone_bricks",
+    "bottom": "stone_bricks"
+  }
+}
+

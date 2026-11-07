@@ -133,14 +133,14 @@ def _palette_lookup(palette):
 
 def _legacy_lookup():
     """Map BG02 global indices to the current registry (pre-sapling layout)."""
-    from server.blocks import BY_INDEX, is_door, is_fence_gate, is_trapdoor, is_vertical_slab
+    from server.blocks import BY_INDEX, is_door, is_fence_gate, is_stairs, is_trapdoor, is_vertical_slab
 
     # Rebuild the registry as it looked before saplings were added. The reserved
     # hole is recreated at its absolute index rather than carried over, because
     # removing saplings shifts every later index.
     palette = [""]
     for index, block in enumerate(BY_INDEX):
-        if index == 0 or block is None or block.id in _LEGACY_NEW_BLOCKS or is_vertical_slab(block) or is_door(block) or is_trapdoor(block) or is_fence_gate(block):
+        if index == 0 or block is None or block.id in _LEGACY_NEW_BLOCKS or is_vertical_slab(block) or is_door(block) or is_trapdoor(block) or is_fence_gate(block) or is_stairs(block):
             continue
         if len(palette) == _LEGACY_RESERVED_INDEX:
             palette.append("")

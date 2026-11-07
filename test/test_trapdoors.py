@@ -52,6 +52,36 @@ class TestTrapdoors(unittest.TestCase):
         drops = get_block_drops(BLOCKS["wooden_trapdoor"])
         self.assertEqual(drops, [("wooden_trapdoor", 1)])
 
+    def test_pine_trapdoor_registered_and_variants(self):
+        self.assertIn("pine_trapdoor", BLOCKS)
+        self.assertIn("pine_trapdoor", ITEMS)
+        self.assertIn("pine_trapdoor", TRAPDOORS)
+
+        td_asset = get_trapdoor("pine_trapdoor")
+        self.assertIsNotNone(td_asset)
+        self.assertEqual(td_asset.sound, "wood")
+        self.assertTrue(td_asset.openable_by_hand)
+
+        item = ITEMS["pine_trapdoor"]
+        self.assertEqual(item.block, "pine_trapdoor")
+        self.assertEqual(item.right, "place")
+
+        drops = get_block_drops(BLOCKS["pine_trapdoor"])
+        self.assertEqual(drops, [("pine_trapdoor", 1)])
+
+        recipe = next((r for r in RECIPES if getattr(r, "id", "") == "pine_trapdoor"), None)
+        self.assertIsNotNone(recipe)
+        self.assertEqual(recipe.result, "pine_trapdoor")
+        self.assertEqual(recipe.count, 2)
+
+        for half in ("bottom", "top"):
+            for facing in ("north", "south", "east", "west"):
+                for is_open in (False, True):
+                    var_id = get_trapdoor_block("pine_trapdoor", half, facing, is_open)
+                    self.assertIn(var_id, BLOCKS)
+                    var_block = BLOCKS[var_id]
+                    self.assertTrue(is_trapdoor(var_block))
+
         # Recipe (6 planks -> 2 trapdoors)
         recipe = next((r for r in RECIPES if getattr(r, "id", "") == "wooden_trapdoor"), None)
         self.assertIsNotNone(recipe)
@@ -224,9 +254,17 @@ class TestTrapdoors(unittest.TestCase):
 
         uv_up = faces[FACE_INDEX["up"]]
         uv_north = faces[FACE_INDEX["north"]]
+        uv_south = faces[FACE_INDEX["south"]]
+        uv_west = faces[FACE_INDEX["west"]]
+        uv_east = faces[FACE_INDEX["east"]]
 
         # Up face is the large face (16x16), north is thin 16x3 edge -> different UV mapping
         self.assertNotEqual(uv_up, uv_north)
+
+        # All 4 side edges (north, south, east, west) must have identical 16x3 edge mapping
+        self.assertEqual(uv_north, uv_south)
+        self.assertEqual(uv_north, uv_west)
+        self.assertEqual(uv_north, uv_east)
 
 
 if __name__ == "__main__":

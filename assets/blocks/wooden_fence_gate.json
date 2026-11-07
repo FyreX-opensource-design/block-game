@@ -1,7 +1,9 @@
 {
   "id": "wooden_fence_gate",
   "lang": "block.wooden_fence_gate",
-  "tab": ["building"],
+  "tab": [
+    "building"
+  ],
   "model": "fence_gate",
   "type": "fence_gate",
   "solid": true,
@@ -16,8 +18,8 @@
     "open": false
   },
   "textures": {
-    "top": "planks",
-    "side": "planks",
-    "texture": "planks"
+    "top": "oak_planks",
+    "side": "oak_planks",
+    "texture": "oak_planks"
   }
 }

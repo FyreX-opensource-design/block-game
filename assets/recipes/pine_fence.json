@@ -1,0 +1,17 @@
+{
+  "id": "pine_fence",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#S#",
+    "#S#"
+  ],
+  "key": {
+    "#": "pine_planks",
+    "S": "#sticks"
+  },
+  "result": {
+    "item": "pine_fence",
+    "count": 3
+  }
+}
+

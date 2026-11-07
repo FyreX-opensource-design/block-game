@@ -1,0 +1,14 @@
+{
+  "name": "multiplayer",
+  "seed": 1546894315,
+  "created": 1794073785.7154958,
+  "last_played": 1794073785.7154958,
+  "player": null,
+  "gamemode": "survival",
+  "day_time": 15181.600000007802,
+  "spawn": [
+    0.5,
+    91.0,
+    0.5
+  ]
+}
