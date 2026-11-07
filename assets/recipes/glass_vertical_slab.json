@@ -1,0 +1,17 @@
+{
+  "id": "glass_vertical_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "#",
+    "#"
+  ],
+  "key": {
+    "#": "glass_slab"
+  },
+  "result": {
+    "item": "glass_vertical_slab",
+    "count": 3
+  }
+}
+

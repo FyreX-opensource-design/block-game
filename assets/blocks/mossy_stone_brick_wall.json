@@ -1,0 +1,23 @@
+{
+  "id": "mossy_stone_brick_wall",
+  "lang": "block.mossy_stone_brick_wall",
+  "tab": [
+    "building"
+  ],
+  "model": "wall_post",
+  "type": "wall",
+  "solid": true,
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "sound": "stone",
+  "loot_table": "blocks/mossy_stone_brick_wall",
+  "properties": {
+    "wall": true
+  },
+  "textures": {
+    "top": "mossy_stone_bricks",
+    "side": "mossy_stone_bricks",
+    "texture": "mossy_stone_bricks"
+  }
+}

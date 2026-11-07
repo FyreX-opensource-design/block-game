@@ -1,0 +1,14 @@
+{
+  "id": "cobble_wall",
+  "lang": "item.cobble_wall",
+  "tab": [
+    "building"
+  ],
+  "model": "block",
+  "item_model": "wall_inventory",
+  "block": "cobble_wall",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}

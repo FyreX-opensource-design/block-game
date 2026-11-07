@@ -1,0 +1,23 @@
+{
+  "id": "cobble_wall",
+  "lang": "block.cobble_wall",
+  "tab": [
+    "building"
+  ],
+  "model": "wall_post",
+  "type": "wall",
+  "solid": true,
+  "hardness": 2.0,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "sound": "stone",
+  "loot_table": "blocks/cobble_wall",
+  "properties": {
+    "wall": true
+  },
+  "textures": {
+    "top": "cobble",
+    "side": "cobble",
+    "texture": "cobble"
+  }
+}

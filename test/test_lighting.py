@@ -510,6 +510,40 @@ class LightingTests(unittest.TestCase):
         self.assertEqual(world.get_blocklight(15, 5, 16), (0, 0, 0, 0, 0))
         self.assertEqual(world.get_blocklight(16, 5, 16), (0, 0, 0, 0, 0))
 
+    def test_placing_opaque_block_near_torch_does_not_mark_27_chunks_dirty(self):
+        """Ensure placing a non-emitting opaque block in a chunk with active torch light
+        does not wipe and dirty all 27 chunks, and properly casts a shadow."""
+        world = World()
+        for cx in (-1, 0, 1):
+            for cy in (0, 1, 2):
+                for cz in (-1, 0, 1):
+                    world.chunks[(cx, cy, cz)] = Chunk(cx, cy, cz)
+
+        # Place support block and torch at (5, 20, 5)
+        world.set_block(5, 19, 5, "stone")
+        world.set_block(5, 20, 5, "torch")
+        light_before = world.get_blocklight(7, 20, 5)[0]
+        self.assertGreater(light_before, 0)
+
+        world.dirty.clear()
+
+        # Place stone at (6, 20, 5) between torch and (7, 20, 5)
+        world.set_block(6, 20, 5, "stone")
+
+        # Dirty chunks should be minimal (local chunk only, not all 27 chunks)
+        self.assertLessEqual(len(world.dirty), 4)
+        self.assertNotIn((1, 2, 1), world.dirty)
+
+        # Light inside stone is 0
+        self.assertEqual(world.get_blocklight(6, 20, 5), (0, 0, 0, 0, 0))
+        # Behind the stone, direct light from torch is blocked
+        light_after = world.get_blocklight(7, 20, 5)[0]
+        self.assertLess(light_after, light_before)
+
+        # Breaking the stone restores the light
+        world.set_block(6, 20, 5, AIR)
+        self.assertEqual(world.get_blocklight(7, 20, 5)[0], light_before)
+
 
 if __name__ == "__main__":
     unittest.main()

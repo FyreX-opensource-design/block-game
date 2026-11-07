@@ -1044,12 +1044,12 @@ class Renderer:
             return
         (vertices, indices), kind = packed
         texture = self.atlas if kind == "block" else self.items
-        if first_person:
+        if first_person and kind != "block":
             # Depth already cleared for this pass; disable test so overlapping
             # extrusion pads don't moiré and near terrain can't poke through.
             self.ctx.disable(moderngl.DEPTH_TEST)
         self._draw_entity(vp, camera, vertices, indices, texture, fog=fog, day_time=day_time)
-        if first_person:
+        if first_person and kind != "block":
             self.ctx.enable(moderngl.DEPTH_TEST)
 
     def _init_mob_textures(self):

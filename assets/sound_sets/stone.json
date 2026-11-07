@@ -1,0 +1,12 @@
+{
+    "id": "stone",
+    "walk": [
+        "stone_walking_1"
+    ],
+    "breaking": [
+        "stone_breaking"
+    ],
+    "broken": [
+        "stone_broken"
+    ]
+}

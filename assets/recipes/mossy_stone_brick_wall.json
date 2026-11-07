@@ -1,0 +1,15 @@
+{
+  "id": "mossy_stone_brick_wall",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "###"
+  ],
+  "key": {
+    "#": "mossy_stone_bricks"
+  },
+  "result": {
+    "item": "mossy_stone_brick_wall",
+    "count": 6
+  }
+}

@@ -72,9 +72,9 @@ class TestToolProgression(unittest.TestCase):
     def test_flint_tool_crafting(self):
         # Flint pickaxe
         pick_grid = (
-            "knapped_flint", "knapped_flint", "knapped_flint",
-            "",              "plant_fiber",   "",
-            "",              "stick",         "",
+            "knapped_flint", "plant_fiber", "knapped_flint",
+            "",              "stick",       "",
+            "",              "stick",       "",
         )
         res = craft_match(pick_grid)
         self.assertIsNotNone(res)
@@ -103,8 +103,8 @@ class TestToolProgression(unittest.TestCase):
         # Flint sword
         sword_grid = (
             "", "knapped_flint", "",
-            "", "knapped_flint", "",
             "", "plant_fiber",   "",
+            "", "stick",         "",
         )
         res = craft_match(sword_grid)
         self.assertIsNotNone(res)

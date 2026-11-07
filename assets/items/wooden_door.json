@@ -1,0 +1,13 @@
+{
+  "id": "wooden_door",
+  "lang": "item.wooden_door",
+  "tab": "building",
+  "model": "flat",
+  "texture": "wooden_door",
+  "block": "wooden_door",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}
+

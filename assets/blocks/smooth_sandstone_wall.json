@@ -1,0 +1,23 @@
+{
+  "id": "smooth_sandstone_wall",
+  "lang": "block.smooth_sandstone_wall",
+  "tab": [
+    "building"
+  ],
+  "model": "wall_post",
+  "type": "wall",
+  "solid": true,
+  "hardness": 0.6,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "sound": "stone",
+  "loot_table": "blocks/smooth_sandstone_wall",
+  "properties": {
+    "wall": true
+  },
+  "textures": {
+    "top": "smooth_sandstone",
+    "side": "smooth_sandstone",
+    "texture": "smooth_sandstone"
+  }
+}
