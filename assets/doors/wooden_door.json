@@ -1,0 +1,16 @@
+{
+  "id": "wooden_door",
+  "name": "Wooden Door",
+  "sound": "wood",
+  "hardness": 3.0,
+  "tool": "axe",
+  "openable_by_hand": true,
+  "item": "wooden_door",
+  "loot_table": "blocks/wooden_door",
+  "textures": {
+    "lower": "wooden_door_lower",
+    "upper": "wooden_door_upper",
+    "edge": "planks"
+  }
+}
+

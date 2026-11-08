@@ -1,0 +1,19 @@
+{
+  "id": "raw_copper_block",
+  "lang": "block.raw_copper_block",
+  "tab": [
+    "building",
+    "materials"
+  ],
+  "model": "cube",
+  "hardness": 3.0,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/raw_copper_block",
+  "sound": "stone",
+  "textures": {
+    "top": "raw_copper_block",
+    "side": "raw_copper_block",
+    "bottom": "raw_copper_block"
+  }
+}

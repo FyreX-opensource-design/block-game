@@ -1,0 +1,36 @@
+{
+  "id": "glass",
+  "lang": "block.glass",
+  "tab": ["building"],
+  "model": "cube",
+  "render": "cutout",
+  "solid": true,
+  "hardness": 0.3,
+  "tool": "none",
+  "mining_level": 0,
+  "loot_table": "blocks/glass",
+  "properties": {
+    "glass": true
+  },
+  "textures": {
+    "top": "glass",
+    "side": "glass",
+    "bottom": "glass",
+    "ctm_0": "glass_0",
+    "ctm_1": "glass_1",
+    "ctm_2": "glass_2",
+    "ctm_3": "glass_3",
+    "ctm_4": "glass_4",
+    "ctm_5": "glass_5",
+    "ctm_6": "glass_6",
+    "ctm_7": "glass_7",
+    "ctm_8": "glass_8",
+    "ctm_9": "glass_9",
+    "ctm_10": "glass_10",
+    "ctm_11": "glass_11",
+    "ctm_12": "glass_12",
+    "ctm_13": "glass_13",
+    "ctm_14": "glass_14",
+    "ctm_15": "glass_15"
+  }
+}

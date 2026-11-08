@@ -1,0 +1,11 @@
+{
+  "id": "raw_iron_from_block",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "raw_iron_block"
+  ],
+  "result": {
+    "item": "raw_iron",
+    "count": 9
+  }
+}

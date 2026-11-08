@@ -1,0 +1,14 @@
+{
+  "id": "smooth_stone_wall",
+  "lang": "item.smooth_stone_wall",
+  "tab": [
+    "building"
+  ],
+  "model": "block",
+  "item_model": "wall_inventory",
+  "block": "smooth_stone_wall",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}

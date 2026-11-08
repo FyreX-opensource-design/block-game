@@ -1,0 +1,11 @@
+{
+  "id": "raw_copper_from_block",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "raw_copper_block"
+  ],
+  "result": {
+    "item": "raw_copper",
+    "count": 9
+  }
+}

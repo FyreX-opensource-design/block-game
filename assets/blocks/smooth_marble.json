@@ -1,0 +1,18 @@
+{
+  "id": "smooth_marble",
+  "lang": "block.smooth_marble",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/smooth_marble",
+  "sound": "stone",
+  "textures": {
+    "top": "smooth_marble",
+    "side": "smooth_marble",
+    "bottom": "smooth_marble"
+  }
+}

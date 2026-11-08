@@ -1,0 +1,11 @@
+{
+  "id": "tin_ingots_from_block",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "tin_block"
+  ],
+  "result": {
+    "item": "tin_ingot",
+    "count": 9
+  }
+}

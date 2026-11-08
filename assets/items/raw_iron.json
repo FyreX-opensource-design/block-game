@@ -1,7 +1,7 @@
 {
   "id": "raw_iron",
   "lang": "item.raw_iron",
-  "tab": "natural",
+  "tab": "materials",
   "model": "flat",
   "texture": "raw_iron",
   "max_stack": 64,

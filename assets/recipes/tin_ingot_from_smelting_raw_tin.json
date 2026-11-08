@@ -1,0 +1,11 @@
+{
+  "id": "tin_ingot_from_smelting_raw_tin",
+  "type": "smelting",
+  "ingredient": "raw_tin",
+  "result": {
+    "item": "tin_ingot",
+    "count": 1
+  },
+  "cookingtime": 10.0,
+  "experience": 0.7
+}

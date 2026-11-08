@@ -1,0 +1,19 @@
+{
+  "id": "marble",
+  "lang": "block.marble",
+  "tab": [
+    "building",
+    "natural"
+  ],
+  "model": "cube",
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/marble",
+  "sound": "stone",
+  "textures": {
+    "top": "marble",
+    "side": "marble",
+    "bottom": "marble"
+  }
+}

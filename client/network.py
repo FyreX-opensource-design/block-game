@@ -27,10 +27,11 @@ class NetworkClient:
 
     def connect(self, timeout=5.0):
         """Connect to the server and send login packet."""
+        if str(self.host).endswith(".255"):
+            self.error = f"Cannot connect to {self.host}: .255 is a broadcast address, not a device IP"
+            return False
         try:
-            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.sock.settimeout(timeout)
-            self.sock.connect((self.host, self.port))
+            self.sock = socket.create_connection((self.host, self.port), timeout=timeout)
             self.sock.setblocking(False)
             self.connected = True
             self.running = True

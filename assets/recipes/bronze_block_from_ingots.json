@@ -1,0 +1,16 @@
+{
+  "id": "bronze_block_from_ingots",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "###",
+    "###"
+  ],
+  "key": {
+    "#": "bronze_ingot"
+  },
+  "result": {
+    "item": "bronze_block",
+    "count": 1
+  }
+}

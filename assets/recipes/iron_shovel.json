@@ -1,0 +1,17 @@
+{
+  "id": "iron_shovel",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "X",
+    "X"
+  ],
+  "key": {
+    "#": "iron_ingot",
+    "X": "#sticks"
+  },
+  "result": {
+    "item": "iron_shovel",
+    "count": 1
+  }
+}

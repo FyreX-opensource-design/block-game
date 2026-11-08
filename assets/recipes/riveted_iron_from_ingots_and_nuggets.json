@@ -1,0 +1,16 @@
+{
+  "id": "riveted_iron_from_ingots_and_nuggets",
+  "type": "crafting_shaped",
+  "pattern": [
+    "IN",
+    "NI"
+  ],
+  "key": {
+    "I": "iron_ingot",
+    "N": "iron_nugget"
+  },
+  "result": {
+    "item": "riveted_iron",
+    "count": 2
+  }
+}

@@ -221,13 +221,18 @@ class NetworkIntegrationTests(unittest.TestCase):
 
             # Clean disconnect
             client2.disconnect()
-            time.sleep(0.1)
 
             # Client 1 should observe player_leave for Client 2
             c1_saw_leave = False
-            for pkt in client1.poll_events():
-                if pkt.get("type") == "player_leave" and pkt.get("uuid") == uuid2:
-                    c1_saw_leave = True
+            t_leave = time.time()
+            while time.time() - t_leave < 2.0:
+                for pkt in client1.poll_events():
+                    if pkt.get("type") == "player_leave" and pkt.get("uuid") == uuid2:
+                        c1_saw_leave = True
+                        break
+                if c1_saw_leave:
+                    break
+                time.sleep(0.05)
             self.assertTrue(c1_saw_leave)
             self.assertNotIn(uuid2, server.clients)
 
@@ -625,6 +630,112 @@ class MultiplayerFurnaceAndSlabSyncTests(unittest.TestCase):
             bcast1 = [p for p in client1_packets if p.get("type") == "block_change" and p.get("block") == remaining_slab]
             bcast2 = [p for p in client2_packets if p.get("type") == "block_change" and p.get("block") == remaining_slab]
             self.assertEqual(len(bcast1) + len(bcast2), 2)
+
+    def test_door_trapdoor_fence_gate_multiplayer_sync(self):
+        from unittest.mock import MagicMock
+        from server.blocks import (
+            can_place_block,
+            get_door_block,
+            get_trapdoor_block,
+            get_fence_gate_block,
+        )
+        from server.network import MultiplayerServer, RemoteClient
+        from server.world import Chunk, World
+
+        with tempfile.TemporaryDirectory() as tmp:
+            world = World(seed=99)
+            server = MultiplayerServer(host="127.0.0.1", port=0, saves_dir=tmp, world=world)
+            chunk = Chunk(0, 0, 0)
+            world.chunks[(0, 0, 0)] = chunk
+
+            client1 = MagicMock(spec=RemoteClient)
+            client1.alive = True
+            client1.uuid = "player-1"
+            client1.pos = [0.0, 5.0, 0.0]
+            client1_packets = []
+            client1.send = lambda pkt: client1_packets.append(pkt)
+            server.clients["player-1"] = client1
+
+            client2 = MagicMock(spec=RemoteClient)
+            client2.alive = True
+            client2.uuid = "player-2"
+            client2.pos = [2.0, 5.0, 2.0]
+            client2_packets = []
+            client2.send = lambda pkt: client2_packets.append(pkt)
+            server.clients["player-2"] = client2
+
+            # 1. Door toggle sync (lower and upper halves)
+            d_lower_closed = get_door_block("wooden_door", "lower", "south", open=False, hinge="left")
+            d_upper_closed = get_door_block("wooden_door", "upper", "south", open=False, hinge="left")
+            d_lower_open = get_door_block("wooden_door", "lower", "south", open=True, hinge="left")
+            d_upper_open = get_door_block("wooden_door", "upper", "south", open=True, hinge="left")
+
+            world.set_block(1, 1, 1, d_lower_closed)
+            world.set_block(1, 2, 1, d_upper_closed)
+
+            self.assertTrue(can_place_block(world, 1, 1, 1, d_lower_open))
+            self.assertTrue(can_place_block(world, 1, 2, 1, d_upper_open))
+
+            client1_packets.clear()
+            client2_packets.clear()
+            server._handle_packet(client1, {"type": "set_block", "x": 1, "y": 1, "z": 1, "block": d_lower_open})
+            server._handle_packet(client1, {"type": "set_block", "x": 1, "y": 2, "z": 1, "block": d_upper_open})
+
+            self.assertEqual(world.get_block(1, 1, 1), d_lower_open)
+            self.assertEqual(world.get_block(1, 2, 1), d_upper_open)
+
+            # Both clients received block_change packets for both door halves
+            bcast2_lower = [p for p in client2_packets if p.get("type") == "block_change" and p.get("x") == 1 and p.get("y") == 1 and p.get("block") == d_lower_open]
+            bcast2_upper = [p for p in client2_packets if p.get("type") == "block_change" and p.get("x") == 1 and p.get("y") == 2 and p.get("block") == d_upper_open]
+            self.assertEqual(len(bcast2_lower), 1)
+            self.assertEqual(len(bcast2_upper), 1)
+
+            # 2. Trapdoor toggle sync
+            t_closed = get_trapdoor_block("wooden_trapdoor", "bottom", "north", open=False)
+            t_open = get_trapdoor_block("wooden_trapdoor", "bottom", "north", open=True)
+            world.set_block(2, 1, 2, t_closed)
+
+            self.assertTrue(can_place_block(world, 2, 1, 2, t_open))
+            client2_packets.clear()
+            server._handle_packet(client1, {"type": "set_block", "x": 2, "y": 1, "z": 2, "block": t_open})
+            self.assertEqual(world.get_block(2, 1, 2), t_open)
+            bcast_trap = [p for p in client2_packets if p.get("type") == "block_change" and p.get("x") == 2 and p.get("y") == 1 and p.get("block") == t_open]
+            self.assertEqual(len(bcast_trap), 1)
+
+            # 3. Fence gate toggle sync (including pine variant)
+            g_closed = get_fence_gate_block("pine_fence_gate", "north", open=False)
+            g_open = get_fence_gate_block("pine_fence_gate", "north", open=True)
+            world.set_block(3, 1, 3, g_closed)
+
+            self.assertTrue(can_place_block(world, 3, 1, 3, g_open))
+            client2_packets.clear()
+            server._handle_packet(client1, {"type": "set_block", "x": 3, "y": 1, "z": 3, "block": g_open})
+            self.assertEqual(world.get_block(3, 1, 3), g_open)
+            bcast_gate = [p for p in client2_packets if p.get("type") == "block_change" and p.get("x") == 3 and p.get("y") == 1 and p.get("block") == g_open]
+            self.assertEqual(len(bcast_gate), 1)
+
+            # 4. Double door sync (partner door with mirrored hinge)
+            p_lower_closed = get_door_block("wooden_door", "lower", "south", open=False, hinge="right")
+            p_upper_closed = get_door_block("wooden_door", "upper", "south", open=False, hinge="right")
+            p_lower_open = get_door_block("wooden_door", "lower", "south", open=True, hinge="right")
+            p_upper_open = get_door_block("wooden_door", "upper", "south", open=True, hinge="right")
+
+            world.set_block(2, 1, 1, p_lower_closed)
+            world.set_block(2, 2, 1, p_upper_closed)
+
+            self.assertTrue(can_place_block(world, 2, 1, 1, p_lower_open))
+            self.assertTrue(can_place_block(world, 2, 2, 1, p_upper_open))
+
+            client2_packets.clear()
+            server._handle_packet(client1, {"type": "set_block", "x": 2, "y": 1, "z": 1, "block": p_lower_open})
+            server._handle_packet(client1, {"type": "set_block", "x": 2, "y": 2, "z": 1, "block": p_upper_open})
+            self.assertEqual(world.get_block(2, 1, 1), p_lower_open)
+            self.assertEqual(world.get_block(2, 2, 1), p_upper_open)
+
+            bcast2_p_lower = [p for p in client2_packets if p.get("type") == "block_change" and p.get("x") == 2 and p.get("y") == 1 and p.get("block") == p_lower_open]
+            bcast2_p_upper = [p for p in client2_packets if p.get("type") == "block_change" and p.get("x") == 2 and p.get("y") == 2 and p.get("block") == p_upper_open]
+            self.assertEqual(len(bcast2_p_lower), 1)
+            self.assertEqual(len(bcast2_p_upper), 1)
 
     def test_furnace_multiplayer_sync(self):
         from unittest.mock import MagicMock

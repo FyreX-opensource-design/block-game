@@ -1,0 +1,15 @@
+{
+  "id": "cut_tin_from_block",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "##"
+  ],
+  "key": {
+    "#": "tin_block"
+  },
+  "result": {
+    "item": "cut_tin",
+    "count": 4
+  }
+}

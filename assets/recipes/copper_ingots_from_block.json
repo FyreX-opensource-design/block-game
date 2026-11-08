@@ -1,0 +1,11 @@
+{
+  "id": "copper_ingots_from_block",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "copper_block"
+  ],
+  "result": {
+    "item": "copper_ingot",
+    "count": 9
+  }
+}

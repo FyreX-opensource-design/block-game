@@ -1,0 +1,16 @@
+{
+  "id": "pine_trapdoor",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "###"
+  ],
+  "key": {
+    "#": "pine_planks"
+  },
+  "result": {
+    "item": "pine_trapdoor",
+    "count": 2
+  }
+}
+

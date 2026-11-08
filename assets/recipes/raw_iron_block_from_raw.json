@@ -1,0 +1,16 @@
+{
+  "id": "raw_iron_block_from_raw",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "###",
+    "###"
+  ],
+  "key": {
+    "#": "raw_iron"
+  },
+  "result": {
+    "item": "raw_iron_block",
+    "count": 1
+  }
+}

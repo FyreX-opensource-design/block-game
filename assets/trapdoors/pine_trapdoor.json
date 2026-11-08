@@ -1,0 +1,15 @@
+{
+  "id": "pine_trapdoor",
+  "name": "Pine Trapdoor",
+  "sound": "wood",
+  "hardness": 3.0,
+  "tool": "axe",
+  "openable_by_hand": true,
+  "item": "pine_trapdoor",
+  "loot_table": "blocks/pine_trapdoor",
+  "textures": {
+    "texture": "pine_trapdoor",
+    "edge": "pine_doors_side"
+  }
+}
+

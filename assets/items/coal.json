@@ -1,7 +1,7 @@
 {
   "id": "coal",
   "lang": "item.coal",
-  "tab": "natural",
+  "tab": "materials",
   "model": "flat",
   "texture": "coal",
   "max_stack": 64,

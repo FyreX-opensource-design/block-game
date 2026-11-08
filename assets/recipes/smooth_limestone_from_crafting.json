@@ -1,0 +1,15 @@
+{
+  "id": "smooth_limestone_from_crafting",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "##"
+  ],
+  "key": {
+    "#": "limestone"
+  },
+  "result": {
+    "item": "smooth_limestone",
+    "count": 4
+  }
+}

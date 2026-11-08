@@ -10,6 +10,7 @@
   "tool": "pickaxe",
   "mining_level": 1,
   "loot_table": "blocks/stone_brick_slab",
+  "sound": "stone",
   "textures": {
     "top": "stone_bricks",
     "side": "stone_bricks",

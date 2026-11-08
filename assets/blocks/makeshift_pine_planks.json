@@ -1,0 +1,13 @@
+{
+    "id": "makeshift_pine_planks",
+    "lang": "block.makeshift_pine_planks",
+    "tab": "building",
+    "model": "cube",
+    "hardness": 2.0,
+    "tool": "axe",
+    "mining_level": 0,
+    "loot_table": "blocks/makeshift_pine_planks",
+    "sound": "wood",
+    "textures": {"top": "makeshift_pine_planks", "side": "makeshift_pine_planks", "bottom": "makeshift_pine_planks"}
+  }
+  

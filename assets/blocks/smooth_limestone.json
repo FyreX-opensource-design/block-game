@@ -1,0 +1,18 @@
+{
+  "id": "smooth_limestone",
+  "lang": "block.smooth_limestone",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/smooth_limestone",
+  "sound": "stone",
+  "textures": {
+    "top": "smooth_limestone",
+    "side": "smooth_limestone",
+    "bottom": "smooth_limestone"
+  }
+}

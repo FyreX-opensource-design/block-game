@@ -1,0 +1,11 @@
+{
+  "id": "smooth_diorite_from_smelting",
+  "type": "smelting",
+  "ingredient": "diorite",
+  "result": {
+    "item": "smooth_diorite",
+    "count": 1
+  },
+  "cookingtime": 10.0,
+  "experience": 0.1
+}

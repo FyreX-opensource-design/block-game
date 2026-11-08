@@ -1,0 +1,19 @@
+{
+    "id": "stonework_table",
+    "lang": "block.stonework_table",
+    "station": "crafting_table",
+    "recipe_types": [
+        "stonework_table"
+    ],
+    "tab": "building",
+    "model": "cube",
+    "hardness": 1.5,
+    "tool": "pickaxe",
+    "mining_level": 1,
+    "loot_table": "blocks/stonework_table",
+    "textures": {
+        "top": "stone_bricks",
+        "side": "cobble",
+        "bottom": "cobble"
+    }
+}

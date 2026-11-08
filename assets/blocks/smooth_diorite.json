@@ -1,0 +1,18 @@
+{
+  "id": "smooth_diorite",
+  "lang": "block.smooth_diorite",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/smooth_diorite",
+  "sound": "stone",
+  "textures": {
+    "top": "smooth_diorite",
+    "side": "smooth_diorite",
+    "bottom": "smooth_diorite"
+  }
+}

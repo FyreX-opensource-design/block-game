@@ -1,0 +1,15 @@
+{
+  "id": "cut_iron_from_block",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "##"
+  ],
+  "key": {
+    "#": "iron_block"
+  },
+  "result": {
+    "item": "cut_iron",
+    "count": 4
+  }
+}

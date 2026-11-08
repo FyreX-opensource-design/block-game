@@ -1,0 +1,16 @@
+{
+  "id": "raw_tin_block_from_raw",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "###",
+    "###"
+  ],
+  "key": {
+    "#": "raw_tin"
+  },
+  "result": {
+    "item": "raw_tin_block",
+    "count": 1
+  }
+}

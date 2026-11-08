@@ -1,0 +1,17 @@
+{
+  "id": "bronze_sword",
+  "lang": "item.bronze_sword",
+  "tab": "tools",
+  "model": "flat",
+  "texture": "bronze_sword",
+  "tool": "sword",
+  "max_stack": 1,
+  "left": "attack",
+  "right": "none",
+  "durability": 220,
+  "mining_level": 0,
+  "mining_speed": 1.0,
+  "attack": 6.0,
+  "food": 0,
+  "repair": "bronze_ingot"
+}

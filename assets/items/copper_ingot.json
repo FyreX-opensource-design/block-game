@@ -1,7 +1,7 @@
 {
   "id": "copper_ingot",
   "lang": "item.copper_ingot",
-  "tab": "natural",
+  "tab": "materials",
   "model": "flat",
   "texture": "copper_ingot",
   "max_stack": 64,

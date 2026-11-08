@@ -1,0 +1,16 @@
+{
+  "id": "tin_block_from_ingots",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "###",
+    "###"
+  ],
+  "key": {
+    "#": "tin_ingot"
+  },
+  "result": {
+    "item": "tin_block",
+    "count": 1
+  }
+}

@@ -352,12 +352,7 @@ def calculate_sub_cell_placement(
 
     if conflict:
         if held_vslab:
-            if any(sub.get_octant(cx, 0, cz) != "" for cx in (0, 1) for cz in (0, 1)) and all(
-                sub.get_octant(ox, 1, oz) == "" for ox, oy, oz in needed_octants
-            ):
-                needed_octants = list(set((ox, 1, oz) for ox, oy, oz in needed_octants))
-                conflict = False
-            elif any(sub.get_octant(cx, 1, cz) != "" for cx in (0, 1) for cz in (0, 1)) and all(
+            if any(sub.get_octant(cx, 1, cz) != "" for cx in (0, 1) for cz in (0, 1)) and all(
                 sub.get_octant(ox, 0, oz) == "" for ox, oy, oz in needed_octants
             ):
                 needed_octants = list(set((ox, 0, oz) for ox, oy, oz in needed_octants))

@@ -1,0 +1,18 @@
+{
+  "id": "cut_tin",
+  "lang": "block.cut_tin",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 4.0,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/cut_tin",
+  "sound": "stone",
+  "textures": {
+    "top": "cut_tin",
+    "side": "cut_tin",
+    "bottom": "cut_tin"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "id": "bronze_ingot_from_smelting_raw_bronze_mix",
+  "type": "smelting",
+  "ingredient": "raw_bronze_mix",
+  "result": {
+    "item": "bronze_ingot",
+    "count": 1
+  },
+  "cookingtime": 10.0,
+  "experience": 0.7
+}

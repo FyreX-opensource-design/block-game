@@ -1,0 +1,18 @@
+{
+    "id": "tin_ore",
+    "lang": "block.tin_ore",
+    "tab": [
+        "natural"
+    ],
+    "model": "cube",
+    "hardness": 3.0,
+    "tool": "pickaxe",
+    "mining_level": 1,
+    "loot_table": "blocks/tin_ore",
+    "sound": "stone",
+    "textures": {
+        "top": "tin_ore",
+        "side": "tin_ore",
+        "bottom": "tin_ore"
+    }
+}

@@ -1,0 +1,11 @@
+{
+  "id": "smooth_marble_from_smelting",
+  "type": "smelting",
+  "ingredient": "marble",
+  "result": {
+    "item": "smooth_marble",
+    "count": 1
+  },
+  "cookingtime": 10.0,
+  "experience": 0.1
+}

@@ -1,0 +1,15 @@
+{
+  "id": "raw_bronze_mix_bit",
+  "lang": "item.raw_bronze_mix_bit",
+  "tab": "materials",
+  "model": "flat",
+  "texture": "raw_bronze_mix_bit",
+  "max_stack": 64,
+  "left": "none",
+  "right": "none",
+  "durability": 0,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 1,
+  "food": 0
+}

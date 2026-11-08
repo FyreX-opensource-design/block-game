@@ -1,0 +1,15 @@
+{
+  "id": "smooth_sandstone_wall",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "###"
+  ],
+  "key": {
+    "#": "smooth_sandstone"
+  },
+  "result": {
+    "item": "smooth_sandstone_wall",
+    "count": 6
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "id": "raw_bronze_mix",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "raw_copper",
+    "raw_copper",
+    "raw_copper",
+    "raw_tin"
+  ],
+  "result": {
+    "item": "raw_bronze_mix",
+    "count": 4
+  }
+}

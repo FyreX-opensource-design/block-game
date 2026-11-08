@@ -1,0 +1,19 @@
+{
+  "id": "raw_iron_block",
+  "lang": "block.raw_iron_block",
+  "tab": [
+    "building",
+    "materials"
+  ],
+  "model": "cube",
+  "hardness": 3.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/raw_iron_block",
+  "sound": "stone",
+  "textures": {
+    "top": "raw_iron_block",
+    "side": "raw_iron_block",
+    "bottom": "raw_iron_block"
+  }
+}

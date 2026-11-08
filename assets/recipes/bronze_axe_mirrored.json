@@ -1,0 +1,17 @@
+{
+  "id": "bronze_axe_mirrored",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "X#",
+    "X "
+  ],
+  "key": {
+    "#": "bronze_ingot",
+    "X": "#sticks"
+  },
+  "result": {
+    "item": "bronze_axe",
+    "count": 1
+  }
+}

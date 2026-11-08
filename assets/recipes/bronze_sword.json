@@ -1,0 +1,17 @@
+{
+  "id": "bronze_sword",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "#",
+    "X"
+  ],
+  "key": {
+    "#": "bronze_ingot",
+    "X": "#sticks"
+  },
+  "result": {
+    "item": "bronze_sword",
+    "count": 1
+  }
+}

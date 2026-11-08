@@ -4,11 +4,11 @@
   "pattern": [
     "F",
     "F",
-    "P"
+    "S"
   ],
   "key": {
     "F": "knapped_flint",
-    "P": "plant_fiber"
+    "S": "#sticks"
   },
   "result": {
     "item": "flint_sword",

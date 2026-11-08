@@ -1,0 +1,13 @@
+{
+  "id": "wooden_trapdoor",
+  "lang": "item.wooden_trapdoor",
+  "tab": "building",
+  "model": "flat",
+  "texture": "wooden_trapdoor",
+  "block": "wooden_trapdoor",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}
+

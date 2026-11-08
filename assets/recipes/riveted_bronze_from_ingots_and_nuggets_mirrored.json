@@ -1,0 +1,16 @@
+{
+  "id": "riveted_bronze_from_ingots_and_nuggets_mirrored",
+  "type": "crafting_shaped",
+  "pattern": [
+    "NI",
+    "IN"
+  ],
+  "key": {
+    "I": "bronze_ingot",
+    "N": "bronze_nugget"
+  },
+  "result": {
+    "item": "riveted_bronze",
+    "count": 2
+  }
+}

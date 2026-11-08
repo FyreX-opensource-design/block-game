@@ -1,0 +1,17 @@
+{
+  "id": "iron_shovel",
+  "lang": "item.iron_shovel",
+  "tab": "tools",
+  "model": "flat",
+  "texture": "iron_shovel",
+  "tool": "shovel",
+  "max_stack": 1,
+  "left": "mine",
+  "right": "none",
+  "durability": 250,
+  "mining_level": 4,
+  "mining_speed": 7.0,
+  "attack": 5.0,
+  "food": 0,
+  "repair": "iron_ingot"
+}

@@ -214,6 +214,61 @@ class TestZombieAndUUID(unittest.TestCase):
         self.world.day_time = 6000.0
         self.assertFalse(self.world.is_night())
 
+    def test_zombie_spawns_in_caves_during_day(self):
+        spawner = MobSpawner(self.world)
+        self.world.day_time = 6000.0  # noon
+
+        x, z = 8, 8
+        cx = x // 16
+        cz = z // 16
+        for cy in range(5):
+            self.world.load_chunk(cx, cy, cz)
+
+        # Setup surface at Y=64 (grass) under sky
+        # Setup cave at Y=20 (stone floor), Y=21..22 air, Y=23 roof
+        self.world.set_block(x, 64, z, GRASS)
+        for y in range(24, 64):
+            self.world.set_block(x, y, z, STONE)
+        self.world.set_block(x, 23, z, STONE)
+        self.world.set_block(x, 22, z, AIR)
+        self.world.set_block(x, 21, z, AIR)
+        self.world.set_block(x, 20, z, STONE)
+
+        # In cave at Y=20: skylight should be 0, can_spawn_zombie_at should be True
+        self.assertTrue(spawner.can_spawn_zombie_at(x, 20, z, skylight=0))
+
+        # Surface at Y=64 under midday sun (skylight=15): can_spawn_zombie_at should be False
+        self.assertFalse(spawner.can_spawn_zombie_at(x, 64, z, skylight=15))
+
+        # Test _find_ground_y_candidates finds cave floor when player is at Y=20
+        cands = spawner._find_ground_y_candidates(x, z, player_y=20.0)
+        self.assertIn(20, cands)
+        # Closest candidate to player_y=20 should be 20, not 64
+        self.assertEqual(cands[0], 20)
+
+    def test_find_ground_near_group_spawning(self):
+        spawner = MobSpawner(self.world)
+        for cy in range(5):
+            self.world.load_chunk(0, cy, 0)
+
+        # Uneven cave floor: (10, 10) at y=20, (11, 10) at y=19
+        self.world.set_block(10, 20, 10, STONE)
+        self.world.set_block(10, 21, 10, AIR)
+        self.world.set_block(10, 22, 10, AIR)
+
+        self.world.set_block(11, 19, 10, STONE)
+        self.world.set_block(11, 20, 10, AIR)
+        self.world.set_block(11, 21, 10, AIR)
+
+        # Surface above at y=60
+        self.world.set_block(11, 60, 10, GRASS)
+        self.world.set_block(11, 61, 10, AIR)
+        self.world.set_block(11, 62, 10, AIR)
+
+        # Searching near y=20 should find cave floor y=19, NOT surface y=60
+        found_y = spawner._find_ground_near(11, 10, near_y=20, max_dy=4)
+        self.assertEqual(found_y, 19)
+
 
 if __name__ == "__main__":
     unittest.main()

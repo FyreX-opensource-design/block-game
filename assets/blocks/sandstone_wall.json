@@ -1,0 +1,23 @@
+{
+  "id": "sandstone_wall",
+  "lang": "block.sandstone_wall",
+  "tab": [
+    "building"
+  ],
+  "model": "wall_post",
+  "type": "wall",
+  "solid": true,
+  "hardness": 0.5,
+  "tool": "shovel",
+  "mining_level": 0,
+  "sound": "stone",
+  "loot_table": "blocks/sandstone_wall",
+  "properties": {
+    "wall": true
+  },
+  "textures": {
+    "top": "sandstone",
+    "side": "sandstone",
+    "texture": "sandstone"
+  }
+}

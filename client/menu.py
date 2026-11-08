@@ -354,6 +354,8 @@ class MenuState:
         field_w = w - 96
         frame.label("Server Address", field_x, y + h - 118, 15, "left", "center", MUTED)
         self._field(frame, field_x, y + h - 174, field_w, 44, "server_address", self.server_address or "", "127.0.0.1:25565")
+        if getattr(self, "local_ips", None):
+            frame.label(f"This device's IP: {self.local_ips[0]}", field_x, y + h - 198, 12, "left", "center", MUTED)
         if self.message:
             frame.label(self.message, x + w / 2, y + 108, 15, "center", "center", (232, 164, 120, 255))
         self._row_buttons(

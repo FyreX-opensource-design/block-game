@@ -1,0 +1,18 @@
+{
+  "id": "cut_bronze",
+  "lang": "block.cut_bronze",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 4.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/cut_bronze",
+  "sound": "stone",
+  "textures": {
+    "top": "cut_bronze",
+    "side": "cut_bronze",
+    "bottom": "cut_bronze"
+  }
+}

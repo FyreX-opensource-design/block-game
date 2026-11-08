@@ -1,0 +1,19 @@
+{
+  "id": "diorite",
+  "lang": "block.diorite",
+  "tab": [
+    "building",
+    "natural"
+  ],
+  "model": "cube",
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/diorite",
+  "sound": "stone",
+  "textures": {
+    "top": "diorite",
+    "side": "diorite",
+    "bottom": "diorite"
+  }
+}

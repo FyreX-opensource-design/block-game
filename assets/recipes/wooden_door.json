@@ -1,0 +1,17 @@
+{
+  "id": "wooden_door",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "##",
+    "##"
+  ],
+  "key": {
+    "#": "#planks"
+  },
+  "result": {
+    "item": "wooden_door",
+    "count": 3
+  }
+}
+

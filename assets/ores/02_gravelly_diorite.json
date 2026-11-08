@@ -1,0 +1,13 @@
+{
+  "id": "02_gravelly_diorite",
+  "block": "gravelly_diorite",
+  "target": "diorite",
+  "min_y": 10,
+  "max_y": 120,
+  "scale": 0.07,
+  "threshold": 0.65,
+  "octaves": 2,
+  "seed_offset": 813,
+  "max_vein_size": 24,
+  "enabled": true
+}

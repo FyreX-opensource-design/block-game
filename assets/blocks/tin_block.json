@@ -1,0 +1,19 @@
+{
+  "id": "tin_block",
+  "lang": "block.tin_block",
+  "tab": [
+    "building",
+    "materials"
+  ],
+  "model": "cube",
+  "hardness": 5.0,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/tin_block",
+  "sound": "stone",
+  "textures": {
+    "top": "tin_block",
+    "side": "tin_block",
+    "bottom": "tin_block"
+  }
+}
