@@ -131,8 +131,14 @@ def _palette_lookup(palette):
     return lookup
 
 
+_LEGACY_PALETTE_PATH = Path(__file__).parent / "legacy_palette.json"
+_LEGACY_PALETTE = json.loads(_LEGACY_PALETTE_PATH.read_text(encoding="utf-8")) if _LEGACY_PALETTE_PATH.is_file() else ()
+
+
 def _legacy_lookup():
     """Map BG02 global indices to the current registry (pre-sapling layout)."""
+    if _LEGACY_PALETTE:
+        return _palette_lookup(_LEGACY_PALETTE)
     from server.blocks import BY_INDEX, is_door, is_fence_gate, is_stairs, is_trapdoor, is_vertical_slab
 
     # Rebuild the registry as it looked before saplings were added. The reserved

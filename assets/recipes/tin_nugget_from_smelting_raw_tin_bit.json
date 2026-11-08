@@ -1,0 +1,11 @@
+{
+  "id": "tin_nugget_from_smelting_raw_tin_bit",
+  "type": "smelting",
+  "ingredient": "raw_tin_bit",
+  "result": {
+    "item": "tin_nugget",
+    "count": 1
+  },
+  "cookingtime": 10.0,
+  "experience": 0.1
+}

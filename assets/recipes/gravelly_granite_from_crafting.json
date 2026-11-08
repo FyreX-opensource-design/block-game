@@ -1,0 +1,12 @@
+{
+  "id": "gravelly_granite_from_crafting",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "granite",
+    "gravel"
+  ],
+  "result": {
+    "item": "gravelly_granite",
+    "count": 2
+  }
+}

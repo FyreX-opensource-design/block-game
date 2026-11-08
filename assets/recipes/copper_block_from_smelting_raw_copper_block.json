@@ -1,0 +1,11 @@
+{
+  "id": "copper_block_from_smelting_raw_copper_block",
+  "type": "smelting",
+  "ingredient": "raw_copper_block",
+  "result": {
+    "item": "copper_block",
+    "count": 1
+  },
+  "cookingtime": 80.0,
+  "experience": 6.3
+}

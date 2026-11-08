@@ -7,13 +7,13 @@
     ],
     "tab": "building",
     "model": "cube",
-    "hardness": 2.5,
+    "hardness": 1.5,
     "tool": "pickaxe",
     "mining_level": 1,
     "loot_table": "blocks/stonework_table",
     "textures": {
-        "top": "crafting_table_top",
-        "side": "planks",
-        "bottom": "log_top"
+        "top": "stone_bricks",
+        "side": "cobble",
+        "bottom": "cobble"
     }
 }

@@ -1,0 +1,16 @@
+{
+  "id": "raw_bronze_mix_from_bits",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "###",
+    "###"
+  ],
+  "key": {
+    "#": "raw_bronze_mix_bit"
+  },
+  "result": {
+    "item": "raw_bronze_mix",
+    "count": 1
+  }
+}

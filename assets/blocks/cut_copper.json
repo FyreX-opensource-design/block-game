@@ -1,0 +1,18 @@
+{
+  "id": "cut_copper",
+  "lang": "block.cut_copper",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 4.0,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/cut_copper",
+  "sound": "stone",
+  "textures": {
+    "top": "cut_copper",
+    "side": "cut_copper",
+    "bottom": "cut_copper"
+  }
+}

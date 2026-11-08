@@ -1,0 +1,19 @@
+{
+  "id": "andesite",
+  "lang": "block.andesite",
+  "tab": [
+    "building",
+    "natural"
+  ],
+  "model": "cube",
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/andesite",
+  "sound": "stone",
+  "textures": {
+    "top": "andesite",
+    "side": "andesite",
+    "bottom": "andesite"
+  }
+}

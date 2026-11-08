@@ -1,0 +1,15 @@
+{
+  "id": "cut_copper_from_block",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "##"
+  ],
+  "key": {
+    "#": "copper_block"
+  },
+  "result": {
+    "item": "cut_copper",
+    "count": 4
+  }
+}

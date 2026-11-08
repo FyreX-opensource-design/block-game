@@ -1,7 +1,7 @@
 {
   "id": "stick",
   "lang": "item.stick",
-  "tab": "materials",
+  "tab": ["materials", "tools"],
   "model": "flat",
   "texture": "oak_stick",
   "max_stack": 64,

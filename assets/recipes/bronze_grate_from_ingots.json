@@ -1,0 +1,15 @@
+{
+  "id": "bronze_grate_from_ingots",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "##"
+  ],
+  "key": {
+    "#": "bronze_ingot"
+  },
+  "result": {
+    "item": "bronze_grate",
+    "count": 4
+  }
+}

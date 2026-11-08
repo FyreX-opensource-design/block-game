@@ -1,0 +1,13 @@
+{
+  "id": "03_gravelly_andesite",
+  "block": "gravelly_andesite",
+  "target": "andesite",
+  "min_y": 10,
+  "max_y": 120,
+  "scale": 0.07,
+  "threshold": 0.65,
+  "octaves": 2,
+  "seed_offset": 823,
+  "max_vein_size": 24,
+  "enabled": true
+}

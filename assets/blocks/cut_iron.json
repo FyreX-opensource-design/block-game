@@ -1,0 +1,18 @@
+{
+  "id": "cut_iron",
+  "lang": "block.cut_iron",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 4.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/cut_iron",
+  "sound": "stone",
+  "textures": {
+    "top": "cut_iron",
+    "side": "cut_iron",
+    "bottom": "cut_iron"
+  }
+}

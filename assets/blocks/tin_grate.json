@@ -1,0 +1,22 @@
+{
+  "id": "tin_grate",
+  "lang": "block.tin_grate",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 3.0,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/tin_grate",
+  "sound": "stone",
+  "textures": {
+    "top": "tin_grate",
+    "side": "tin_grate",
+    "bottom": "tin_grate"
+  },
+  "properties": {
+    "grate": true
+  },
+  "render": "cutout"
+}

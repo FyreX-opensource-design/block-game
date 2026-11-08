@@ -1,0 +1,12 @@
+{
+  "id": "gravelly_diorite_from_crafting",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "diorite",
+    "gravel"
+  ],
+  "result": {
+    "item": "gravelly_diorite",
+    "count": 2
+  }
+}

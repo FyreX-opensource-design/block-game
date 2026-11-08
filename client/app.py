@@ -855,6 +855,15 @@ class Game(pyglet.window.Window):
                 px, py, pz = self.player.pos
                 if math.hypot(x + 0.5 - px, y + 0.5 - py, z + 0.5 - pz) <= 32:
                     self.sound_manager.play_break_sound(broken_id)
+            else:
+                from server.blocks import get_door_info, is_door, is_fence_gate, is_trapdoor
+                is_door_toggle = is_door(old_block) and is_door(block) and (get_door_info(block) or {}).get("half") == "lower"
+                is_trapdoor_toggle = is_trapdoor(old_block) and is_trapdoor(block)
+                is_fence_gate_toggle = is_fence_gate(old_block) and is_fence_gate(block)
+                if is_door_toggle or is_trapdoor_toggle or is_fence_gate_toggle:
+                    px, py, pz = self.player.pos
+                    if math.hypot(x + 0.5 - px, y + 0.5 - py, z + 0.5 - pz) <= 32:
+                        self.sound_manager.play_walk_sound("planks")
         return True
 
     def _upload_block_change(self, x, y, z):
@@ -2535,6 +2544,62 @@ class Game(pyglet.window.Window):
                                 else:
                                     self.hotbar[self.selected] = empty_stack()
                             return
+
+        # Placing a vertical slab above an adjacent bottom slab to make an offset vertical slab
+        if (
+            held_v_info is not None
+            and adj_slab_info is not None
+            and not adj_slab_info["double"]
+            and adj_slab_info["half"] == "bottom"
+            and hit["ny"] == 0
+        ):
+            if place_local_y is None or place_local_y >= 0.5:
+                player_yaw = self.player.yaw if self.player is not None else None
+                new_facing = player_facing_from_yaw(player_yaw)
+                off_id = get_vertical_slab_offset_block(rotation_variant(held.block, new_facing))
+                if off_id is not None:
+                    above_block = self.world.get_block(x, y + 1, z)
+                    above_slab_info = get_slab_info(above_block)
+                    block_to_place = off_id
+                    if (
+                        above_slab_info is not None
+                        and not above_slab_info["double"]
+                        and above_slab_info["half"] == "top"
+                    ):
+                        capped_id = get_capped_vertical_slab_offset(off_id, above_block)
+                        if capped_id is not None:
+                            block_to_place = capped_id
+                    elif above_block not in ("", AIR, None) and self.world.is_solid(x, y + 1, z):
+                        return
+
+                    new_box = vertical_slab_offset_bounds(x, y + 1, z, new_facing)
+                    if self.player is not None:
+                        px, py, pz = self.player.pos
+                        rad, hgt = self.player.radius, self.player.height
+                        bx0, by0, bz0, bx1, by1, bz1 = new_box
+                        if (
+                            px + rad > bx0
+                            and px - rad < bx1
+                            and py + hgt > by0
+                            and py < by1
+                            and pz + rad > bz0
+                            and pz - rad < bz1
+                        ):
+                            return
+                    if self.network_client is not None:
+                        self.network_client.send_set_block(x, y + 1, z, block_to_place)
+                    if self.world.set_block(x, y + 1, z, block_to_place):
+                        self._upload_block_change(x, y + 1, z)
+                        if self.gamemode == "survival":
+                            cur_slot = self.hotbar[self.selected]
+                            c = stack_count(cur_slot)
+                            if c > 1:
+                                self.hotbar[self.selected] = make_stack(stack_id(cur_slot), c - 1)
+                            else:
+                                self.hotbar[self.selected] = empty_stack()
+                        return
+            else:
+                return
 
         # Placing a full block into an adjacent top slab to make a capped offset block
         if (

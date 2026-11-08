@@ -1,0 +1,11 @@
+{
+  "id": "smooth_limestone_from_smelting",
+  "type": "smelting",
+  "ingredient": "limestone",
+  "result": {
+    "item": "smooth_limestone",
+    "count": 1
+  },
+  "cookingtime": 10.0,
+  "experience": 0.1
+}

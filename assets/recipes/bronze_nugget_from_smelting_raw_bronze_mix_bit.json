@@ -1,0 +1,11 @@
+{
+  "id": "bronze_nugget_from_smelting_raw_bronze_mix_bit",
+  "type": "smelting",
+  "ingredient": "raw_bronze_mix_bit",
+  "result": {
+    "item": "bronze_nugget",
+    "count": 1
+  },
+  "cookingtime": 10.0,
+  "experience": 0.1
+}

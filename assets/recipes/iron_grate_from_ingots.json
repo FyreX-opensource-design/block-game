@@ -1,0 +1,15 @@
+{
+  "id": "iron_grate_from_ingots",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "##"
+  ],
+  "key": {
+    "#": "iron_ingot"
+  },
+  "result": {
+    "item": "iron_grate",
+    "count": 4
+  }
+}

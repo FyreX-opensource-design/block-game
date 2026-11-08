@@ -109,6 +109,10 @@ def get_block_opacity(block_obj):
         return 0
     if props.get("stairs") or getattr(block_obj, "stairs", False) or "stairs" in bid or "stairs" in str(base):
         return 0
+    if props.get("grate") or getattr(block_obj, "grate", False) or "grate" in bid or "grate" in str(base):
+        if props.get("waterlogged") or getattr(block_obj, "waterlogged", False):
+            return 2
+        return 0
     if getattr(block_obj, "full_cube", False):
         return 15
     opacity = getattr(block_obj, "opacity", 1.0)

@@ -1,0 +1,16 @@
+{
+  "id": "iron_block_from_ingots",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "###",
+    "###"
+  ],
+  "key": {
+    "#": "iron_ingot"
+  },
+  "result": {
+    "item": "iron_block",
+    "count": 1
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "id": "tin_ingot_from_nuggets",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "###",
+    "###"
+  ],
+  "key": {
+    "#": "tin_nugget"
+  },
+  "result": {
+    "item": "tin_ingot",
+    "count": 1
+  }
+}

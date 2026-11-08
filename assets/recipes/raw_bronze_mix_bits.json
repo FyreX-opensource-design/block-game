@@ -1,0 +1,14 @@
+{
+  "id": "raw_bronze_mix_bits",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "raw_copper_bit",
+    "raw_copper_bit",
+    "raw_copper_bit",
+    "raw_tin_bit"
+  ],
+  "result": {
+    "item": "raw_bronze_mix_bit",
+    "count": 4
+  }
+}

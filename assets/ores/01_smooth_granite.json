@@ -1,0 +1,13 @@
+{
+  "id": "01_smooth_granite",
+  "block": "smooth_granite",
+  "target": "granite",
+  "min_y": 10,
+  "max_y": 120,
+  "scale": 0.06,
+  "threshold": 0.67,
+  "octaves": 2,
+  "seed_offset": 802,
+  "max_vein_size": 32,
+  "enabled": true
+}

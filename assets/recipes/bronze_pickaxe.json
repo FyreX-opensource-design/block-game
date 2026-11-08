@@ -1,0 +1,17 @@
+{
+  "id": "bronze_pickaxe",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    " X ",
+    " X "
+  ],
+  "key": {
+    "#": "bronze_ingot",
+    "X": "#sticks"
+  },
+  "result": {
+    "item": "bronze_pickaxe",
+    "count": 1
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "id": "riveted_tin",
+  "lang": "block.riveted_tin",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 4.5,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/riveted_tin",
+  "sound": "stone",
+  "textures": {
+    "top": "riveted_tin",
+    "side": "riveted_tin",
+    "bottom": "riveted_tin"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "id": "copper_grate",
+  "lang": "block.copper_grate",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 3.0,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/copper_grate",
+  "sound": "stone",
+  "textures": {
+    "top": "copper_grate",
+    "side": "copper_grate",
+    "bottom": "copper_grate"
+  },
+  "properties": {
+    "grate": true
+  },
+  "render": "cutout"
+}

@@ -1,0 +1,20 @@
+{
+  "id": "gravely_marble",
+  "lang": "block.gravely_marble",
+  "tab": [
+    "building",
+    "natural"
+  ],
+  "model": "cube",
+  "hardness": 0.8,
+  "tool": "shovel",
+  "mining_level": 0,
+  "loot_table": "blocks/gravely_marble",
+  "sound": "gravel",
+  "gravity": true,
+  "textures": {
+    "top": "gravely_marble",
+    "side": "gravely_marble",
+    "bottom": "gravely_marble"
+  }
+}

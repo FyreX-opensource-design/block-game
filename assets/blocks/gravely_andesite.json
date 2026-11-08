@@ -1,0 +1,20 @@
+{
+  "id": "gravely_andesite",
+  "lang": "block.gravely_andesite",
+  "tab": [
+    "building",
+    "natural"
+  ],
+  "model": "cube",
+  "hardness": 0.8,
+  "tool": "shovel",
+  "mining_level": 0,
+  "loot_table": "blocks/gravely_andesite",
+  "sound": "gravel",
+  "gravity": true,
+  "textures": {
+    "top": "gravely_andesite",
+    "side": "gravely_andesite",
+    "bottom": "gravely_andesite"
+  }
+}

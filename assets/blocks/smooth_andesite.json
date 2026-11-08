@@ -1,0 +1,18 @@
+{
+  "id": "smooth_andesite",
+  "lang": "block.smooth_andesite",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/smooth_andesite",
+  "sound": "stone",
+  "textures": {
+    "top": "smooth_andesite",
+    "side": "smooth_andesite",
+    "bottom": "smooth_andesite"
+  }
+}

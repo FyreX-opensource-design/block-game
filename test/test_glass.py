@@ -254,9 +254,8 @@ def test_mixed_slab_mesh_separation():
     opaque_uvs_h = mesh_h.vertices[:, 6:8]
     cutout_uvs_h = mesh_h.cutout[0][:, 6:8]
 
-    # Stone UVs are in 0.18..0.25; Glass CTM UVs are in 0.75..0.90
-    assert opaque_uvs_h[:, 0].max() < 0.5
-    assert cutout_uvs_h[:, 0].min() > 0.5
+    # Verify opaque mesh (stone) and cutout mesh (glass) UVs are separated and non-overlapping
+    assert opaque_uvs_h[:, 0].max() < cutout_uvs_h[:, 0].min() or cutout_uvs_h[:, 0].max() < opaque_uvs_h[:, 0].min()
 
     # Top face of stone slab (normal +Y) must be present so stone is visible through glass
     opaque_normals = mesh_h.vertices[:, 3:6]
@@ -273,8 +272,7 @@ def test_mixed_slab_mesh_separation():
     opaque_uvs_v = mesh_v.vertices[:, 6:8]
     cutout_uvs_v = mesh_v.cutout[0][:, 6:8]
 
-    assert opaque_uvs_v[:, 0].max() < 0.5
-    assert cutout_uvs_v[:, 0].min() > 0.5
+    assert opaque_uvs_v[:, 0].max() < cutout_uvs_v[:, 0].min() or cutout_uvs_v[:, 0].max() < opaque_uvs_v[:, 0].min()
 
 
 def test_double_glass_slab_ctm_connection():

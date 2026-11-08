@@ -126,7 +126,7 @@ void main() {
         base_rgb = mix(texel.rgb, tinted_grass, is_grass);
     }
 
-    vec3 norm = normalize(v_normal);
+    vec3 norm = normalize(gl_FrontFacing ? v_normal : -v_normal);
     float lambert = max(dot(norm, normalize(sun_dir)), 0.0);
 
     // Light and shadow: direct sunlight is shadowed when skylight is low
@@ -221,7 +221,7 @@ void main() {
         base_rgb = mix(texel.rgb, tinted_grass, is_grass);
     }
 
-    vec3 norm = normalize(v_normal);
+    vec3 norm = normalize(gl_FrontFacing ? v_normal : -v_normal);
     float lambert = max(dot(norm, normalize(sun_dir)), 0.0);
 
     float effective_skylight = v_skylight * sky_intensity;
@@ -328,7 +328,7 @@ void main() {
     vec4 texel = texture(atlas, v_uv);
     if (texel.a < 0.5) discard;
 
-    vec3 norm = normalize(v_normal);
+    vec3 norm = normalize(gl_FrontFacing ? v_normal : -v_normal);
     float lambert = max(dot(norm, normalize(sun_dir)), 0.0);
     float effective_skylight = entity_skylight * sky_intensity;
     float sun_factor = smoothstep(0.4, 0.95, entity_skylight) * sky_intensity;

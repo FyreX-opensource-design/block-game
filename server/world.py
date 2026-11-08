@@ -1381,7 +1381,7 @@ class World:
         water_mask = (levels > tops) & (levels <= WATER_LEVEL)
         data[water_mask] = ocean_water
 
-        self._place_ores(data, x0, y0, z0)
+        self._place_ores(data, x0, y0, z0, exclude_mask=(top_mask | cover_mask))
         self._carve_caves(data, x0, y0, z0, heights)
         self._place_features(data, x0, y0, z0, heights, sample)
 
@@ -1399,7 +1399,7 @@ class World:
         self._remember(chunk)
         return chunk
 
-    def _place_ores(self, data, x0, y0, z0):
+    def _place_ores(self, data, x0, y0, z0, exclude_mask=None):
         if not self.ores:
             return
         y1 = y0 + CHUNK_SIZE - 1
@@ -1418,6 +1418,8 @@ class World:
             if ore_index is None:
                 continue
             target_mask = np.isin(data, target_indices)
+            if exclude_mask is not None:
+                target_mask = target_mask & ~exclude_mask
             if not np.any(target_mask):
                 continue
             in_range = target_mask & (ys > 0) & (ys >= ore.min_y) & (ys <= ore.max_y)

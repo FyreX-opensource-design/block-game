@@ -1,0 +1,11 @@
+{
+  "id": "tin_block_from_smelting_raw_tin_block",
+  "type": "smelting",
+  "ingredient": "raw_tin_block",
+  "result": {
+    "item": "tin_block",
+    "count": 1
+  },
+  "cookingtime": 80.0,
+  "experience": 6.3
+}

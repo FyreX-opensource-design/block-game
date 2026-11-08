@@ -5172,6 +5172,28 @@ def can_place_block(world, x, y, z, block_id, hit=None):
     b_obj = BLOCKS[block_id]
 
     cur_blk = world.get_block(x, y, z)
+
+    # Allow toggling or updating door states (open/closed, mirroring hinge)
+    if is_door(cur_blk) and is_door(b_obj):
+        cur_d = get_door_info(cur_blk)
+        new_d = get_door_info(b_obj)
+        if cur_d and new_d and cur_d["base_id"] == new_d["base_id"] and cur_d["half"] == new_d["half"]:
+            return True
+
+    # Allow toggling trapdoors (open/closed)
+    if is_trapdoor(cur_blk) and is_trapdoor(b_obj):
+        cur_t = get_trapdoor_info(cur_blk)
+        new_t = get_trapdoor_info(b_obj)
+        if cur_t and new_t and cur_t["base_id"] == new_t["base_id"] and cur_t["half"] == new_t["half"]:
+            return True
+
+    # Allow toggling fence gates (open/closed)
+    if is_fence_gate(cur_blk) and is_fence_gate(b_obj):
+        cur_g = get_fence_gate_info(cur_blk)
+        new_g = get_fence_gate_info(b_obj)
+        if cur_g and new_g and cur_g["base_id"] == new_g["base_id"]:
+            return True
+
     cur_t_info = get_offset_torch_info(cur_blk)
     new_t_info = get_offset_torch_info(b_obj)
 
