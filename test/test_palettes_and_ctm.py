@@ -42,15 +42,16 @@ def test_smooth_stones_palettes_and_ctm_registered():
         "smooth_andesite",
         "smooth_marble",
         "smooth_limestone",
+        "smooth_stone",
     ]
     for stone_id in smooth_stones:
         block = BLOCKS.get(stone_id)
         assert block is not None, f"Block {stone_id} not found in BLOCKS"
         assert block.ctm is True, f"Block {stone_id} should have ctm=True"
-        assert len(block.palettes) == 3, f"Block {stone_id} should have 3 palettes"
-        assert len(block.palette_face_uvs) == 3, f"Block {stone_id} should have 3 palette_face_uvs"
-        assert len(block.palette_ctm_uvs) == 3, f"Block {stone_id} should have 3 palette_ctm_uvs"
-        for p in range(3):
+        assert len(block.palettes) == 5, f"Block {stone_id} should have 5 palettes"
+        assert len(block.palette_face_uvs) == 5, f"Block {stone_id} should have 5 palette_face_uvs"
+        assert len(block.palette_ctm_uvs) == 5, f"Block {stone_id} should have 5 palette_ctm_uvs"
+        for p in range(5):
             assert len(block.palette_ctm_uvs[p]) == 16, f"Block {stone_id} palette {p} should have 16 CTM masks"
 
 
