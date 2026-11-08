@@ -612,7 +612,11 @@ class World:
                 lx = x - cx * CHUNK_SIZE
                 ly = y - cy * CHUNK_SIZE
                 lz = z - cz * CHUNK_SIZE
-                chunk.data[ly, lz, lx] = 0
+                above_id = self.get_block(x, y + 1, z)
+                from server.fluid import is_fluid
+
+                replacement_id = above_id if is_fluid(above_id) else AIR
+                chunk.data[ly, lz, lx] = block_index(replacement_id)
                 self.modified.add((cx, cy, cz))
                 self.mark_dirty(cx, cy, cz)
                 if lx == 0:
@@ -636,7 +640,7 @@ class World:
                 # broadcast the removal explicitly or clients keep a phantom
                 # block where the falling block started.
                 if getattr(self, "on_block_set", None) is not None:
-                    self.on_block_set(x, y, z, AIR)
+                    self.on_block_set(x, y, z, replacement_id)
             return self.spawn_falling_block(block_id, pos=[x + 0.5, float(y), z + 0.5])
         return None
 
@@ -647,20 +651,18 @@ class World:
             return
         self._in_falling_update = True
         try:
-            queue = [(x, y, z), (x, y + 1, z), (x, y - 1, z), (x + 1, y, z), (x - 1, y, z), (x, y, z + 1), (x, y, z - 1)]
+            from collections import deque
+
+            queue = deque([(x, y, z), (x, y + 1, z), (x, y - 1, z), (x + 1, y, z), (x - 1, y, z), (x, y, z + 1), (x, y, z - 1)])
             seen = set()
             while queue:
-                qx, qy, qz = queue.pop(0)
+                qx, qy, qz = queue.popleft()
                 if (qx, qy, qz) in seen:
                     continue
                 seen.add((qx, qy, qz))
                 fell = self.check_falling(qx, qy, qz)
                 if fell is not None:
                     queue.append((qx, qy + 1, qz))
-                    queue.append((qx + 1, qy, qz))
-                    queue.append((qx - 1, qy, qz))
-                    queue.append((qx, qy, qz + 1))
-                    queue.append((qx, qy, qz - 1))
         finally:
             self._in_falling_update = False
 
@@ -1381,8 +1383,8 @@ class World:
         water_mask = (levels > tops) & (levels <= WATER_LEVEL)
         data[water_mask] = ocean_water
 
-        self._place_ores(data, x0, y0, z0, exclude_mask=(top_mask | cover_mask))
-        self._carve_caves(data, x0, y0, z0, heights)
+        self._place_ores(data, x0, y0, z0)
+        self._carve_caves(data, x0, y0, z0, heights, sub_top=sub_top)
         self._place_features(data, x0, y0, z0, heights, sample)
 
         for lz in range(-2, CHUNK_SIZE + 2):
@@ -1410,13 +1412,26 @@ class World:
         zs = np.arange(z0, z0 + CHUNK_SIZE, dtype=np.float64).reshape(1, CHUNK_SIZE, 1)
         xs = np.arange(x0, x0 + CHUNK_SIZE, dtype=np.float64).reshape(1, 1, CHUNK_SIZE)
         for ore in active:
-            targets = ore.target if isinstance(ore.target, (list, tuple)) else (ore.target,)
-            target_indices = [block_index(t) for t in targets if block_index(t) is not None]
-            if not target_indices:
-                continue
-            ore_index = block_index(ore.block)
-            if ore_index is None:
-                continue
+            target_map = getattr(ore, "target_blocks", None)
+            if target_map:
+                mapping = {}
+                for t_name, b_name in target_map.items():
+                    t_idx = block_index(t_name)
+                    b_idx = block_index(b_name)
+                    if t_idx is not None and b_idx is not None:
+                        mapping[t_idx] = b_idx
+                if not mapping:
+                    continue
+                target_indices = list(mapping.keys())
+            else:
+                mapping = None
+                targets = ore.target if isinstance(ore.target, (list, tuple)) else (ore.target,)
+                target_indices = [block_index(t) for t in targets if block_index(t) is not None]
+                if not target_indices:
+                    continue
+                ore_index = block_index(ore.block)
+                if ore_index is None:
+                    continue
             target_mask = np.isin(data, target_indices)
             if exclude_mask is not None:
                 target_mask = target_mask & ~exclude_mask
@@ -1435,9 +1450,15 @@ class World:
             mask = in_range & (noise > ore.threshold)
             if ore.max_vein_size > 0 and np.any(mask):
                 mask = _limit_vein_size(mask, noise, ore.max_vein_size)
-            data[mask] = ore_index
+            if mapping:
+                for t_idx, b_idx in mapping.items():
+                    sub = mask & (data == t_idx)
+                    if np.any(sub):
+                        data[sub] = b_idx
+            else:
+                data[mask] = ore_index
 
-    def _carve_caves(self, data, x0, y0, z0, heights):
+    def _carve_caves(self, data, x0, y0, z0, heights, sub_top=None):
         if not self.caves:
             return
         y1 = y0 + CHUNK_SIZE - 1
@@ -1448,9 +1469,13 @@ class World:
         zs = np.arange(z0, z0 + CHUNK_SIZE, dtype=np.float64).reshape(1, CHUNK_SIZE, 1)
         xs = np.arange(x0, x0 + CHUNK_SIZE, dtype=np.float64).reshape(1, 1, CHUNK_SIZE)
         surface = heights[TREE_MARGIN : TREE_MARGIN + CHUNK_SIZE, TREE_MARGIN : TREE_MARGIN + CHUNK_SIZE]
-        is_water_col = surface.reshape(1, CHUNK_SIZE, CHUNK_SIZE) <= WATER_LEVEL
+        tops = surface.reshape(1, CHUNK_SIZE, CHUNK_SIZE)
+        is_water_col = tops <= WATER_LEVEL
         water = block_index(WATER)
         salt_water = block_index(SALT_WATER)
+        if sub_top is not None:
+            safe_stone_ceiling = sub_top - 2
+            needs_safe_depth = is_water_col | (tops <= WATER_LEVEL + 4)
         for cave in active:
             noise = fbm3_grid(
                 xs * cave.horizontal_scale,
@@ -1464,17 +1489,22 @@ class World:
             else:
                 opened = noise > cave.threshold
             opened &= (ys > 0) & (ys >= cave.min_y) & (ys <= cave.max_y)
-            max_y = np.where(
-                is_water_col,
-                surface.reshape(1, CHUNK_SIZE, CHUNK_SIZE) - np.maximum(cave.surface_margin, 4),
-                surface.reshape(1, CHUNK_SIZE, CHUNK_SIZE) - cave.surface_margin,
-            )
+            normal_max_y = tops - cave.surface_margin
+            if sub_top is not None:
+                cave_safe_max = np.minimum(tops - np.maximum(cave.surface_margin, 8), safe_stone_ceiling)
+                max_y = np.where(needs_safe_depth, cave_safe_max, normal_max_y)
+            else:
+                max_y = np.where(
+                    is_water_col,
+                    tops - np.maximum(cave.surface_margin, 8),
+                    normal_max_y,
+                )
             opened &= ys <= max_y
             if cave.mask_scale > 0:
                 mask = fbm_grid(xs * cave.mask_scale, zs * cave.mask_scale, 2, self.seed + cave.seed_offset + 4096)
                 opened &= mask > cave.mask_threshold
             if cave.breach_threshold > 0:
-                near_surface = ys > (surface.reshape(1, CHUNK_SIZE, CHUNK_SIZE) - cave.breach_depth)
+                near_surface = ys > (tops - cave.breach_depth)
                 breach = fbm3_grid(
                     xs * cave.breach_scale,
                     ys * cave.breach_scale,
@@ -1482,7 +1512,8 @@ class World:
                     1,
                     self.seed + cave.seed_offset + 77,
                 )
-                opened &= ~near_surface | ((breach > cave.breach_threshold) & ~is_water_col)
+                safe_mask = needs_safe_depth if sub_top is not None else is_water_col
+                opened &= ~near_surface | ((breach > cave.breach_threshold) & ~safe_mask)
             data[opened & (data != 0) & (data != water) & (data != salt_water)] = 0
 
     def _place_features(self, data, x0, y0, z0, heights, sample):

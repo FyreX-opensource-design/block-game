@@ -1,0 +1,18 @@
+{
+  "id": "marble_coal_ore",
+  "lang": "block.marble_coal_ore",
+  "tab": [
+    "natural"
+  ],
+  "model": "cube",
+  "hardness": 3.0,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/marble_coal_ore",
+  "sound": "stone",
+  "textures": {
+    "top": "marble_coal_ore",
+    "side": "marble_coal_ore",
+    "bottom": "marble_coal_ore"
+  }
+}

@@ -186,6 +186,19 @@ class TestFenceGates(unittest.TestCase):
         placed = placement_block("wooden_fence_gate", (0, 1, 0), yaw=math.pi / 2)
         self.assertEqual(placed, "wooden_fence_gate_west")
 
+    def test_fence_gates_creative_and_by_index_no_duplicates(self):
+        from server.blocks import BY_INDEX
+        from server.items import creative_items
+
+        building = creative_items("building")
+        self.assertEqual(building.count("wooden_fence_gate"), 1)
+        self.assertEqual(building.count("pine_fence_gate"), 1)
+
+        # In BY_INDEX, the base block ID should appear only once
+        by_index_ids = [b.id for b in BY_INDEX if b is not None and not b.is_variant]
+        self.assertEqual(by_index_ids.count("wooden_fence_gate"), 1)
+        self.assertEqual(by_index_ids.count("pine_fence_gate"), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

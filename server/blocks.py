@@ -107,6 +107,12 @@ class Block:
         double_slab=False,
         sound=None,
         sounds=None,
+        ctm=False,
+        palettes=None,
+        palette_face_uvs=None,
+        palette_ctm_uvs=None,
+        palette_ctm_rects=None,
+        palette_texture_rects=None,
     ):
         from server.lighting import parse_light_levels
 
@@ -188,6 +194,13 @@ class Block:
             self.properties["cook_speed"] = self.cook_speed
         self.emission = parse_light_levels(light if light is not None else emission)
         self.light = self.emission
+        self.ctm = bool(ctm or self.properties.get("ctm", False))
+        self.palettes = tuple(palettes) if palettes else ()
+        self.palette_face_uvs = tuple(palette_face_uvs) if palette_face_uvs else (tuple(face_uvs),)
+        self.palette_ctm_uvs = tuple(palette_ctm_uvs) if palette_ctm_uvs else ()
+        self.palette_ctm_rects = dict(palette_ctm_rects) if palette_ctm_rects else {}
+        self.palette_texture_rects = dict(palette_texture_rects) if palette_texture_rects else {}
+
         source = (face_uvs[FACE_INDEX["up"]] if face_uvs else None) or next((uv for uv in (face_uvs or ()) if uv is not None), None)
         if source:
             self.icon = (
@@ -382,6 +395,32 @@ def get_glass_ctm_uv(mask, model_uv=(0, 0, 16, 16)):
     if GLASS_CTM_UVS and 0 <= mask < len(GLASS_CTM_UVS):
         return GLASS_CTM_UVS[mask]
     return None
+
+
+def block_palette_index(x, y, z, seed=0, num_palettes=1):
+    if num_palettes <= 1:
+        return 0
+    ix = int(x) & 0xFFFFFFFF
+    iy = int(y) & 0xFFFFFFFF
+    iz = int(z) & 0xFFFFFFFF
+    s = int(seed) & 0xFFFFFFFF
+    h = (ix * 374761393 + iy * 668265263 + iz * 1274126177 + s * 1442695041) & 0xFFFFFFFF
+    h = ((h ^ (h >> 13)) * 1274126177) & 0xFFFFFFFF
+    h = (h ^ (h >> 16)) & 0xFFFFFFFF
+    return h % num_palettes
+
+
+def block_palette_indices_grid(wx, wy, wz, seed, num_palettes):
+    if num_palettes <= 1:
+        return np.zeros(len(wx), dtype=np.int32)
+    ix = wx.astype(np.int64) & 0xFFFFFFFF
+    iy = wy.astype(np.int64) & 0xFFFFFFFF
+    iz = wz.astype(np.int64) & 0xFFFFFFFF
+    s = np.int64(seed) & 0xFFFFFFFF
+    h = (ix * 374761393 + iy * 668265263 + iz * 1274126177 + s * 1442695041) & 0xFFFFFFFF
+    h = ((h ^ (h >> 13)) * 1274126177) & 0xFFFFFFFF
+    h = (h ^ (h >> 16)) & 0xFFFFFFFF
+    return (h % num_palettes).astype(np.int32)
 
 
 def is_slab(block_or_id):
@@ -2810,6 +2849,13 @@ def _load_registry():
         for texture_name in textures.values():
             if texture_name not in texture_names:
                 texture_names.append(texture_name)
+        palettes_raw = entry.get("palettes")
+        if palettes_raw and isinstance(palettes_raw, list):
+            for pal in palettes_raw:
+                if isinstance(pal, dict):
+                    for texture_name in pal.values():
+                        if texture_name not in texture_names:
+                            texture_names.append(texture_name)
         prepared.append((entry, _load_model(entry["model"]), textures, _block_name(entry, lang)))
 
     for m in range(16):
@@ -2953,7 +2999,13 @@ def _load_registry():
         if rotation_type in ("axis", "xyz") or "axis" in properties:
             base_props["rotation"] = "axis"
             base_props["axis"] = "y"
-        elif (rotation_type in ("horizontal", "cardinal", "facing") or "facing" in properties) and not is_stairs_type:
+        elif (
+            (rotation_type in ("horizontal", "cardinal", "facing") or "facing" in properties)
+            and not is_stairs_type
+            and not is_door_type
+            and not is_trapdoor_type
+            and not is_fence_gate_type
+        ):
             base_props["rotation"] = "horizontal"
             base_props["facing"] = properties.get("facing", "south")
         hardness = float(entry.get("hardness", 1.0))
@@ -3008,6 +3060,57 @@ def _load_registry():
         if sounds_val:
             base_props["sounds"] = sounds_val
 
+        is_ctm = bool(entry.get("ctm", False) or properties.get("ctm", False) or any(k.startswith("ctm_") for k in textures))
+        palettes_raw = entry.get("palettes")
+        if not palettes_raw or not isinstance(palettes_raw, list):
+            palettes_raw = [textures]
+
+        palette_face_uvs = []
+        palette_ctm_uvs = []
+        palette_ctm_rects = {}
+        palette_texture_rects = {}
+
+        for p_idx, pal_dict in enumerate(palettes_raw):
+            pal_mapping = dict(textures)
+            if isinstance(pal_dict, dict):
+                pal_mapping.update(pal_dict)
+
+            p_face_uvs = [None] * len(FACE_INDEX)
+            for element in elements:
+                for face_name, spec in element["faces"].items():
+                    if face_name not in FACE_INDEX:
+                        continue
+                    index = FACE_INDEX[face_name]
+                    tex_name = _resolve_texture(spec["texture"], pal_mapping, entry["id"], face_name=face_name)
+                    if tex_name in rects:
+                        spec_uv = spec.get("uv", [0, 0, 16, 16])
+                        uv = _map_uv(rects[tex_name], spec_uv)
+                        if p_face_uvs[index] is None:
+                            p_face_uvs[index] = uv
+                        palette_texture_rects[(p_idx, index)] = rects[tex_name]
+
+            fallback = next((uv for uv in p_face_uvs if uv is not None), None)
+            if fallback is not None:
+                p_face_uvs = [uv if uv is not None else fallback for uv in p_face_uvs]
+            palette_face_uvs.append(tuple(p_face_uvs))
+
+            if is_ctm:
+                p_ctm_uvs = []
+                for m in range(16):
+                    c_key = f"ctm_{m}"
+                    c_name = pal_mapping.get(c_key) or textures.get(c_key)
+                    if c_name and c_name in rects:
+                        palette_ctm_rects[(p_idx, m)] = rects[c_name]
+                        p_ctm_uvs.append(_map_uv(rects[c_name], [0, 0, 16, 16]))
+                    else:
+                        fallback_c = pal_mapping.get("side") or pal_mapping.get("top") or textures.get("side") or textures.get("top")
+                        if fallback_c and fallback_c in rects:
+                            palette_ctm_rects[(p_idx, m)] = rects[fallback_c]
+                            p_ctm_uvs.append(_map_uv(rects[fallback_c], [0, 0, 16, 16]))
+                        else:
+                            p_ctm_uvs.append(None)
+                palette_ctm_uvs.append(tuple(p_ctm_uvs))
+
         block = Block(
             str(entry["id"]),
             name,
@@ -3039,6 +3142,12 @@ def _load_registry():
             slab_half=("bottom" if is_slab_type else None),
             sound=sound_val,
             sounds=sounds_val,
+            ctm=is_ctm,
+            palettes=palettes_raw,
+            palette_face_uvs=palette_face_uvs,
+            palette_ctm_uvs=palette_ctm_uvs,
+            palette_ctm_rects=palette_ctm_rects,
+            palette_texture_rects=palette_texture_rects,
         )
         def _register_block(b_id, b_obj):
             if len(by_index) == 99:
@@ -3115,7 +3224,13 @@ def _load_registry():
                 )
                 _register_block(variant_id, var_block)
 
-        elif (rotation_type in ("horizontal", "cardinal", "facing") or "facing" in properties) and not is_stairs_type:
+        elif (
+            (rotation_type in ("horizontal", "cardinal", "facing") or "facing" in properties)
+            and not is_stairs_type
+            and not is_door_type
+            and not is_trapdoor_type
+            and not is_fence_gate_type
+        ):
             for facing in ("north", "east", "west"):
                 variant_id = f"{block.id}_{facing}"
                 if is_vertical_slab_type:
@@ -3423,7 +3538,8 @@ def _load_registry():
                             sound=sound_val,
                             sounds=sounds_val,
                         )
-                        _register_block(block.id, base_gate)
+                        blocks[block.id] = base_gate
+                        by_index[index_of[block.id]] = base_gate
 
         if is_stairs_type:
             top_tex = textures.get("top") or textures.get("up") or textures.get("texture") or textures.get("side") or entry["id"]

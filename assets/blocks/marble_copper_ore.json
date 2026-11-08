@@ -1,0 +1,18 @@
+{
+  "id": "marble_copper_ore",
+  "lang": "block.marble_copper_ore",
+  "tab": [
+    "natural"
+  ],
+  "model": "cube",
+  "hardness": 3.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/marble_copper_ore",
+  "sound": "stone",
+  "textures": {
+    "top": "marble_copper_ore",
+    "side": "marble_copper_ore",
+    "bottom": "marble_copper_ore"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "id": "marble_iron_ore",
+  "lang": "block.marble_iron_ore",
+  "tab": [
+    "natural"
+  ],
+  "model": "cube",
+  "hardness": 3.0,
+  "tool": "pickaxe",
+  "mining_level": 3,
+  "loot_table": "blocks/marble_iron_ore",
+  "sound": "stone",
+  "textures": {
+    "top": "marble_iron_ore",
+    "side": "marble_iron_ore",
+    "bottom": "marble_iron_ore"
+  }
+}

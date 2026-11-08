@@ -80,13 +80,19 @@ def stack_limit(item_id):
 
 def creative_items(tab_id):
     ordered = []
+    seen = set()
     for block in BY_INDEX:
-        if block is None:
+        if block is None or block.id in seen:
             continue
         item = ITEMS.get(block.id)
         if item is not None and tab_id in item.tabs:
+            seen.add(block.id)
             ordered.append(block.id)
-    extras = sorted(item.id for item in ITEMS.values() if not item.block and tab_id in item.tabs)
+    extras = sorted(
+        item.id
+        for item in ITEMS.values()
+        if not item.block and tab_id in item.tabs and item.id not in seen
+    )
     return tuple(ordered + extras)
 
 

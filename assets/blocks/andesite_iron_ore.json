@@ -1,0 +1,18 @@
+{
+  "id": "andesite_iron_ore",
+  "lang": "block.andesite_iron_ore",
+  "tab": [
+    "natural"
+  ],
+  "model": "cube",
+  "hardness": 3.0,
+  "tool": "pickaxe",
+  "mining_level": 3,
+  "loot_table": "blocks/andesite_iron_ore",
+  "sound": "stone",
+  "textures": {
+    "top": "andesite_iron_ore",
+    "side": "andesite_iron_ore",
+    "bottom": "andesite_iron_ore"
+  }
+}

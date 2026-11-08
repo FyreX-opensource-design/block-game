@@ -8,7 +8,10 @@ from server.blocks import (
     GLASS_CTM_UVS,
     SECTION_COUNT,
     SUB_CELL_BLOCK,
+    _map_uv,
     block_from_index,
+    block_palette_index,
+    block_palette_indices_grid,
     get_glass_ctm_uv,
     get_offset_info,
     has_half_offset_top,
@@ -664,7 +667,30 @@ def build_chunk_mesh(world, cx, cy, cz):
             shade = 0.92 + 0.08 * hash2_grid(np.int64(x0) + xx.astype(np.int64), np.int64(z0) + zz.astype(np.int64), 0)
             origin = np.stack((xx, yy, zz), axis=1).astype(np.float32)
             positions = (origin[:, None, :] + corners[None, :, :]).reshape(-1, 3)
-            uvs = np.broadcast_to(np.asarray(block.face_uvs[normal_i], dtype=np.float32), (count, 4, 2)).reshape(-1, 2)
+
+            has_palettes = bool(getattr(block, "palette_face_uvs", None) and len(block.palette_face_uvs) > 1)
+            has_ctm = bool(getattr(block, "ctm", False) and getattr(block, "palette_ctm_uvs", None) and len(block.palette_ctm_uvs) > 0)
+
+            if has_palettes or has_ctm:
+                wx = np.int64(x0) + xx.astype(np.int64)
+                wy = np.int64(y0) + yy.astype(np.int64)
+                wz = np.int64(z0) + zz.astype(np.int64)
+                seed = world.seed if world is not None else 0
+                num_p = len(block.palette_face_uvs) if getattr(block, "palette_face_uvs", None) else 1
+
+                p_indices = block_palette_indices_grid(wx, wy, wz, seed, num_p)
+                uvs = np.empty((count * 4, 2), dtype=np.float32)
+                for i in range(count):
+                    p_idx = int(p_indices[i])
+                    if has_ctm:
+                        ctm_mask = get_block_face_ctm_mask(world, int(wx[i]), int(wy[i]), int(wz[i]), normal_i, block)
+                        b_uv = block.palette_ctm_uvs[p_idx][ctm_mask]
+                    else:
+                        b_uv = block.palette_face_uvs[p_idx][normal_i]
+                    uvs[i * 4 : (i + 1) * 4] = b_uv
+            else:
+                uvs = np.broadcast_to(np.asarray(block.face_uvs[normal_i], dtype=np.float32), (count, 4, 2)).reshape(-1, 2)
+
             span = count * 4
             vertices[cursor : cursor + span, 0:3] = positions
             vertices[cursor : cursor + span, 3:6] = normal
@@ -853,6 +879,27 @@ def build_chunk_mesh(world, cx, cy, cz):
                     m = _get_glass_face_ctm_mask(world, wx, wy, wz, normal_i, block=block, element=element)
                     spec_uv = element.get("face_uv_specs", {}).get(normal_i, [0, 0, 16, 16])
                     uvs = get_glass_ctm_uv(m, spec_uv) or uvs
+                elif getattr(block, "ctm", False) and getattr(block, "palette_ctm_uvs", None) and len(block.palette_ctm_uvs) > 0:
+                    seed = world.seed if world is not None else 0
+                    num_p = len(block.palette_face_uvs) if getattr(block, "palette_face_uvs", None) else 1
+                    p_idx = block_palette_index(wx, wy, wz, seed, num_p)
+                    m = get_block_face_ctm_mask(world, wx, wy, wz, normal_i, block=block, element=element)
+                    spec_uv = element.get("face_uv_specs", {}).get(normal_i, [0, 0, 16, 16])
+                    rect = getattr(block, "palette_ctm_rects", {}).get((p_idx, m))
+                    if rect is not None:
+                        uvs = _map_uv(rect, spec_uv)
+                    elif block.palette_ctm_uvs and m < len(block.palette_ctm_uvs[p_idx]):
+                        uvs = block.palette_ctm_uvs[p_idx][m]
+                elif getattr(block, "palette_face_uvs", None) and len(block.palette_face_uvs) > 1:
+                    seed = world.seed if world is not None else 0
+                    num_p = len(block.palette_face_uvs)
+                    p_idx = block_palette_index(wx, wy, wz, seed, num_p)
+                    rect = getattr(block, "palette_texture_rects", {}).get((p_idx, normal_i))
+                    spec_uv = element.get("face_uv_specs", {}).get(normal_i, [0, 0, 16, 16])
+                    if rect is not None:
+                        uvs = _map_uv(rect, spec_uv)
+                    else:
+                        uvs = block.palette_face_uvs[p_idx][normal_i]
                 points = _element_corners(element, normal_i)
                 if el_cutout:
                     base = cursor_cutout
@@ -1544,6 +1591,55 @@ def _get_glass_face_ctm_mask(world, wx, wy, wz, normal_i, block=None, element=No
     left = _glass_face_connects(world, wx, wy, wz, normal_i, (-u_vec[0], -u_vec[1], -u_vec[2]), block, element)
     right = _glass_face_connects(world, wx, wy, wz, normal_i, u_vec, block, element)
     return (1 if up else 0) | (2 if down else 0) | (4 if left else 0) | (8 if right else 0)
+
+
+def get_block_face_ctm_mask(world, wx, wy, wz, normal_i, block=None, element=None):
+    if world is None:
+        return 0
+    if is_glass(block):
+        return _get_glass_face_ctm_mask(world, wx, wy, wz, normal_i, block=block, element=element)
+    u_vec, v_vec = FACE_UV_VECTORS[normal_i]
+    up = _block_face_connects(world, wx, wy, wz, normal_i, v_vec, block, element)
+    down = _block_face_connects(world, wx, wy, wz, normal_i, (-v_vec[0], -v_vec[1], -v_vec[2]), block, element)
+    left = _block_face_connects(world, wx, wy, wz, normal_i, (-u_vec[0], -u_vec[1], -u_vec[2]), block, element)
+    right = _block_face_connects(world, wx, wy, wz, normal_i, u_vec, block, element)
+    return (1 if up else 0) | (2 if down else 0) | (4 if left else 0) | (8 if right else 0)
+
+
+def _block_face_connects(world, wx, wy, wz, normal_i, d_vec, block=None, element=None):
+    if world is None:
+        return False
+    if is_glass(block):
+        return _glass_face_connects(world, wx, wy, wz, normal_i, d_vec, block, element)
+
+    nx = int(NORMALS[normal_i, 0])
+    ny = int(NORMALS[normal_i, 1])
+    nz = int(NORMALS[normal_i, 2])
+    dx, dy, dz = int(d_vec[0]), int(d_vec[1]), int(d_vec[2])
+
+    nbr_b_id = world.get_block(wx + dx, wy + dy, wz + dz)
+    if nbr_b_id is None:
+        return False
+    nbr_b = BLOCKS.get(nbr_b_id) if isinstance(nbr_b_id, str) else nbr_b_id
+    if nbr_b is None:
+        return False
+
+    my_b = block if block else BLOCKS.get(world.get_block(wx, wy, wz))
+    if my_b is None:
+        return False
+
+    my_group = my_b.properties.get("ctm_group") or my_b.base_id or my_b.id
+    nbr_group = nbr_b.properties.get("ctm_group") or nbr_b.base_id or nbr_b.id
+    if my_group != nbr_group:
+        return False
+
+    front_b_id = world.get_block(wx + dx + nx, wy + dy + ny, wz + dz + nz)
+    if front_b_id is not None:
+        fb = BLOCKS.get(front_b_id) if isinstance(front_b_id, str) else front_b_id
+        if fb is not None and getattr(fb, "solid", False) and getattr(fb, "full_cube", False) and not getattr(fb, "cutout", False):
+            return False
+
+    return True
 
 
 def _should_cull_glass_element_face(world, wx, wy, wz, block, element, normal_i):

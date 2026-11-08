@@ -1,0 +1,18 @@
+{
+  "id": "diorite_copper_ore",
+  "lang": "block.diorite_copper_ore",
+  "tab": [
+    "natural"
+  ],
+  "model": "cube",
+  "hardness": 3.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/diorite_copper_ore",
+  "sound": "stone",
+  "textures": {
+    "top": "diorite_copper_ore",
+    "side": "diorite_copper_ore",
+    "bottom": "diorite_copper_ore"
+  }
+}

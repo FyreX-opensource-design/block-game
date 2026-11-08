@@ -1,0 +1,18 @@
+{
+  "id": "andesite_tin_ore",
+  "lang": "block.andesite_tin_ore",
+  "tab": [
+    "natural"
+  ],
+  "model": "cube",
+  "hardness": 3.0,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/andesite_tin_ore",
+  "sound": "stone",
+  "textures": {
+    "top": "andesite_tin_ore",
+    "side": "andesite_tin_ore",
+    "bottom": "andesite_tin_ore"
+  }
+}

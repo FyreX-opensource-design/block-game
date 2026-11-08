@@ -1,0 +1,18 @@
+{
+  "id": "andesite_copper_ore",
+  "lang": "block.andesite_copper_ore",
+  "tab": [
+    "natural"
+  ],
+  "model": "cube",
+  "hardness": 3.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/andesite_copper_ore",
+  "sound": "stone",
+  "textures": {
+    "top": "andesite_copper_ore",
+    "side": "andesite_copper_ore",
+    "bottom": "andesite_copper_ore"
+  }
+}

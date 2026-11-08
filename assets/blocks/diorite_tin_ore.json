@@ -1,0 +1,18 @@
+{
+  "id": "diorite_tin_ore",
+  "lang": "block.diorite_tin_ore",
+  "tab": [
+    "natural"
+  ],
+  "model": "cube",
+  "hardness": 3.0,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/diorite_tin_ore",
+  "sound": "stone",
+  "textures": {
+    "top": "diorite_tin_ore",
+    "side": "diorite_tin_ore",
+    "bottom": "diorite_tin_ore"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "id": "diorite_coal_ore",
+  "lang": "block.diorite_coal_ore",
+  "tab": [
+    "natural"
+  ],
+  "model": "cube",
+  "hardness": 3.0,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/diorite_coal_ore",
+  "sound": "stone",
+  "textures": {
+    "top": "diorite_coal_ore",
+    "side": "diorite_coal_ore",
+    "bottom": "diorite_coal_ore"
+  }
+}

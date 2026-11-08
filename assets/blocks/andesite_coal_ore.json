@@ -1,0 +1,18 @@
+{
+  "id": "andesite_coal_ore",
+  "lang": "block.andesite_coal_ore",
+  "tab": [
+    "natural"
+  ],
+  "model": "cube",
+  "hardness": 3.0,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/andesite_coal_ore",
+  "sound": "stone",
+  "textures": {
+    "top": "andesite_coal_ore",
+    "side": "andesite_coal_ore",
+    "bottom": "andesite_coal_ore"
+  }
+}

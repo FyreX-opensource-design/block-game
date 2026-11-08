@@ -1,0 +1,18 @@
+{
+  "id": "diorite_iron_ore",
+  "lang": "block.diorite_iron_ore",
+  "tab": [
+    "natural"
+  ],
+  "model": "cube",
+  "hardness": 3.0,
+  "tool": "pickaxe",
+  "mining_level": 3,
+  "loot_table": "blocks/diorite_iron_ore",
+  "sound": "stone",
+  "textures": {
+    "top": "diorite_iron_ore",
+    "side": "diorite_iron_ore",
+    "bottom": "diorite_iron_ore"
+  }
+}

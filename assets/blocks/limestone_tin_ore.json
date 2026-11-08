@@ -1,0 +1,18 @@
+{
+  "id": "limestone_tin_ore",
+  "lang": "block.limestone_tin_ore",
+  "tab": [
+    "natural"
+  ],
+  "model": "cube",
+  "hardness": 3.0,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/limestone_tin_ore",
+  "sound": "stone",
+  "textures": {
+    "top": "limestone_tin_ore",
+    "side": "limestone_tin_ore",
+    "bottom": "limestone_tin_ore"
+  }
+}
