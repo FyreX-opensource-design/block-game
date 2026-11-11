@@ -1,0 +1,11 @@
+{
+  "id": "ultramarine_dye_from_cobalt_bellflower",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "cobalt_bellflower"
+  ],
+  "result": {
+    "item": "ultramarine_dye",
+    "count": 1
+  }
+}

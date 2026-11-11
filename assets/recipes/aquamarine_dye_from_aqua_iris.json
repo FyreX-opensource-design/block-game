@@ -1,0 +1,11 @@
+{
+  "id": "aquamarine_dye_from_aqua_iris",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "aqua_iris"
+  ],
+  "result": {
+    "item": "aquamarine_dye",
+    "count": 1
+  }
+}

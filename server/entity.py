@@ -932,23 +932,40 @@ class Pig(Mob):
 
 SHEEP_WOOL_BLOCKS = {
     "white": "wool",
-    "red": "red_wool",
-    "yellow": "yellow_wool",
-    "orange": "orange_wool",
-    "green": "green_wool",
-    "blue": "blue_wool",
+    "light_gray": "light_gray_wool",
+    "gray": "gray_wool",
     "black": "black_wool",
+    "brown": "brown_wool",
+    "red": "red_wool",
+    "orange": "orange_wool",
+    "yellow": "yellow_wool",
+    "lime": "lime_wool",
+    "green": "green_wool",
+    "cyan": "cyan_wool",
+    "light_blue": "light_blue_wool",
+    "blue": "blue_wool",
+    "purple": "purple_wool",
+    "magenta": "magenta_wool",
+    "pink": "pink_wool",
+    "amber": "amber_wool",
+    "aquamarine": "aquamarine_wool",
+    "bubblegum": "bubblegum_wool",
+    "conifer": "conifer_wool",
+    "fluorescent": "fluorescent_wool",
+    "honey": "honey_wool",
+    "lavender": "lavender_wool",
+    "maroon": "maroon_wool",
+    "mint": "mint_wool",
+    "navy": "navy_wool",
+    "peach": "peach_wool",
+    "persimmon": "persimmon_wool",
+    "rose": "rose_wool",
+    "spring_green": "spring_green_wool",
+    "ultramarine": "ultramarine_wool",
+    "wine": "wine_wool",
 }
 
-DYE_TO_SHEEP_COLOR = {
-    "white_dye": "white",
-    "red_dye": "red",
-    "yellow_dye": "yellow",
-    "orange_dye": "orange",
-    "green_dye": "green",
-    "blue_dye": "blue",
-    "black_dye": "black",
-}
+DYE_TO_SHEEP_COLOR = {f"{color}_dye": color for color in SHEEP_WOOL_BLOCKS}
 
 
 class Sheep(Mob):

@@ -1,4 +1,6 @@
 import math
+import queue
+from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 
@@ -1097,7 +1099,7 @@ class World:
         if getattr(self, "saplings", None) is not None:
             self.saplings.on_block_set(x, y, z, block_id if block_id not in ("", None) else AIR)
         if simulate and old_block:
-            from server.blocks import get_door_info
+            from server.blocks import get_door_info, get_tall_plant_info
             old_d_info = get_door_info(old_block)
             if old_d_info is not None and (block_id in ("", AIR, None) or get_door_info(block_id) is None):
                 other_y = y + 1 if old_d_info["half"] == "lower" else y - 1
@@ -1106,6 +1108,24 @@ class World:
                     other_info = get_door_info(other_block)
                     if other_info is not None and other_info["base_id"] == old_d_info["base_id"]:
                         self.set_block(x, other_y, z, AIR)
+            old_tp_info = get_tall_plant_info(old_block)
+            new_tp_info_chk = get_tall_plant_info(block_id)
+            if old_tp_info is not None and (
+                block_id in ("", AIR, None)
+                or new_tp_info_chk is None
+                or new_tp_info_chk["base_id"] != old_tp_info["base_id"]
+            ):
+                other_y = y + 1 if old_tp_info["half"] == "lower" else y - 1
+                expected_other = old_tp_info["upper"] if old_tp_info["half"] == "lower" else old_tp_info["lower"]
+                if 0 < other_y < WORLD_HEIGHT and self.get_block(x, other_y, z) == expected_other:
+                    self.set_block(x, other_y, z, AIR)
+
+        if simulate and block_id not in ("", AIR, None):
+            from server.blocks import get_tall_plant_info
+            new_tp_info = get_tall_plant_info(block_id)
+            if new_tp_info is not None and new_tp_info["half"] == "lower" and y + 1 < WORLD_HEIGHT:
+                if self.get_block(x, y + 1, z) in ("", AIR, None):
+                    self.set_block(x, y + 1, z, new_tp_info["upper"], simulate=False)
 
         self.notify_neighbors_falling(x, y, z)
         self.check_plant_support(x, y + 1, z)
@@ -1179,10 +1199,22 @@ class World:
         above_id = self.get_block(x, y, z)
         if not above_id or above_id == AIR:
             return
-        from server.blocks import BLOCKS, can_sustain_plant
+        from server.blocks import BLOCKS, can_sustain_plant, get_tall_plant_info
 
         b_obj = BLOCKS.get(above_id)
         if b_obj is None:
+            return
+        tp_info = get_tall_plant_info(b_obj)
+        if tp_info is not None and tp_info["half"] == "upper":
+            ground_id = self.get_block(x, y - 1, z)
+            if ground_id != tp_info["lower"]:
+                from server.loot import get_block_drops
+
+                drops = get_block_drops(b_obj)
+                for drop_id, count in drops:
+                    if count > 0:
+                        self.spawn_item(drop_id, count=count, pos=(x + 0.5, y + 0.2, z + 0.5))
+                self.set_block(x, y, z, AIR)
             return
         if (
             getattr(b_obj, "requires_soil", False)
@@ -1231,19 +1263,15 @@ class World:
                 layers += 1
         return layers * (LOAD_RADIUS * 2 + 1) ** 2
 
-    def sync_players(self, centers):
-        """Sync chunks around multiple player chunk centers [(cx, cy, cz), ...].
-
-        Evicts chunks that are outside UNLOAD_RADIUS from ALL player centers.
-        Loads the closest missing chunk within LOAD_RADIUS of ANY player center.
-        """
+    def evict_distant(self, centers):
+        """Evict chunks that are outside UNLOAD_RADIUS from all centers and return removed keys."""
         parsed = [
             (int(c[0]), min(SECTION_COUNT - 1, max(0, int(c[1]))), int(c[2]))
             for c in centers
             if c is not None
         ]
         if not parsed:
-            return None, []
+            return []
 
         removed = []
         for key, chunk in list(self.chunks.items()):
@@ -1256,9 +1284,18 @@ class World:
             if not retained:
                 self.evict_chunk(key)
                 removed.append(key)
+        return removed
 
-        built = None
-        best = (math.inf, 0)
+    def missing_chunks(self, centers, limit=None, exclude=None):
+        """Return missing chunk keys within LOAD_RADIUS of centers, ordered closest first."""
+        parsed = [
+            (int(c[0]), min(SECTION_COUNT - 1, max(0, int(c[1]))), int(c[2]))
+            for c in centers
+            if c is not None
+        ]
+        if not parsed:
+            return []
+
         candidates = set()
         for cx, cy, cz in parsed:
             for dy in range(-VERTICAL_RADIUS, VERTICAL_RADIUS + 1):
@@ -1269,21 +1306,208 @@ class World:
                     for dx in range(-LOAD_RADIUS, LOAD_RADIUS + 1):
                         candidates.add((cx + dx, ty, cz + dz))
 
+        ex = set(exclude) if exclude else set()
+        missing = []
         for cand in candidates:
-            if cand in self.chunks:
+            if cand in self.chunks or cand in ex:
                 continue
             cand_dist = min(
                 (cand[0] - cx) ** 2 + (cand[2] - cz) ** 2
                 for cx, cy, cz in parsed
             )
             metric = (cand_dist, -cand[1])
-            if metric < best:
-                best = metric
-                built = cand
+            missing.append((metric, cand))
 
+        missing.sort(key=lambda item: item[0])
+        result = [item[1] for item in missing]
+        if limit is not None:
+            return result[:limit]
+        return result
+
+    def sync_players(self, centers):
+        """Sync chunks around multiple player chunk centers [(cx, cy, cz), ...].
+
+        Evicts chunks that are outside UNLOAD_RADIUS from ALL player centers.
+        Loads the closest missing chunk within LOAD_RADIUS of ANY player center.
+        """
+        removed = self.evict_distant(centers)
+        missing = self.missing_chunks(centers, limit=1)
+        built = missing[0] if missing else None
         if built is not None:
             self.load_chunk(*built)
         return built, removed
+
+    def start_background_generator(self, max_workers=None, use_processes=True):
+        """Start a process or thread pool for background world generation."""
+        if getattr(self, "_gen_executor", None) is not None:
+            return
+        if max_workers is None:
+            import os
+            cpu = os.cpu_count() or 2
+            max_workers = min(4, max(2, cpu // 2))
+
+        self._gen_pending = set()
+        self._gen_futures = {}
+        self._gen_results = queue.Queue()
+        self._gen_use_processes = use_processes
+
+        if use_processes:
+            try:
+                import multiprocessing
+                from concurrent.futures import ProcessPoolExecutor
+                store_folder = (
+                    str(self.store.folder)
+                    if self.store is not None and hasattr(self.store, "folder")
+                    else None
+                )
+                ctx = multiprocessing.get_context("spawn")
+                self._gen_executor = ProcessPoolExecutor(
+                    max_workers=max_workers,
+                    mp_context=ctx,
+                    initializer=_init_world_gen_worker,
+                    initargs=(
+                        self.seed,
+                        store_folder,
+                        self.caves,
+                        self.biomes,
+                        self.ores,
+                        self.features,
+                    ),
+                )
+            except Exception:
+                self._gen_use_processes = False
+                self._gen_executor = ThreadPoolExecutor(
+                    max_workers=max_workers,
+                    thread_name_prefix="world-gen",
+                )
+        else:
+            self._gen_executor = ThreadPoolExecutor(
+                max_workers=max_workers,
+                thread_name_prefix="world-gen",
+            )
+
+    def stop_background_generator(self):
+        """Stop the background world generation executor."""
+        if getattr(self, "_gen_executor", None) is not None:
+            if hasattr(self, "_gen_pending"):
+                self._gen_pending.clear()
+            if hasattr(self, "_gen_futures"):
+                for f in list(self._gen_futures.keys()):
+                    f.cancel()
+                self._gen_futures.clear()
+            try:
+                self._gen_executor.shutdown(wait=False, cancel_futures=True)
+            except Exception:
+                try:
+                    self._gen_executor.shutdown(wait=False)
+                except Exception:
+                    pass
+            self._gen_executor = None
+
+    def request_chunks(self, centers, max_in_flight=16):
+        """Schedule generation of missing chunks around centers off the main thread."""
+        if getattr(self, "_gen_executor", None) is None:
+            self.start_background_generator()
+        parsed_centers = [
+            (int(c[0]), min(SECTION_COUNT - 1, max(0, int(c[1]))), int(c[2]))
+            for c in centers
+            if c is not None
+        ]
+        if not parsed_centers:
+            return []
+
+        # Cancel futures that have moved far outside UNLOAD_RADIUS from all centers
+        for fut, cand in list(self._gen_futures.items()):
+            if not fut.done():
+                retained = any(
+                    abs(cand[0] - cx) <= UNLOAD_RADIUS
+                    and abs(cand[2] - cz) <= UNLOAD_RADIUS
+                    and abs(cand[1] - cy) <= VERTICAL_UNLOAD
+                    for cx, cy, cz in parsed_centers
+                )
+                if not retained:
+                    if fut.cancel():
+                        self._gen_pending.discard(cand)
+                        self._gen_futures.pop(fut, None)
+
+        slots = max_in_flight - len(self._gen_futures)
+        if slots <= 0:
+            return []
+
+        missing = self.missing_chunks(parsed_centers, limit=slots, exclude=self._gen_pending)
+        requested = []
+        is_proc = getattr(self, "_gen_use_processes", False)
+
+        for cand in missing:
+            self._gen_pending.add(cand)
+            requested.append(cand)
+
+            if is_proc:
+                fut = self._gen_executor.submit(_worker_generate_chunk, *cand)
+            else:
+                def _thread_task(c=cand, w=self):
+                    try:
+                        return c, w.load_chunk(*c, remember=False)
+                    except Exception:
+                        return c, None
+                fut = self._gen_executor.submit(_thread_task)
+
+            def _on_done(f, q=self._gen_results, pending=self._gen_pending, key=cand):
+                try:
+                    if not f.cancelled():
+                        c, chunk = f.result()
+                        q.put((c, chunk))
+                    else:
+                        pending.discard(key)
+                except Exception:
+                    pending.discard(key)
+
+            fut.add_done_callback(_on_done)
+            self._gen_futures[fut] = cand
+        return requested
+
+    def poll_generated_chunks(self, max_count=16, centers=None):
+        """Commit chunks generated off-thread to the world, returning list of newly committed keys."""
+        if getattr(self, "_gen_results", None) is None:
+            return []
+        for f in list(self._gen_futures.keys()):
+            if f.done():
+                self._gen_futures.pop(f, None)
+
+        parsed_centers = None
+        if centers:
+            parsed_centers = [
+                (int(c[0]), min(SECTION_COUNT - 1, max(0, int(c[1]))), int(c[2]))
+                for c in centers
+                if c is not None
+            ]
+
+        committed = []
+        count = 0
+        while not self._gen_results.empty() and count < max_count:
+            try:
+                cand, chunk = self._gen_results.get_nowait()
+            except queue.Empty:
+                break
+            self._gen_pending.discard(cand)
+            if chunk is None:
+                continue
+            key = (chunk.cx, chunk.cy, chunk.cz)
+            if key in self.chunks:
+                continue
+            if parsed_centers:
+                retained = any(
+                    abs(chunk.cx - cx) <= UNLOAD_RADIUS
+                    and abs(chunk.cz - cz) <= UNLOAD_RADIUS
+                    and abs(chunk.cy - cy) <= VERTICAL_UNLOAD
+                    for cx, cy, cz in parsed_centers
+                )
+                if not retained:
+                    continue
+            self.commit_chunk(chunk)
+            committed.append(key)
+            count += 1
+        return committed
 
     def sync_all_players(self):
         centers = [self.chunk_key(*p.pos) for p in self.players.values() if getattr(p, "pos", None)]
@@ -1313,7 +1537,16 @@ class World:
         if getattr(self, "saplings", None) is not None:
             self.saplings.save()
 
-    def load_chunk(self, cx, cy, cz):
+    def commit_chunk(self, chunk):
+        if chunk is None:
+            return None
+        key = (chunk.cx, chunk.cy, chunk.cz)
+        if key in self.chunks:
+            return self.chunks[key]
+        self._remember(chunk)
+        return chunk
+
+    def load_chunk(self, cx, cy, cz, remember=True):
         if cy < 0 or cy >= SECTION_COUNT:
             return None
         key = (cx, cy, cz)
@@ -1325,14 +1558,15 @@ class World:
                 chunk = Chunk(cx, cy, cz)
                 chunk.sub_cells = dict(getattr(data, "sub_cells", {}))
                 chunk.data[:, :, :] = data
-                self._remember(chunk)
+                if remember:
+                    self._remember(chunk)
                 return chunk
-        return self.generate_chunk(cx, cy, cz)
+        return self.generate_chunk(cx, cy, cz, remember=remember)
 
     def generate_column(self, cx, cz):
         return [self.generate_chunk(cx, cy, cz) for cy in range(SECTION_COUNT)]
 
-    def generate_chunk(self, cx, cy, cz):
+    def generate_chunk(self, cx, cy, cz, remember=True):
         chunk = Chunk(cx, cy, cz)
         x0 = cx * CHUNK_SIZE
         y0 = cy * CHUNK_SIZE
@@ -1387,6 +1621,8 @@ class World:
         self._carve_caves(data, x0, y0, z0, heights, sub_top=sub_top)
         self._place_features(data, x0, y0, z0, heights, sample)
 
+        blocked_below = np.zeros((CHUNK_SIZE, CHUNK_SIZE), dtype=bool)
+        blocked_above = np.zeros((CHUNK_SIZE, CHUNK_SIZE), dtype=bool)
         for lz in range(-2, CHUNK_SIZE + 2):
             for lx in range(-2, CHUNK_SIZE + 2):
                 wx = x0 + lx
@@ -1394,11 +1630,31 @@ class World:
                 decorator = self._cached_tree(wx, wz, sample, lx, lz)
                 if decorator is None:
                     continue
-                self._place_tree(data, lx, lz, sample(lx, lz), wx, wz, y0, decorator)
+                self._place_tree(
+                    data,
+                    lx,
+                    lz,
+                    sample(lx, lz),
+                    wx,
+                    wz,
+                    y0,
+                    decorator,
+                    blocked_below=blocked_below,
+                    blocked_above=blocked_above,
+                )
 
-        self._place_decorations(data, x0, y0, z0, sample)
+        self._place_decorations(
+            data,
+            x0,
+            y0,
+            z0,
+            sample,
+            blocked_below=blocked_below,
+            blocked_above=blocked_above,
+        )
 
-        self._remember(chunk)
+        if remember:
+            self._remember(chunk)
         return chunk
 
     def _place_ores(self, data, x0, y0, z0, exclude_mask=None):
@@ -1639,6 +1895,68 @@ class World:
                 self.mark_dirty(*b_key)
         if getattr(self, "saplings", None) is not None:
             self.saplings.scan_chunk(key)
+        self._reconcile_tall_plant_seams(chunk)
+
+    def _tall_plant_index_maps(self):
+        maps = getattr(self, "_cached_tp_maps", None)
+        if maps is not None:
+            return maps
+        from server.blocks import BLOCKS, get_tall_plant_info
+
+        lower_to_upper = {}
+        upper_to_lower = {}
+        for b_id in BLOCKS:
+            info = get_tall_plant_info(b_id)
+            if info is not None and info["half"] == "lower":
+                l_idx = block_index(info["lower"])
+                u_idx = block_index(info["upper"])
+                if l_idx is not None and u_idx is not None:
+                    lower_to_upper[int(l_idx)] = int(u_idx)
+                    upper_to_lower[int(u_idx)] = int(l_idx)
+        maps = (lower_to_upper, upper_to_lower)
+        self._cached_tp_maps = maps
+        return maps
+
+    def _reconcile_tall_plant_seams(self, chunk):
+        lower_chunk = self.chunks.get((chunk.cx, chunk.cy - 1, chunk.cz))
+        if lower_chunk is not None:
+            self._reconcile_tall_plant_seam_pair(lower_chunk, chunk)
+        upper_chunk = self.chunks.get((chunk.cx, chunk.cy + 1, chunk.cz))
+        if upper_chunk is not None:
+            self._reconcile_tall_plant_seam_pair(chunk, upper_chunk)
+
+    def _reconcile_tall_plant_seam_pair(self, lower_chunk, upper_chunk):
+        lower_to_upper, upper_to_lower = self._tall_plant_index_maps()
+        if not lower_to_upper:
+            return
+        lower_row = lower_chunk.data[CHUNK_SIZE - 1]
+        upper_row = upper_chunk.data[0]
+        lower_uniq = set(np.unique(lower_row).tolist())
+        upper_uniq = set(np.unique(upper_row).tolist())
+        if not (lower_uniq & lower_to_upper.keys()) and not (upper_uniq & upper_to_lower.keys()):
+            return
+        lower_dirty = False
+        upper_dirty = False
+        for lz in range(CHUNK_SIZE):
+            for lx in range(CHUNK_SIZE):
+                u_idx = int(upper_row[lz, lx])
+                l_idx = int(lower_row[lz, lx])
+                if u_idx in upper_to_lower:
+                    if l_idx != upper_to_lower[u_idx]:
+                        upper_row[lz, lx] = 0
+                        upper_dirty = True
+                elif l_idx in lower_to_upper:
+                    exp_u = lower_to_upper[l_idx]
+                    if u_idx == 0:
+                        upper_row[lz, lx] = exp_u
+                        upper_dirty = True
+                    elif u_idx != exp_u:
+                        lower_row[lz, lx] = 0
+                        lower_dirty = True
+        if lower_dirty:
+            self.mark_dirty(lower_chunk.cx, lower_chunk.cy, lower_chunk.cz)
+        if upper_dirty:
+            self.mark_dirty(upper_chunk.cx, upper_chunk.cy, upper_chunk.cz)
 
     def _note_evicted(self, cx, cy, cz):
         remaining = [key[1] for key in self.chunks if key[0] == cx and key[2] == cz]
@@ -1665,7 +1983,7 @@ class World:
             return None
         return decorator
 
-    def _place_tree(self, data, lx, lz, ground, wx, wz, y0, tree):
+    def _place_tree(self, data, lx, lz, ground, wx, wz, y0, tree, blocked_below=None, blocked_above=None):
         if 0 <= lx < CHUNK_SIZE and 0 <= lz < CHUNK_SIZE and y0 <= ground < y0 + CHUNK_SIZE:
             under = int(data[ground - y0, lz, lx])
             under_b = block_from_index(under)
@@ -1693,7 +2011,17 @@ class World:
             z = bz - z0
             if x < 0 or z < 0 or x >= CHUNK_SIZE or z >= CHUNK_SIZE:
                 continue
-            if by <= 0 or by < y0 or by >= y0 + CHUNK_SIZE or by >= WORLD_HEIGHT:
+            if by <= 0 or by >= WORLD_HEIGHT:
+                continue
+            if by == y0 - 1:
+                if blocked_below is not None:
+                    blocked_below[z, x] = True
+                continue
+            if by == y0 + CHUNK_SIZE:
+                if blocked_above is not None:
+                    blocked_above[z, x] = True
+                continue
+            if by < y0 or by >= y0 + CHUNK_SIZE:
                 continue
             if replace:
                 cur = int(data[by - y0, z, x])
@@ -1728,19 +2056,66 @@ class World:
             place(bx, by, bz, block_id, replace)
         return changed
 
-    def _place_decorations(self, data, x0, y0, z0, sample):
+    def _place_decorations(self, data, x0, y0, z0, sample, blocked_below=None, blocked_above=None):
+        from server.blocks import get_tall_plant_info
+
         for lz in range(CHUNK_SIZE):
             wz = z0 + lz
             for lx in range(CHUNK_SIZE):
                 wx = x0 + lx
                 gy = sample(lx, lz)
                 dec_y = gy + 1
-                if dec_y < y0 or dec_y >= y0 + CHUNK_SIZE:
+                is_upper_boundary = dec_y + 1 == y0
+                if not is_upper_boundary and (dec_y < y0 or dec_y >= y0 + CHUNK_SIZE):
                     continue
                 if gy <= WATER_LEVEL:
                     continue
-                if data[dec_y - y0, lz, lx] != 0:
+                if is_upper_boundary:
+                    if data[0, lz, lx] != 0:
+                        continue
+                    if blocked_below is not None and blocked_below[lz, lx]:
+                        continue
+                elif data[dec_y - y0, lz, lx] != 0:
                     continue
+
+                biome = biome_at(wx, wz, self.seed, self.biomes)
+                decorations = getattr(biome, "decorations", ())
+                if not decorations:
+                    continue
+
+                roll = hash2(wx, wz, self.seed + 9876)
+                chosen = None
+                chosen_dec = None
+                accum = 0.0
+                for dec in decorations:
+                    accum += dec.chance
+                    if roll < accum:
+                        chosen_dec = dec
+                        chosen = dec.pick_block(wx, wz, self.seed)
+                        break
+                if chosen is None:
+                    continue
+
+                tp_info = get_tall_plant_info(chosen)
+                if is_upper_boundary:
+                    if tp_info is None or tp_info["half"] != "lower":
+                        continue
+                    b_idx = block_index(chosen)
+                    upper_idx = block_index(tp_info["upper"])
+                    if b_idx is None or upper_idx is None:
+                        continue
+                    lower_chunk = self.chunks.get((x0 // CHUNK_SIZE, (y0 // CHUNK_SIZE) - 1, z0 // CHUNK_SIZE))
+                    if lower_chunk is not None:
+                        if lower_chunk.data[dec_y - (y0 - CHUNK_SIZE), lz, lx] != b_idx:
+                            continue
+                    else:
+                        if any(cave.opens(wx, gy, wz, gy, self.seed) for cave in self.caves):
+                            continue
+                        if biome.surface not in chosen_dec.surfaces:
+                            continue
+                    data[0, lz, lx] = upper_idx
+                    continue
+
                 if gy >= y0:
                     surface_idx = data[gy - y0, lz, lx]
                     surface_block = block_from_index(surface_idx)
@@ -1754,28 +2129,32 @@ class World:
                     else:
                         if any(cave.opens(wx, gy, wz, gy, self.seed) for cave in self.caves):
                             continue
-                        biome = biome_at(wx, wz, self.seed, self.biomes)
                         surface_id = biome.surface
 
-                if not surface_id:
+                if not surface_id or surface_id not in chosen_dec.surfaces:
                     continue
 
-                biome = biome_at(wx, wz, self.seed, self.biomes)
-                decorations = getattr(biome, "decorations", ())
-                if not decorations:
+                b_idx = block_index(chosen)
+                if b_idx is None:
                     continue
-
-                roll = hash2(wx, wz, self.seed + 9876)
-                accum = 0.0
-                for dec in decorations:
-                    accum += dec.chance
-                    if roll < accum:
-                        if surface_id in dec.surfaces:
-                            chosen = dec.pick_block(wx, wz, self.seed)
-                            b_idx = block_index(chosen)
-                            if b_idx is not None:
-                                data[dec_y - y0, lz, lx] = b_idx
-                        break
+                if tp_info is not None and tp_info["half"] == "lower":
+                    upper_idx = block_index(tp_info["upper"])
+                    if upper_idx is None:
+                        continue
+                    if dec_y + 1 < y0 + CHUNK_SIZE:
+                        if data[dec_y + 1 - y0, lz, lx] != 0:
+                            continue
+                        data[dec_y - y0, lz, lx] = b_idx
+                        data[dec_y + 1 - y0, lz, lx] = upper_idx
+                    else:
+                        if blocked_above is not None and blocked_above[lz, lx]:
+                            continue
+                        upper_chunk = self.chunks.get((x0 // CHUNK_SIZE, (y0 // CHUNK_SIZE) + 1, z0 // CHUNK_SIZE))
+                        if upper_chunk is not None and upper_chunk.data[0, lz, lx] not in (0, upper_idx):
+                            continue
+                        data[dec_y - y0, lz, lx] = b_idx
+                else:
+                    data[dec_y - y0, lz, lx] = b_idx
 
     @property
     def spawn_point(self):
@@ -2525,4 +2904,48 @@ class World:
                 best_entity = entity
 
         return best_entity
+
+    def close(self):
+        self.stop_background_generator()
+        if hasattr(self, "lighting") and hasattr(self.lighting, "close"):
+            self.lighting.close()
+
+    def __del__(self):
+        try:
+            self.stop_background_generator()
+        except Exception:
+            pass
+
+
+_worker_world = None
+
+
+def _init_world_gen_worker(seed, store_folder=None, caves=None, biomes=None, ores=None, features=None):
+    global _worker_world
+    store = None
+    if store_folder is not None:
+        from server.storage import ChunkStore
+        store = ChunkStore(store_folder)
+    _worker_world = World(
+        seed=seed,
+        store=store,
+        caves=caves,
+        biomes=biomes,
+        ores=ores,
+        features=features,
+    )
+    _worker_world.simulate_blocks = False
+
+
+def _worker_generate_chunk(cx, cy, cz):
+    global _worker_world
+    if _worker_world is None:
+        return (cx, cy, cz), None
+    try:
+        chunk = _worker_world.load_chunk(cx, cy, cz, remember=False)
+        return (cx, cy, cz), chunk
+    except Exception:
+        return (cx, cy, cz), None
+
+
 

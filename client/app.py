@@ -797,19 +797,25 @@ class Game(pyglet.window.Window):
         self.ready = True
         self.mode = "play"
         self._persist_world()
+        if self.world is not None:
+            self.world.start_background_generator()
         if not self._smoke:
             self.set_exclusive_mouse(True)
 
     def _stream(self):
+        if self.world is None or self.player is None:
+            return
         cx = math.floor(self.player.pos[0] / CHUNK_SIZE)
         cy = min(SECTION_COUNT - 1, max(0, math.floor(self.player.pos[1] / CHUNK_SIZE)))
         cz = math.floor(self.player.pos[2] / CHUNK_SIZE)
-        built, removed = self.world.sync(cx, cy, cz)
+        center = (cx, cy, cz)
+
+        removed = self.world.evict_distant([center])
         for key in removed:
             self.renderer.drop(key)
-        if built is not None:
-            self._upload(built)
-            self.world.dirty.discard(built)
+
+        committed = self.world.poll_generated_chunks(max_count=16, centers=[center])
+        self.world.request_chunks([center], max_in_flight=16)
 
     def _upload(self, key):
         mesh = build_chunk_mesh(self.world, key[0], key[1], key[2])
@@ -1340,6 +1346,7 @@ class Game(pyglet.window.Window):
             get_offset_info,
             get_offset_torch_info,
             get_slab_info,
+            get_tall_plant_info,
             get_trapdoor_info,
             get_vertical_slab_info,
             get_vertical_slab_offset_block,
@@ -1351,6 +1358,41 @@ class Game(pyglet.window.Window):
             is_trapdoor,
             rotation_variant,
         )
+
+        tp_info = get_tall_plant_info(block_id)
+        if tp_info is not None:
+            base_id = tp_info["base_id"]
+            partner_y = y + 1 if tp_info["half"] == "lower" else y - 1
+            partner_block = self.world.get_block(x, partner_y, z)
+            partner_info = get_tall_plant_info(partner_block)
+            has_partner = partner_info is not None and partner_info["base_id"] == base_id
+
+            if self.gamemode == "survival":
+                held_id = stack_id(self.hotbar[self.selected]) if self.selected < len(self.hotbar) else ""
+                held_item = ITEMS.get(held_id)
+                drops = get_block_drops(BLOCKS.get(base_id), held_item)
+                drop_y = float(min(y, partner_y)) + 0.2
+                self._spawn_break_drops(drops, x, drop_y, z)
+                if hasattr(self, "_use_held_tool"):
+                    self._use_held_tool()
+
+            if getattr(self, "sound_manager", None):
+                self.sound_manager.play_break_sound(base_id)
+
+            if self.network_client is not None:
+                self.network_client.send_set_block(x, y, z, AIR)
+                if has_partner:
+                    self.network_client.send_set_block(x, partner_y, z, AIR)
+
+            self.world.set_block(x, y, z, AIR)
+            self._upload_block_change(x, y, z)
+            if has_partner:
+                if self.world.get_block(x, partner_y, z) != AIR:
+                    self.world.set_block(x, partner_y, z, AIR)
+                self._upload_block_change(x, partner_y, z)
+
+            self._reset_breaking()
+            return
 
         d_info = get_door_info(block_id)
         if d_info is not None:
@@ -2917,14 +2959,19 @@ class Game(pyglet.window.Window):
         if not placing_capped_torch and (self.world.is_solid(x, y, z) or is_torch(self.world.get_block(x, y, z))):
             return
 
-        from server.blocks import can_place_block
+        from server.blocks import can_place_block, get_tall_plant_info
 
         if not can_place_block(self.world, x, y, z, block_to_place, hit=hit):
             return
+        tp_info = get_tall_plant_info(block_to_place)
         if self.network_client is not None:
             self.network_client.send_set_block(x, y, z, block_to_place)
+            if tp_info is not None and tp_info["half"] == "lower":
+                self.network_client.send_set_block(x, y + 1, z, tp_info["upper"])
         if self.world.set_block(x, y, z, block_to_place):
             self._upload_block_change(x, y, z)
+            if tp_info is not None and tp_info["half"] == "lower":
+                self._upload_block_change(x, y + 1, z)
             if self.gamemode == "survival":
                 cur_slot = self.hotbar[self.selected]
                 c = stack_count(cur_slot)
@@ -3063,8 +3110,10 @@ class Game(pyglet.window.Window):
     def _drop_view(self):
         for key in list(self.renderer.chunks):
             self.renderer.drop(key)
-        if self.world is not None and self.player is not None and self.player.uuid:
-            self.world.unregister_player(self.player.uuid)
+        if self.world is not None:
+            self.world.stop_background_generator()
+            if self.player is not None and self.player.uuid:
+                self.world.unregister_player(self.player.uuid)
         self.world = None
         self.player = None
         self.ready = False
@@ -4619,6 +4668,8 @@ class Game(pyglet.window.Window):
         if self._closing:
             return
         self._closing = True
+        if self.world is not None:
+            self.world.stop_background_generator()
         self._stop_web_companion()
         if self.network_client is not None:
             self.network_client.disconnect()

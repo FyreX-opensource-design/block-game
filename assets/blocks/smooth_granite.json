@@ -17,7 +17,7 @@
     "ctm_0": "smooth_granite/smooth_granite_var_0_1",
     "ctm_1": "smooth_granite/smooth_granite_var_2_1",
     "ctm_2": "smooth_granite/smooth_granite_var_4_1",
-    "ctm_3": "smooth_granite/smooth_granite_var_16_1",
+    "ctm_3": "smooth_granite/smooth_granite_var_14_1",
     "ctm_4": "smooth_granite/smooth_granite_var_1_1",
     "ctm_5": "smooth_granite/smooth_granite_var_6_1",
     "ctm_6": "smooth_granite/smooth_granite_var_5_1",
@@ -26,10 +26,10 @@
     "ctm_9": "smooth_granite/smooth_granite_var_7_1",
     "ctm_10": "smooth_granite/smooth_granite_var_8_1",
     "ctm_11": "smooth_granite/smooth_granite_var_12_1",
-    "ctm_12": "smooth_granite/smooth_granite_var_15_1",
+    "ctm_12": "smooth_granite/smooth_granite_var_13_1",
     "ctm_13": "smooth_granite/smooth_granite_var_11_1",
     "ctm_14": "smooth_granite/smooth_granite_var_9_1",
-    "ctm_15": "smooth_granite/smooth_granite_var_14_1"
+    "ctm_15": "smooth_granite/smooth_granite_var_15_1"
   },
   "ctm": true,
   "palettes": [
@@ -40,7 +40,7 @@
       "ctm_0": "smooth_granite/smooth_granite_var_0_1",
       "ctm_1": "smooth_granite/smooth_granite_var_2_1",
       "ctm_2": "smooth_granite/smooth_granite_var_4_1",
-      "ctm_3": "smooth_granite/smooth_granite_var_16_1",
+      "ctm_3": "smooth_granite/smooth_granite_var_14_1",
       "ctm_4": "smooth_granite/smooth_granite_var_1_1",
       "ctm_5": "smooth_granite/smooth_granite_var_6_1",
       "ctm_6": "smooth_granite/smooth_granite_var_5_1",
@@ -49,10 +49,10 @@
       "ctm_9": "smooth_granite/smooth_granite_var_7_1",
       "ctm_10": "smooth_granite/smooth_granite_var_8_1",
       "ctm_11": "smooth_granite/smooth_granite_var_12_1",
-      "ctm_12": "smooth_granite/smooth_granite_var_15_1",
+      "ctm_12": "smooth_granite/smooth_granite_var_13_1",
       "ctm_13": "smooth_granite/smooth_granite_var_11_1",
       "ctm_14": "smooth_granite/smooth_granite_var_9_1",
-      "ctm_15": "smooth_granite/smooth_granite_var_14_1"
+      "ctm_15": "smooth_granite/smooth_granite_var_15_1"
     },
     {
       "top": "smooth_granite/smooth_granite_var_0_2",
@@ -61,7 +61,7 @@
       "ctm_0": "smooth_granite/smooth_granite_var_0_2",
       "ctm_1": "smooth_granite/smooth_granite_var_2_2",
       "ctm_2": "smooth_granite/smooth_granite_var_4_2",
-      "ctm_3": "smooth_granite/smooth_granite_var_16_2",
+      "ctm_3": "smooth_granite/smooth_granite_var_14_2",
       "ctm_4": "smooth_granite/smooth_granite_var_1_2",
       "ctm_5": "smooth_granite/smooth_granite_var_6_2",
       "ctm_6": "smooth_granite/smooth_granite_var_5_2",
@@ -70,10 +70,10 @@
       "ctm_9": "smooth_granite/smooth_granite_var_7_2",
       "ctm_10": "smooth_granite/smooth_granite_var_8_2",
       "ctm_11": "smooth_granite/smooth_granite_var_12_2",
-      "ctm_12": "smooth_granite/smooth_granite_var_15_2",
+      "ctm_12": "smooth_granite/smooth_granite_var_13_2",
       "ctm_13": "smooth_granite/smooth_granite_var_11_2",
       "ctm_14": "smooth_granite/smooth_granite_var_9_2",
-      "ctm_15": "smooth_granite/smooth_granite_var_14_2"
+      "ctm_15": "smooth_granite/smooth_granite_var_15_2"
     },
     {
       "top": "smooth_granite/smooth_granite_var_0_3",
@@ -82,7 +82,7 @@
       "ctm_0": "smooth_granite/smooth_granite_var_0_3",
       "ctm_1": "smooth_granite/smooth_granite_var_2_3",
       "ctm_2": "smooth_granite/smooth_granite_var_4_3",
-      "ctm_3": "smooth_granite/smooth_granite_var_16_3",
+      "ctm_3": "smooth_granite/smooth_granite_var_14_3",
       "ctm_4": "smooth_granite/smooth_granite_var_1_3",
       "ctm_5": "smooth_granite/smooth_granite_var_6_3",
       "ctm_6": "smooth_granite/smooth_granite_var_5_3",
@@ -91,10 +91,10 @@
       "ctm_9": "smooth_granite/smooth_granite_var_7_3",
       "ctm_10": "smooth_granite/smooth_granite_var_8_3",
       "ctm_11": "smooth_granite/smooth_granite_var_12_3",
-      "ctm_12": "smooth_granite/smooth_granite_var_15_3",
+      "ctm_12": "smooth_granite/smooth_granite_var_13_3",
       "ctm_13": "smooth_granite/smooth_granite_var_11_3",
       "ctm_14": "smooth_granite/smooth_granite_var_9_3",
-      "ctm_15": "smooth_granite/smooth_granite_var_14_3"
+      "ctm_15": "smooth_granite/smooth_granite_var_15_3"
     },
     {
       "top": "smooth_granite/smooth_granite_var_0_4",
@@ -103,7 +103,7 @@
       "ctm_0": "smooth_granite/smooth_granite_var_0_4",
       "ctm_1": "smooth_granite/smooth_granite_var_2_4",
       "ctm_2": "smooth_granite/smooth_granite_var_4_4",
-      "ctm_3": "smooth_granite/smooth_granite_var_16_4",
+      "ctm_3": "smooth_granite/smooth_granite_var_14_4",
       "ctm_4": "smooth_granite/smooth_granite_var_1_4",
       "ctm_5": "smooth_granite/smooth_granite_var_6_4",
       "ctm_6": "smooth_granite/smooth_granite_var_5_4",
@@ -112,10 +112,10 @@
       "ctm_9": "smooth_granite/smooth_granite_var_7_4",
       "ctm_10": "smooth_granite/smooth_granite_var_8_4",
       "ctm_11": "smooth_granite/smooth_granite_var_12_4",
-      "ctm_12": "smooth_granite/smooth_granite_var_15_4",
+      "ctm_12": "smooth_granite/smooth_granite_var_13_4",
       "ctm_13": "smooth_granite/smooth_granite_var_11_4",
       "ctm_14": "smooth_granite/smooth_granite_var_9_4",
-      "ctm_15": "smooth_granite/smooth_granite_var_14_4"
+      "ctm_15": "smooth_granite/smooth_granite_var_15_4"
     },
     {
       "top": "smooth_granite/smooth_granite_var_0_5",
@@ -124,7 +124,7 @@
       "ctm_0": "smooth_granite/smooth_granite_var_0_5",
       "ctm_1": "smooth_granite/smooth_granite_var_2_5",
       "ctm_2": "smooth_granite/smooth_granite_var_4_5",
-      "ctm_3": "smooth_granite/smooth_granite_var_16_5",
+      "ctm_3": "smooth_granite/smooth_granite_var_14_5",
       "ctm_4": "smooth_granite/smooth_granite_var_1_5",
       "ctm_5": "smooth_granite/smooth_granite_var_6_5",
       "ctm_6": "smooth_granite/smooth_granite_var_5_5",
@@ -133,10 +133,10 @@
       "ctm_9": "smooth_granite/smooth_granite_var_7_5",
       "ctm_10": "smooth_granite/smooth_granite_var_8_5",
       "ctm_11": "smooth_granite/smooth_granite_var_12_5",
-      "ctm_12": "smooth_granite/smooth_granite_var_15_5",
+      "ctm_12": "smooth_granite/smooth_granite_var_13_5",
       "ctm_13": "smooth_granite/smooth_granite_var_11_5",
       "ctm_14": "smooth_granite/smooth_granite_var_9_5",
-      "ctm_15": "smooth_granite/smooth_granite_var_14_5"
+      "ctm_15": "smooth_granite/smooth_granite_var_15_5"
     }
   ]
 }

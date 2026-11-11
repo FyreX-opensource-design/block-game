@@ -1,0 +1,18 @@
+{
+  "id": "alpine_flower_patch_flowers",
+  "blocks": {
+    "cornflower": 3,
+    "blue_orchid": 3,
+    "cobalt_bellflower": 3,
+    "sea_holly": 3,
+    "delphinium": 3,
+    "indigo_spire": 3,
+    "lavender": 2,
+    "pine_lily": 2
+  },
+  "chance": 0.56,
+  "surfaces": [
+    "grass"
+  ],
+  "seed_offset": 8858
+}

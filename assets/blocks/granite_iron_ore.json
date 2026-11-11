@@ -11,8 +11,35 @@
   "loot_table": "blocks/granite_iron_ore",
   "sound": "stone",
   "textures": {
-    "top": "granite_iron_ore",
-    "side": "granite_iron_ore",
-    "bottom": "granite_iron_ore"
-  }
+    "top": "granite_iron_ore/granite_iron_ore_var_1",
+    "side": "granite_iron_ore/granite_iron_ore_var_1",
+    "bottom": "granite_iron_ore/granite_iron_ore_var_1"
+  },
+  "palettes": [
+    {
+      "top": "granite_iron_ore/granite_iron_ore_var_1",
+      "side": "granite_iron_ore/granite_iron_ore_var_1",
+      "bottom": "granite_iron_ore/granite_iron_ore_var_1"
+    },
+    {
+      "top": "granite_iron_ore/granite_iron_ore_var_2",
+      "side": "granite_iron_ore/granite_iron_ore_var_2",
+      "bottom": "granite_iron_ore/granite_iron_ore_var_2"
+    },
+    {
+      "top": "granite_iron_ore/granite_iron_ore_var_3",
+      "side": "granite_iron_ore/granite_iron_ore_var_3",
+      "bottom": "granite_iron_ore/granite_iron_ore_var_3"
+    },
+    {
+      "top": "granite_iron_ore/granite_iron_ore_var_4",
+      "side": "granite_iron_ore/granite_iron_ore_var_4",
+      "bottom": "granite_iron_ore/granite_iron_ore_var_4"
+    },
+    {
+      "top": "granite_iron_ore/granite_iron_ore_var_5",
+      "side": "granite_iron_ore/granite_iron_ore_var_5",
+      "bottom": "granite_iron_ore/granite_iron_ore_var_5"
+    }
+  ]
 }

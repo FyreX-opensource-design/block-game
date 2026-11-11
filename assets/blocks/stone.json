@@ -12,8 +12,35 @@
   "loot_table": "blocks/stone",
   "sound": "stone",
   "textures": {
-    "top": "stone",
-    "side": "stone",
-    "bottom": "stone"
-  }
+    "top": "stone/stone_var_1",
+    "side": "stone/stone_var_1",
+    "bottom": "stone/stone_var_1"
+  },
+  "palettes": [
+    {
+      "top": "stone/stone_var_1",
+      "side": "stone/stone_var_1",
+      "bottom": "stone/stone_var_1"
+    },
+    {
+      "top": "stone/stone_var_2",
+      "side": "stone/stone_var_2",
+      "bottom": "stone/stone_var_2"
+    },
+    {
+      "top": "stone/stone_var_3",
+      "side": "stone/stone_var_3",
+      "bottom": "stone/stone_var_3"
+    },
+    {
+      "top": "stone/stone_var_4",
+      "side": "stone/stone_var_4",
+      "bottom": "stone/stone_var_4"
+    },
+    {
+      "top": "stone/stone_var_5",
+      "side": "stone/stone_var_5",
+      "bottom": "stone/stone_var_5"
+    }
+  ]
 }

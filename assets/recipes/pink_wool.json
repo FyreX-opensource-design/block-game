@@ -1,0 +1,12 @@
+{
+  "id": "pink_wool",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "#wool",
+    "pink_dye"
+  ],
+  "result": {
+    "item": "pink_wool",
+    "count": 1
+  }
+}

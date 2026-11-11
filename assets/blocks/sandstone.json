@@ -10,8 +10,35 @@
   "sound": "stone",
   "gravity": false,
   "textures": {
-    "top": "sandstone",
-    "side": "sandstone",
-    "bottom": "sandstone"
-  }
+    "top": "sandstone/sandstone_var_1",
+    "side": "sandstone/sandstone_var_1",
+    "bottom": "sandstone/sandstone_var_1"
+  },
+  "palettes": [
+    {
+      "top": "sandstone/sandstone_var_1",
+      "side": "sandstone/sandstone_var_1",
+      "bottom": "sandstone/sandstone_var_1"
+    },
+    {
+      "top": "sandstone/sandstone_var_2",
+      "side": "sandstone/sandstone_var_2",
+      "bottom": "sandstone/sandstone_var_2"
+    },
+    {
+      "top": "sandstone/sandstone_var_3",
+      "side": "sandstone/sandstone_var_3",
+      "bottom": "sandstone/sandstone_var_3"
+    },
+    {
+      "top": "sandstone/sandstone_var_4",
+      "side": "sandstone/sandstone_var_4",
+      "bottom": "sandstone/sandstone_var_4"
+    },
+    {
+      "top": "sandstone/sandstone_var_5",
+      "side": "sandstone/sandstone_var_5",
+      "bottom": "sandstone/sandstone_var_5"
+    }
+  ]
 }

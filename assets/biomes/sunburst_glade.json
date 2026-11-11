@@ -1,0 +1,43 @@
+{
+  "id": "sunburst_glade",
+  "name": "Sunburst Glade",
+  "variant_of": "lowland_plains",
+  "variant_noise": {
+    "scale": 0.038,
+    "octaves": 2,
+    "seed_offset": 8202,
+    "offset": [
+      -19.4,
+      41.8
+    ],
+    "threshold": 0.62,
+    "above": true
+  },
+  "surface": "grass",
+  "soil": "dirt",
+  "soil_depth": 3,
+  "scale": 0.006,
+  "octaves": 2,
+  "seed_offset": 90,
+  "ceiling": 0.43,
+  "tree_chance": 0.001,
+  "height_offset": -8.0,
+  "height_scale": 0.75,
+  "cliff": false,
+  "transition": {
+    "blend": 0.08,
+    "curve": "smoothstep"
+  },
+  "trees": [
+    "oak",
+    "shrub"
+  ],
+  "decorations": [
+    "sunburst_glade_flowers",
+    {
+      "feature": "tall_grass",
+      "chance": 0.14
+    }
+  ],
+  "grass_color": "#7ec944"
+}

@@ -1,0 +1,20 @@
+{
+  "id": "crimson_hollyhock",
+  "lang": "block.crimson_hollyhock",
+  "tab": "natural",
+  "type": "tall_plant",
+  "model": "cross",
+  "render": "cutout",
+  "solid": false,
+  "hardness": 0.0,
+  "tool": "none",
+  "mining_level": 0,
+  "loot_table": "blocks/crimson_hollyhock",
+  "fluid_breakable": true,
+  "plant": true,
+  "requires_soil": true,
+  "textures": {
+    "cross": "crimson_hollyhock_bottom",
+    "upper": "crimson_hollyhock_top"
+  }
+}

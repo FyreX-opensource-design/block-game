@@ -1,0 +1,16 @@
+{
+  "id": "rose_thicket_flowers",
+  "blocks": {
+    "rose_bush": 3,
+    "crimson_hollyhock": 3,
+    "sweet_pea": 3,
+    "peony": 2,
+    "rose": 3,
+    "burgundy_dahlia": 3
+  },
+  "chance": 0.56,
+  "surfaces": [
+    "grass"
+  ],
+  "seed_offset": 8353
+}

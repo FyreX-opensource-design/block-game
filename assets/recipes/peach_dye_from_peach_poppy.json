@@ -1,0 +1,11 @@
+{
+  "id": "peach_dye_from_peach_poppy",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "peach_poppy"
+  ],
+  "result": {
+    "item": "peach_dye",
+    "count": 1
+  }
+}

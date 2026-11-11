@@ -1,0 +1,11 @@
+{
+  "id": "cyan_dye_from_sea_holly",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "sea_holly"
+  ],
+  "result": {
+    "item": "cyan_dye",
+    "count": 1
+  }
+}

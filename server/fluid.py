@@ -592,6 +592,31 @@ def get_entity_fluid_flow(world, min_x, min_y, min_z, max_x, max_y, max_z):
     return (out_fx, out_fy, out_fz)
 
 
+def _is_dropoff_cell(world, x, y, z, fluid_type=None):
+    """Return True if fluid at (x, y, z) can drop down into (x, y - 1, z)."""
+    if y <= 0:
+        return False
+    below = world.get_block(x, y - 1, z)
+    if can_flow_into(world, x, y - 1, z, fluid_type=fluid_type, from_y=y):
+        return True
+    # Non-source fluid below acts as a sink, whereas a full fluid source surface does not.
+    return is_fluid(below) and not is_fluid_source(below)
+
+
+def _blocks_horizontal_spread(world, x, y, z, block, fluid_type=None):
+    """Return True if fluid at (x, y, z) cannot spread sideways due to falling/ocean rules."""
+    if y <= 0:
+        return False
+    below = world.get_block(x, y - 1, z)
+    if can_flow_into(world, x, y - 1, z, fluid_type=fluid_type, from_y=y):
+        return True
+    if is_fluid(below):
+        # A full fluid source resting on another source (e.g., deep ocean) spreads sideways;
+        # a non-source stream hitting a pool/ocean does not fan out across the water surface.
+        return not (is_fluid_source(block) and is_fluid_source(below))
+    return False
+
+
 def find_dropoff_directions(world, x, y, z, max_dist=None):
     """Minecraft slope / dropoff pathfinding within dropoff_distance (default 4) blocks.
     Finds which cardinal directions lead to a dropoff (a place where fluid can
@@ -631,10 +656,7 @@ def find_dropoff_directions(world, x, y, z, max_dist=None):
         sz = z + start_dz
 
         # If immediate dropoff directly under start block
-        if y > 0 and (
-            can_flow_into(world, sx, y - 1, sz, fluid_type=fluid_type, from_y=y)
-            or is_fluid(world.get_block(sx, y - 1, sz))
-        ):
+        if _is_dropoff_cell(world, sx, y, sz, fluid_type=fluid_type):
             dir_distances[(start_dx, start_dz)] = 1
             if 1 < best_dist:
                 best_dist = 1
@@ -662,10 +684,7 @@ def find_dropoff_directions(world, x, y, z, max_dist=None):
                 if nbr_vs is not None and (-ddx, -ddz) == CARDINAL_FOR_FACING.get(nbr_vs["facing"]):
                     continue
                 visited.add((nnx, nnz))
-                if y > 0 and (
-                    can_flow_into(world, nnx, y - 1, nnz, fluid_type=fluid_type, from_y=y)
-                    or is_fluid(world.get_block(nnx, y - 1, nnz))
-                ):
+                if _is_dropoff_cell(world, nnx, y, nnz, fluid_type=fluid_type):
                     found_dist = dist + 1
                     queue.clear()
                     break
@@ -724,7 +743,7 @@ def compute_new_fluid_state(world, x, y, z):
             pot = _step_down_level(nbr, nbr_level, nbr_def)
             if pot <= 0:
                 continue
-            if y > 0 and (can_flow_into(world, nx, y - 1, nz, fluid_type=nbr_type, from_y=y) or is_fluid(world.get_block(nx, y - 1, nz))):
+            if _blocks_horizontal_spread(world, nx, y, nz, nbr, fluid_type=nbr_type):
                 continue
             dirs = find_dropoff_directions(world, nx, y, nz, max_dist=nbr_def.dropoff_distance)
             if (-dx, -dz) in dirs:
@@ -761,7 +780,7 @@ def compute_new_fluid_state(world, x, y, z):
                 pot = _step_down_level(nbr, nbr_level, nbr_def)
                 if pot <= 3:
                     continue
-                if y > 0 and (can_flow_into(world, nx, y - 1, nz, fluid_type=nbr_type, from_y=y) or is_fluid(world.get_block(nx, y - 1, nz))):
+                if _blocks_horizontal_spread(world, nx, y, nz, nbr, fluid_type=nbr_type):
                     continue
                 dirs = find_dropoff_directions(world, nx, y, nz, max_dist=nbr_def.dropoff_distance)
                 if (-dx, -dz) in dirs:
@@ -783,7 +802,7 @@ def compute_new_fluid_state(world, x, y, z):
                 pot = _step_down_level(nbr, nbr_level, nbr_def)
                 if pot <= 0:
                     continue
-                if y > 0 and (can_flow_into(world, nx, y - 1, nz, fluid_type=nbr_type, from_y=y) or is_fluid(world.get_block(nx, y - 1, nz))):
+                if _blocks_horizontal_spread(world, nx, y, nz, nbr, fluid_type=nbr_type):
                     continue
                 dirs = find_dropoff_directions(world, nx, y, nz, max_dist=nbr_def.dropoff_distance)
                 if (-dx, -dz) in dirs:
@@ -846,8 +865,7 @@ def compute_new_fluid_state(world, x, y, z):
             continue
         if not can_flow_into(world, x, y, z, from_level=nbr_level, from_y=y, fluid_type=nbr_type, from_x=nx, from_z=nz):
             continue
-        # If neighbor can fall down directly below it or is resting on fluid, it doesn't spread horizontally here
-        if y > 0 and (can_flow_into(world, nx, y - 1, nz, fluid_type=nbr_type, from_y=y) or is_fluid(world.get_block(nx, y - 1, nz))):
+        if _blocks_horizontal_spread(world, nx, y, nz, nbr, fluid_type=nbr_type):
             continue
         dirs = find_dropoff_directions(world, nx, y, nz, max_dist=nbr_def.dropoff_distance)
         if (-dx, -dz) in dirs:
@@ -864,9 +882,15 @@ class FluidSystem:
     def __init__(self, world):
         self.world = world
         self.queue = set()
+        self._order = collections.deque()
         self.tick_timer = 0.0
         self.tick_interval = 0.15
         self.fluid_timers = {}
+
+    def _enqueue(self, pos):
+        if pos not in self.queue:
+            self.queue.add(pos)
+            self._order.append(pos)
 
     def schedule(self, x, y, z):
         """Schedule a block and its 6 neighbors for fluid simulation if chunk is loaded."""
@@ -875,13 +899,13 @@ class FluidSystem:
         cx, cy, cz = self.world.chunk_key(x, y, z)
         if (cx, cy, cz) not in self.world.chunks:
             return
-        self.queue.add((x, y, z))
+        self._enqueue((x, y, z))
         for dx, dz in CARDINALS:
-            self.queue.add((x + dx, y, z + dz))
+            self._enqueue((x + dx, y, z + dz))
         if y > 0:
-            self.queue.add((x, y - 1, z))
+            self._enqueue((x, y - 1, z))
         if y + 1 < WORLD_HEIGHT:
-            self.queue.add((x, y + 1, z))
+            self._enqueue((x, y + 1, z))
 
     def _dominant_fluid_for_cell(self, x, y, z):
         blk = self.world.get_block(x, y, z)
@@ -901,6 +925,7 @@ class FluidSystem:
     def update(self, dt):
         """Tick fluid simulation in player loaded chunks, respecting each fluid's speed."""
         if not self.queue:
+            self._order.clear()
             self.tick_timer = 0.0
             self.fluid_timers.clear()
             return []
@@ -926,15 +951,26 @@ class FluidSystem:
         if not ready_fluids:
             return []
 
-        pending = list(self.queue)
+        pending = []
+        seen_pending = set()
+        while self._order:
+            pos = self._order.popleft()
+            if pos in self.queue and pos not in seen_pending:
+                pending.append(pos)
+                seen_pending.add(pos)
+        for pos in self.queue:
+            if pos not in seen_pending:
+                pending.append(pos)
+                seen_pending.add(pos)
         self.queue.clear()
+
         changed_blocks = []
         limit = 128
         count = 0
 
         for x, y, z in pending:
             if count >= limit:
-                self.queue.add((x, y, z))
+                self._enqueue((x, y, z))
                 continue
             cx, cy, cz = self.world.chunk_key(x, y, z)
             if (cx, cy, cz) not in self.world.chunks:
@@ -942,7 +978,7 @@ class FluidSystem:
 
             dom_fluid = self._dominant_fluid_for_cell(x, y, z)
             if dom_fluid not in ready_fluids:
-                self.queue.add((x, y, z))
+                self._enqueue((x, y, z))
                 continue
 
             count += 1
@@ -963,12 +999,13 @@ class FluidSystem:
                     can_fall_below = False
 
                 # If fluid can fall down, schedule below
+                cur_below = self.world.get_block(x, y - 1, z) if y > 0 else AIR
                 if can_fall_below and y > 0 and can_flow_into(self.world, x, y - 1, z, from_y=y, fluid_type=cur_type):
                     fall_blk = _fluid_falling_block(cur_type)
-                    if self.world.get_block(x, y - 1, z) != fall_blk:
-                        self.queue.add((x, y - 1, z))
-                elif y > 0 and is_fluid(self.world.get_block(x, y - 1, z)):
-                    # Fluid resting on fluid cannot spread horizontally
+                    if cur_below != fall_blk:
+                        self._enqueue((x, y - 1, z))
+                elif can_fall_below and y > 0 and is_fluid(cur_below) and not (is_fluid_source(cur) and is_fluid_source(cur_below)):
+                    # Non-source fluid resting on fluid cannot spread horizontally
                     pass
                 else:
                     cur_level = get_fluid_level(cur)
@@ -993,8 +1030,9 @@ class FluidSystem:
                                     if nbr_vs is not None
                                     else _fluid_level_block(cur_type, target_level)
                                 )
-                                if self.world.get_block(nx, y, nz) != expected:
-                                    self.queue.add((nx, y, nz))
+                                nbr_level = get_fluid_level(nbr) if (is_fluid(nbr) and get_fluid_type(nbr) == cur_type) else 0
+                                if nbr_level < target_level and nbr != expected:
+                                    self._enqueue((nx, y, nz))
 
             # Fluid collision transformation and fluid_meet interactions
             current_now = self.world.get_block(x, y, z)

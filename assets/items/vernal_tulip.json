@@ -1,0 +1,16 @@
+{
+  "id": "vernal_tulip",
+  "lang": "block.vernal_tulip",
+  "tab": "natural",
+  "model": "flat",
+  "block": "vernal_tulip",
+  "texture": "vernal_tulip",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 1,
+  "food": 0
+}

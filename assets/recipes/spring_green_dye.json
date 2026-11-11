@@ -1,0 +1,12 @@
+{
+  "id": "spring_green_dye",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "lime_dye",
+    "cyan_dye"
+  ],
+  "result": {
+    "item": "spring_green_dye",
+    "count": 2
+  }
+}

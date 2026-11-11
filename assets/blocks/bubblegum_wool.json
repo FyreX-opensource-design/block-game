@@ -1,0 +1,21 @@
+{
+  "id": "bubblegum_wool",
+  "lang": "block.bubblegum_wool",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 0.8,
+  "tool": "shears",
+  "mining_level": 0,
+  "textures": {
+    "top": "bubblegum_wool",
+    "side": "bubblegum_wool",
+    "bottom": "bubblegum_wool"
+  },
+  "properties": {
+    "tags": [
+      "wool"
+    ]
+  }
+}

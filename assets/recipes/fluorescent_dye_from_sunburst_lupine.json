@@ -1,0 +1,11 @@
+{
+  "id": "fluorescent_dye_from_sunburst_lupine",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "sunburst_lupine"
+  ],
+  "result": {
+    "item": "fluorescent_dye",
+    "count": 2
+  }
+}

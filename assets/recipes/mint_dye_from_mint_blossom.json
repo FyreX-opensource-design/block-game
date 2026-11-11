@@ -1,0 +1,11 @@
+{
+  "id": "mint_dye_from_mint_blossom",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "mint_blossom"
+  ],
+  "result": {
+    "item": "mint_dye",
+    "count": 1
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "id": "gray_dye",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "black_dye",
+    "white_dye"
+  ],
+  "result": {
+    "item": "gray_dye",
+    "count": 2
+  }
+}

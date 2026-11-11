@@ -1,0 +1,12 @@
+{
+  "id": "aquamarine_wool",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "#wool",
+    "aquamarine_dye"
+  ],
+  "result": {
+    "item": "aquamarine_wool",
+    "count": 1
+  }
+}

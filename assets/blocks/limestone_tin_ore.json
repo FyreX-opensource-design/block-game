@@ -11,8 +11,35 @@
   "loot_table": "blocks/limestone_tin_ore",
   "sound": "stone",
   "textures": {
-    "top": "limestone_tin_ore",
-    "side": "limestone_tin_ore",
-    "bottom": "limestone_tin_ore"
-  }
+    "top": "limestone_tin_ore/limestone_tin_ore_var_1",
+    "side": "limestone_tin_ore/limestone_tin_ore_var_1",
+    "bottom": "limestone_tin_ore/limestone_tin_ore_var_1"
+  },
+  "palettes": [
+    {
+      "top": "limestone_tin_ore/limestone_tin_ore_var_1",
+      "side": "limestone_tin_ore/limestone_tin_ore_var_1",
+      "bottom": "limestone_tin_ore/limestone_tin_ore_var_1"
+    },
+    {
+      "top": "limestone_tin_ore/limestone_tin_ore_var_2",
+      "side": "limestone_tin_ore/limestone_tin_ore_var_2",
+      "bottom": "limestone_tin_ore/limestone_tin_ore_var_2"
+    },
+    {
+      "top": "limestone_tin_ore/limestone_tin_ore_var_3",
+      "side": "limestone_tin_ore/limestone_tin_ore_var_3",
+      "bottom": "limestone_tin_ore/limestone_tin_ore_var_3"
+    },
+    {
+      "top": "limestone_tin_ore/limestone_tin_ore_var_4",
+      "side": "limestone_tin_ore/limestone_tin_ore_var_4",
+      "bottom": "limestone_tin_ore/limestone_tin_ore_var_4"
+    },
+    {
+      "top": "limestone_tin_ore/limestone_tin_ore_var_5",
+      "side": "limestone_tin_ore/limestone_tin_ore_var_5",
+      "bottom": "limestone_tin_ore/limestone_tin_ore_var_5"
+    }
+  ]
 }

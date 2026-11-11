@@ -1,0 +1,12 @@
+{
+  "id": "magenta_wool",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "#wool",
+    "magenta_dye"
+  ],
+  "result": {
+    "item": "magenta_wool",
+    "count": 1
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "id": "honey_wool",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "#wool",
+    "honey_dye"
+  ],
+  "result": {
+    "item": "honey_wool",
+    "count": 1
+  }
+}

@@ -43,6 +43,7 @@ def test_smooth_stones_palettes_and_ctm_registered():
         "smooth_marble",
         "smooth_limestone",
         "smooth_stone",
+        "smooth_sandstone",
     ]
     for stone_id in smooth_stones:
         block = BLOCKS.get(stone_id)
@@ -53,6 +54,49 @@ def test_smooth_stones_palettes_and_ctm_registered():
         assert len(block.palette_ctm_uvs) == 5, f"Block {stone_id} should have 5 palette_ctm_uvs"
         for p in range(5):
             assert len(block.palette_ctm_uvs[p]) == 16, f"Block {stone_id} palette {p} should have 16 CTM masks"
+            if stone_id in ("smooth_granite", "smooth_diorite", "smooth_sandstone"):
+                assert block.palettes[p]["ctm_3"] == f"{stone_id}/{stone_id}_var_14_{p + 1}"
+                assert block.palettes[p]["ctm_12"] == f"{stone_id}/{stone_id}_var_13_{p + 1}"
+                assert block.palettes[p]["ctm_15"] == f"{stone_id}/{stone_id}_var_15_{p + 1}"
+
+
+def test_stone_variants_palettes_registered():
+    stone_variants = [
+        "granite",
+        "diorite",
+        "andesite",
+        "marble",
+        "limestone",
+        "stone",
+        "sandstone",
+    ]
+    for stone_id in stone_variants:
+        block = BLOCKS.get(stone_id)
+        assert block is not None, f"Block {stone_id} not found in BLOCKS"
+        assert len(block.palettes) == 5, f"Block {stone_id} should have 5 palettes"
+        assert len(block.palette_face_uvs) == 5, f"Block {stone_id} should have 5 palette_face_uvs"
+        for p in range(5):
+            assert block.palettes[p]["top"] == f"{stone_id}/{stone_id}_var_{p + 1}"
+            assert block.palettes[p]["side"] == f"{stone_id}/{stone_id}_var_{p + 1}"
+            assert block.palettes[p]["bottom"] == f"{stone_id}/{stone_id}_var_{p + 1}"
+            assert block.palette_face_uvs[p] is not None
+
+
+def test_ore_variants_palettes_registered():
+    ores = ["coal", "copper", "iron", "tin"]
+    stones = ["stone", "granite", "andesite", "diorite", "limestone", "marble"]
+    for ore in ores:
+        for stone in stones:
+            block_id = f"{ore}_ore" if stone == "stone" else f"{stone}_{ore}_ore"
+            block = BLOCKS.get(block_id)
+            assert block is not None, f"Block {block_id} not found in BLOCKS"
+            assert len(block.palettes) == 5, f"Block {block_id} should have 5 palettes"
+            assert len(block.palette_face_uvs) == 5, f"Block {block_id} should have 5 palette_face_uvs"
+            for p in range(5):
+                assert block.palettes[p]["top"] == f"{block_id}/{block_id}_var_{p + 1}"
+                assert block.palettes[p]["side"] == f"{block_id}/{block_id}_var_{p + 1}"
+                assert block.palettes[p]["bottom"] == f"{block_id}/{block_id}_var_{p + 1}"
+                assert block.palette_face_uvs[p] is not None
 
 
 def test_ctm_mask_isolated_and_neighbors():

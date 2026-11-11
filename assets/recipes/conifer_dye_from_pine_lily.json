@@ -1,0 +1,11 @@
+{
+  "id": "conifer_dye_from_pine_lily",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "pine_lily"
+  ],
+  "result": {
+    "item": "conifer_dye",
+    "count": 1
+  }
+}

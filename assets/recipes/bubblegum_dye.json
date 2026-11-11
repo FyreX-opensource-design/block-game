@@ -1,0 +1,12 @@
+{
+  "id": "bubblegum_dye",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "magenta_dye",
+    "pink_dye"
+  ],
+  "result": {
+    "item": "bubblegum_dye",
+    "count": 2
+  }
+}

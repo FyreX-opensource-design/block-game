@@ -11,8 +11,35 @@
   "loot_table": "blocks/granite_coal_ore",
   "sound": "stone",
   "textures": {
-    "top": "granite_coal_ore",
-    "side": "granite_coal_ore",
-    "bottom": "granite_coal_ore"
-  }
+    "top": "granite_coal_ore/granite_coal_ore_var_1",
+    "side": "granite_coal_ore/granite_coal_ore_var_1",
+    "bottom": "granite_coal_ore/granite_coal_ore_var_1"
+  },
+  "palettes": [
+    {
+      "top": "granite_coal_ore/granite_coal_ore_var_1",
+      "side": "granite_coal_ore/granite_coal_ore_var_1",
+      "bottom": "granite_coal_ore/granite_coal_ore_var_1"
+    },
+    {
+      "top": "granite_coal_ore/granite_coal_ore_var_2",
+      "side": "granite_coal_ore/granite_coal_ore_var_2",
+      "bottom": "granite_coal_ore/granite_coal_ore_var_2"
+    },
+    {
+      "top": "granite_coal_ore/granite_coal_ore_var_3",
+      "side": "granite_coal_ore/granite_coal_ore_var_3",
+      "bottom": "granite_coal_ore/granite_coal_ore_var_3"
+    },
+    {
+      "top": "granite_coal_ore/granite_coal_ore_var_4",
+      "side": "granite_coal_ore/granite_coal_ore_var_4",
+      "bottom": "granite_coal_ore/granite_coal_ore_var_4"
+    },
+    {
+      "top": "granite_coal_ore/granite_coal_ore_var_5",
+      "side": "granite_coal_ore/granite_coal_ore_var_5",
+      "bottom": "granite_coal_ore/granite_coal_ore_var_5"
+    }
+  ]
 }

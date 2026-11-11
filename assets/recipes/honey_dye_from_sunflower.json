@@ -1,0 +1,11 @@
+{
+  "id": "honey_dye_from_sunflower",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "sunflower"
+  ],
+  "result": {
+    "item": "honey_dye",
+    "count": 2
+  }
+}

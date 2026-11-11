@@ -857,6 +857,49 @@ def get_door_block(base_id, half="lower", facing="south", open=False, hinge="lef
     return f"{base_id}_{half}_{facing}{hinge_str}{open_suffix}"
 
 
+def is_tall_plant(block_or_id):
+    """Return True if block_or_id is any half of a two-block tall plant."""
+    if not block_or_id:
+        return False
+    block = BLOCKS.get(block_or_id) if isinstance(block_or_id, str) else block_or_id
+    if block is None:
+        return False
+    props = getattr(block, "properties", {})
+    return bool(props.get("tall_plant") or getattr(block, "tall_plant", False))
+
+
+def get_tall_plant_info(block_or_id):
+    """Return tall plant metadata dict or None if not a two-block tall plant."""
+    if not block_or_id:
+        return None
+    block = BLOCKS.get(block_or_id) if isinstance(block_or_id, str) else block_or_id
+    if block is None:
+        return None
+    props = getattr(block, "properties", {})
+    if not (props.get("tall_plant") or getattr(block, "tall_plant", False)):
+        return None
+    b_id = getattr(block, "id", str(block_or_id))
+    base_id = getattr(block, "base_id", None) or b_id
+    if base_id == b_id and b_id.endswith("_top"):
+        base_id = b_id[:-4]
+    half = props.get("half")
+    if half is None:
+        half = "upper" if b_id.endswith("_top") else "lower"
+    return {
+        "base_id": base_id,
+        "half": half,
+        "lower": base_id,
+        "upper": f"{base_id}_top",
+    }
+
+
+def get_tall_plant_block(base_id, half="lower"):
+    """Return the block ID string for a tall plant half ('lower' or 'upper')."""
+    if half == "upper":
+        return f"{base_id}_top"
+    return str(base_id)
+
+
 def _get_door_elements(
     uv_main_front,
     uv_main_back,
@@ -2946,12 +2989,16 @@ def _load_registry():
         is_fence_type = (entry.get("type") == "fence" or properties.get("fence", False) or entry.get("model") == "fence_post") and not is_fence_gate_type
         is_wall_type = entry.get("type") == "wall" or properties.get("wall", False) or entry.get("model") == "wall_post"
         is_stairs_type = entry.get("type") == "stairs" or properties.get("stairs", False) or entry.get("model") == "stairs"
+        is_tall_plant_type = entry.get("type") == "tall_plant" or properties.get("tall_plant", False)
         rotation_type = properties.get("rotation") or entry.get("rotation")
         if not rotation_type and entry.get("model") == "orientable":
             rotation_type = "horizontal"
         if not rotation_type and is_vertical_slab_type:
             rotation_type = "horizontal"
         base_props = dict(properties)
+        if is_tall_plant_type:
+            base_props["tall_plant"] = True
+            base_props["half"] = properties.get("half", "lower")
         if is_slab_type:
             base_props["slab"] = True
             base_props["half"] = "bottom"
@@ -3323,6 +3370,66 @@ def _load_registry():
                     cook_speed=block.cook_speed,
                 )
                 _register_block(variant_id, var_block)
+
+        if is_tall_plant_type:
+            upper_tex = textures.get("upper") or textures.get("top") or textures.get("cross") or entry["id"]
+            upper_textures = dict(textures)
+            upper_textures["cross"] = upper_tex
+            upper_resolved = []
+            upper_face_uvs = [None] * len(FACE_INDEX)
+            for element in elements:
+                u_origin = [float(value) for value in element["from"]]
+                u_extent = [float(value) for value in element["to"]]
+                u_faces = {}
+                for face_name, spec in element["faces"].items():
+                    if face_name not in FACE_INDEX:
+                        continue
+                    t_name = _resolve_texture(spec["texture"], upper_textures, entry["id"], face_name=face_name)
+                    if t_name not in rects:
+                        t_name = upper_tex if upper_tex in rects else next(iter(rects))
+                    spec_uv = spec.get("uv", [0, 0, 16, 16])
+                    uv = _map_uv(rects[t_name], spec_uv)
+                    f_idx = FACE_INDEX[face_name]
+                    u_faces[f_idx] = uv
+                    if upper_face_uvs[f_idx] is None:
+                        upper_face_uvs[f_idx] = uv
+                upper_resolved.append({"from": u_origin, "to": u_extent, "faces": u_faces})
+            u_fallback = next((uv for uv in upper_face_uvs if uv is not None), None)
+            if u_fallback is not None:
+                upper_face_uvs = [uv if uv is not None else u_fallback for uv in upper_face_uvs]
+            upper_id = get_tall_plant_block(block.id, "upper")
+            upper_props = dict(base_props)
+            upper_props["tall_plant"] = True
+            upper_props["half"] = "upper"
+            upper_block = Block(
+                upper_id,
+                f"{name} (Top)",
+                False,
+                False,
+                tuple(upper_face_uvs),
+                tuple(upper_resolved),
+                cutout,
+                opacity,
+                (),
+                properties=upper_props,
+                base_id=block.id,
+                is_variant=True,
+                hardness=block.hardness,
+                tool=block.tool,
+                mining_level=block.mining_level,
+                loot_table=block.loot_table,
+                emission=block.emission,
+                gravity=block.gravity,
+                fluid_breakable=block.fluid_breakable,
+                soil=block.soil,
+                plant=True,
+                requires_soil=True,
+                valid_ground=block.valid_ground,
+                tint=block.tint,
+                sound=sound_val,
+                sounds=sounds_val,
+            )
+            _register_block(upper_id, upper_block)
 
         if is_door_type:
             lower_tex = textures.get("lower", entry["id"])
@@ -5510,5 +5617,13 @@ def can_place_block(world, x, y, z, block_id, hit=None):
         below_id = world.get_block(x, y - 1, z)
         if not can_sustain_plant(below_id, b_obj):
             return False
+
+        tp_info = get_tall_plant_info(b_obj)
+        if tp_info is not None and tp_info["half"] == "lower":
+            if y + 1 >= WORLD_HEIGHT:
+                return False
+            above_block = world.get_block(x, y + 1, z)
+            if above_block not in ("", AIR, None):
+                return False
 
     return True

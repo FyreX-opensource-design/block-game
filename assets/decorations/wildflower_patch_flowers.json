@@ -1,0 +1,18 @@
+{
+  "id": "wildflower_patch_flowers",
+  "blocks": {
+    "orange_tulip": 3,
+    "vernal_tulip": 3,
+    "marigold": 3,
+    "cornflower": 3,
+    "sunflower": 2,
+    "peony": 2,
+    "dandelion": 2,
+    "rose": 2
+  },
+  "chance": 0.56,
+  "surfaces": [
+    "grass"
+  ],
+  "seed_offset": 8151
+}

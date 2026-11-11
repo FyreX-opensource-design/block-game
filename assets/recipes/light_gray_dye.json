@@ -1,0 +1,12 @@
+{
+  "id": "light_gray_dye",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "gray_dye",
+    "white_dye"
+  ],
+  "result": {
+    "item": "light_gray_dye",
+    "count": 2
+  }
+}

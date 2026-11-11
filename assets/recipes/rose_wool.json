@@ -1,0 +1,12 @@
+{
+  "id": "rose_wool",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "#wool",
+    "rose_dye"
+  ],
+  "result": {
+    "item": "rose_wool",
+    "count": 1
+  }
+}

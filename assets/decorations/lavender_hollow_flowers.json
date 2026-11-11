@@ -1,0 +1,16 @@
+{
+  "id": "lavender_hollow_flowers",
+  "blocks": {
+    "lavender": 4,
+    "lilac": 3,
+    "delphinium": 3,
+    "indigo_spire": 2,
+    "cobalt_bellflower": 3,
+    "chocolate_cosmos": 2
+  },
+  "chance": 0.56,
+  "surfaces": [
+    "grass"
+  ],
+  "seed_offset": 8454
+}

@@ -1,0 +1,12 @@
+{
+  "id": "peach_wool",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "#wool",
+    "peach_dye"
+  ],
+  "result": {
+    "item": "peach_wool",
+    "count": 1
+  }
+}
