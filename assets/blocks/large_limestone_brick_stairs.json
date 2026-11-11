@@ -1,0 +1,19 @@
+{
+  "id": "large_limestone_brick_stairs",
+  "lang": "block.large_limestone_brick_stairs",
+  "type": "stairs",
+  "tab": [
+    "building"
+  ],
+  "model": "stairs",
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "sound": "stone",
+  "loot_table": "blocks/large_limestone_brick_stairs",
+  "textures": {
+    "top": "large_limestone_bricks",
+    "side": "large_limestone_bricks",
+    "bottom": "large_limestone_bricks"
+  }
+}

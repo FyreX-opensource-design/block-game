@@ -1,0 +1,15 @@
+{
+  "id": "ultramarine_bricks",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "##"
+  ],
+  "key": {
+    "#": "ultramarine_brick"
+  },
+  "result": {
+    "item": "ultramarine_bricks",
+    "count": 1
+  }
+}

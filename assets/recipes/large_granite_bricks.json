@@ -1,0 +1,15 @@
+{
+  "id": "large_granite_bricks",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "##"
+  ],
+  "key": {
+    "#": "smooth_granite"
+  },
+  "result": {
+    "item": "large_granite_bricks",
+    "count": 4
+  }
+}

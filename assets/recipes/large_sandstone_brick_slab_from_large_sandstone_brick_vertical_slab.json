@@ -1,0 +1,11 @@
+{
+  "id": "large_sandstone_brick_slab_from_large_sandstone_brick_vertical_slab",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "large_sandstone_brick_vertical_slab"
+  ],
+  "result": {
+    "item": "large_sandstone_brick_slab",
+    "count": 1
+  }
+}

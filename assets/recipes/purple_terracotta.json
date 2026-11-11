@@ -1,0 +1,17 @@
+{
+  "id": "purple_terracotta",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "terracotta",
+    "D": "purple_dye"
+  },
+  "result": {
+    "item": "purple_terracotta",
+    "count": 8
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "id": "large_andesite_brick_slab_from_large_andesite_brick_vertical_slab",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "large_andesite_brick_vertical_slab"
+  ],
+  "result": {
+    "item": "large_andesite_brick_slab",
+    "count": 1
+  }
+}

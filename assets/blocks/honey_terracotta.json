@@ -1,0 +1,18 @@
+{
+  "id": "honey_terracotta",
+  "lang": "block.honey_terracotta",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 1.25,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "loot_table": "blocks/honey_terracotta",
+  "sound": "stone",
+  "textures": {
+    "top": "terracotta/honey_terracotta",
+    "side": "terracotta/honey_terracotta",
+    "bottom": "terracotta/honey_terracotta"
+  }
+}

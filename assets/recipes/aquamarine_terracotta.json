@@ -1,0 +1,17 @@
+{
+  "id": "aquamarine_terracotta",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "terracotta",
+    "D": "aquamarine_dye"
+  },
+  "result": {
+    "item": "aquamarine_terracotta",
+    "count": 8
+  }
+}

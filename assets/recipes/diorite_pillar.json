@@ -1,0 +1,15 @@
+{
+  "id": "diorite_pillar",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "#"
+  ],
+  "key": {
+    "#": "smooth_diorite"
+  },
+  "result": {
+    "item": "diorite_pillar",
+    "count": 2
+  }
+}

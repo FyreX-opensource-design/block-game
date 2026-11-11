@@ -1,0 +1,16 @@
+{
+  "id": "wine_stained_glass_vertical_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "#",
+    "#"
+  ],
+  "key": {
+    "#": "wine_stained_glass_slab"
+  },
+  "result": {
+    "item": "wine_stained_glass_vertical_slab",
+    "count": 3
+  }
+}

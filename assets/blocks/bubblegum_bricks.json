@@ -1,0 +1,18 @@
+{
+  "id": "bubblegum_bricks",
+  "lang": "block.bubblegum_bricks",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "loot_table": "blocks/bubblegum_bricks",
+  "sound": "stone",
+  "textures": {
+    "top": "bricks/bubblegum_bricks",
+    "side": "bricks/bubblegum_bricks",
+    "bottom": "bricks/bubblegum_bricks"
+  }
+}

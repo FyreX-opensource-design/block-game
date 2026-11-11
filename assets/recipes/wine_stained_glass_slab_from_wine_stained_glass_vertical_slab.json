@@ -1,0 +1,11 @@
+{
+  "id": "wine_stained_glass_slab_from_wine_stained_glass_vertical_slab",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "wine_stained_glass_vertical_slab"
+  ],
+  "result": {
+    "item": "wine_stained_glass_slab",
+    "count": 1
+  }
+}

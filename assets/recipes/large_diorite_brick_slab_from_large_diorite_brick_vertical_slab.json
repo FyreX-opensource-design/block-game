@@ -1,0 +1,11 @@
+{
+  "id": "large_diorite_brick_slab_from_large_diorite_brick_vertical_slab",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "large_diorite_brick_vertical_slab"
+  ],
+  "result": {
+    "item": "large_diorite_brick_slab",
+    "count": 1
+  }
+}

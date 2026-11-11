@@ -1,0 +1,17 @@
+{
+  "id": "maroon_stained_glass",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "glass",
+    "D": "maroon_dye"
+  },
+  "result": {
+    "item": "maroon_stained_glass",
+    "count": 8
+  }
+}

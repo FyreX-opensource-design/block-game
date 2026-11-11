@@ -1,0 +1,47 @@
+{
+  "id": "granite_vertical_slab",
+  "lang": "block.granite_vertical_slab",
+  "type": "vertical_slab",
+  "tab": [
+    "building"
+  ],
+  "model": "vertical_slab",
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/granite_vertical_slab",
+  "full_block": "granite",
+  "sound": "stone",
+  "textures": {
+    "top": "granite/granite_var_1",
+    "side": "granite/granite_var_1",
+    "bottom": "granite/granite_var_1"
+  },
+  "palettes": [
+    {
+      "top": "granite/granite_var_1",
+      "side": "granite/granite_var_1",
+      "bottom": "granite/granite_var_1"
+    },
+    {
+      "top": "granite/granite_var_2",
+      "side": "granite/granite_var_2",
+      "bottom": "granite/granite_var_2"
+    },
+    {
+      "top": "granite/granite_var_3",
+      "side": "granite/granite_var_3",
+      "bottom": "granite/granite_var_3"
+    },
+    {
+      "top": "granite/granite_var_4",
+      "side": "granite/granite_var_4",
+      "bottom": "granite/granite_var_4"
+    },
+    {
+      "top": "granite/granite_var_5",
+      "side": "granite/granite_var_5",
+      "bottom": "granite/granite_var_5"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "id": "aquamarine_stained_glass_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###"
+  ],
+  "key": {
+    "#": "aquamarine_stained_glass"
+  },
+  "result": {
+    "item": "aquamarine_stained_glass_slab",
+    "count": 6
+  }
+}

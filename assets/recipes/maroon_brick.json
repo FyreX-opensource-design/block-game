@@ -1,0 +1,17 @@
+{
+  "id": "maroon_brick",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "brick",
+    "D": "maroon_dye"
+  },
+  "result": {
+    "item": "maroon_brick",
+    "count": 8
+  }
+}

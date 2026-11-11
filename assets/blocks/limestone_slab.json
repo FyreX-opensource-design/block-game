@@ -1,0 +1,46 @@
+{
+  "id": "limestone_slab",
+  "lang": "block.limestone_slab",
+  "type": "slab",
+  "tab": [
+    "building"
+  ],
+  "model": "slab",
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/limestone_slab",
+  "sound": "stone",
+  "textures": {
+    "top": "limestone/limestone_var_1",
+    "side": "limestone/limestone_var_1",
+    "bottom": "limestone/limestone_var_1"
+  },
+  "palettes": [
+    {
+      "top": "limestone/limestone_var_1",
+      "side": "limestone/limestone_var_1",
+      "bottom": "limestone/limestone_var_1"
+    },
+    {
+      "top": "limestone/limestone_var_2",
+      "side": "limestone/limestone_var_2",
+      "bottom": "limestone/limestone_var_2"
+    },
+    {
+      "top": "limestone/limestone_var_3",
+      "side": "limestone/limestone_var_3",
+      "bottom": "limestone/limestone_var_3"
+    },
+    {
+      "top": "limestone/limestone_var_4",
+      "side": "limestone/limestone_var_4",
+      "bottom": "limestone/limestone_var_4"
+    },
+    {
+      "top": "limestone/limestone_var_5",
+      "side": "limestone/limestone_var_5",
+      "bottom": "limestone/limestone_var_5"
+    }
+  ]
+}

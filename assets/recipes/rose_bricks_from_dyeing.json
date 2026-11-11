@@ -1,0 +1,17 @@
+{
+  "id": "rose_bricks_from_dyeing",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "bricks",
+    "D": "rose_dye"
+  },
+  "result": {
+    "item": "rose_bricks",
+    "count": 8
+  }
+}

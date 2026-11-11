@@ -1,0 +1,46 @@
+{
+  "id": "limestone_stairs",
+  "lang": "block.limestone_stairs",
+  "type": "stairs",
+  "tab": [
+    "building"
+  ],
+  "model": "stairs",
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "sound": "stone",
+  "loot_table": "blocks/limestone_stairs",
+  "textures": {
+    "top": "limestone/limestone_var_1",
+    "side": "limestone/limestone_var_1",
+    "bottom": "limestone/limestone_var_1"
+  },
+  "palettes": [
+    {
+      "top": "limestone/limestone_var_1",
+      "side": "limestone/limestone_var_1",
+      "bottom": "limestone/limestone_var_1"
+    },
+    {
+      "top": "limestone/limestone_var_2",
+      "side": "limestone/limestone_var_2",
+      "bottom": "limestone/limestone_var_2"
+    },
+    {
+      "top": "limestone/limestone_var_3",
+      "side": "limestone/limestone_var_3",
+      "bottom": "limestone/limestone_var_3"
+    },
+    {
+      "top": "limestone/limestone_var_4",
+      "side": "limestone/limestone_var_4",
+      "bottom": "limestone/limestone_var_4"
+    },
+    {
+      "top": "limestone/limestone_var_5",
+      "side": "limestone/limestone_var_5",
+      "bottom": "limestone/limestone_var_5"
+    }
+  ]
+}

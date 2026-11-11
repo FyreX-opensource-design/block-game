@@ -1,0 +1,11 @@
+{
+  "id": "persimmon_stained_glass_slab_from_persimmon_stained_glass_vertical_slab",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "persimmon_stained_glass_vertical_slab"
+  ],
+  "result": {
+    "item": "persimmon_stained_glass_slab",
+    "count": 1
+  }
+}

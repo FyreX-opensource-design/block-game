@@ -1,0 +1,17 @@
+{
+  "id": "red_stained_glass",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "glass",
+    "D": "red_dye"
+  },
+  "result": {
+    "item": "red_stained_glass",
+    "count": 8
+  }
+}

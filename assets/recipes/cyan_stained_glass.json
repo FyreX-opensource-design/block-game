@@ -1,0 +1,17 @@
+{
+  "id": "cyan_stained_glass",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "glass",
+    "D": "cyan_dye"
+  },
+  "result": {
+    "item": "cyan_stained_glass",
+    "count": 8
+  }
+}

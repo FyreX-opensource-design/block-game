@@ -1,0 +1,46 @@
+{
+  "id": "smooth_marble_stairs",
+  "lang": "block.smooth_marble_stairs",
+  "type": "stairs",
+  "tab": [
+    "building"
+  ],
+  "model": "stairs",
+  "hardness": 2.0,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "sound": "stone",
+  "loot_table": "blocks/smooth_marble_stairs",
+  "textures": {
+    "top": "smooth_marble/smooth_marble_var_0_1",
+    "side": "smooth_marble/smooth_marble_var_0_1",
+    "bottom": "smooth_marble/smooth_marble_var_0_1"
+  },
+  "palettes": [
+    {
+      "top": "smooth_marble/smooth_marble_var_0_1",
+      "side": "smooth_marble/smooth_marble_var_0_1",
+      "bottom": "smooth_marble/smooth_marble_var_0_1"
+    },
+    {
+      "top": "smooth_marble/smooth_marble_var_0_2",
+      "side": "smooth_marble/smooth_marble_var_0_2",
+      "bottom": "smooth_marble/smooth_marble_var_0_2"
+    },
+    {
+      "top": "smooth_marble/smooth_marble_var_0_3",
+      "side": "smooth_marble/smooth_marble_var_0_3",
+      "bottom": "smooth_marble/smooth_marble_var_0_3"
+    },
+    {
+      "top": "smooth_marble/smooth_marble_var_0_4",
+      "side": "smooth_marble/smooth_marble_var_0_4",
+      "bottom": "smooth_marble/smooth_marble_var_0_4"
+    },
+    {
+      "top": "smooth_marble/smooth_marble_var_0_5",
+      "side": "smooth_marble/smooth_marble_var_0_5",
+      "bottom": "smooth_marble/smooth_marble_var_0_5"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "id": "spring_green_brick",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "brick",
+    "D": "spring_green_dye"
+  },
+  "result": {
+    "item": "spring_green_brick",
+    "count": 8
+  }
+}

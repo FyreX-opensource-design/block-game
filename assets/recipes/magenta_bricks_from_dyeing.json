@@ -1,0 +1,17 @@
+{
+  "id": "magenta_bricks_from_dyeing",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "bricks",
+    "D": "magenta_dye"
+  },
+  "result": {
+    "item": "magenta_bricks",
+    "count": 8
+  }
+}

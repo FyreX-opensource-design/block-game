@@ -1,0 +1,11 @@
+{
+  "id": "smooth_diorite_slab_from_smooth_diorite_vertical_slab",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "smooth_diorite_vertical_slab"
+  ],
+  "result": {
+    "item": "smooth_diorite_slab",
+    "count": 1
+  }
+}

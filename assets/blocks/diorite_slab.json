@@ -1,0 +1,46 @@
+{
+  "id": "diorite_slab",
+  "lang": "block.diorite_slab",
+  "type": "slab",
+  "tab": [
+    "building"
+  ],
+  "model": "slab",
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/diorite_slab",
+  "sound": "stone",
+  "textures": {
+    "top": "diorite/diorite_var_1",
+    "side": "diorite/diorite_var_1",
+    "bottom": "diorite/diorite_var_1"
+  },
+  "palettes": [
+    {
+      "top": "diorite/diorite_var_1",
+      "side": "diorite/diorite_var_1",
+      "bottom": "diorite/diorite_var_1"
+    },
+    {
+      "top": "diorite/diorite_var_2",
+      "side": "diorite/diorite_var_2",
+      "bottom": "diorite/diorite_var_2"
+    },
+    {
+      "top": "diorite/diorite_var_3",
+      "side": "diorite/diorite_var_3",
+      "bottom": "diorite/diorite_var_3"
+    },
+    {
+      "top": "diorite/diorite_var_4",
+      "side": "diorite/diorite_var_4",
+      "bottom": "diorite/diorite_var_4"
+    },
+    {
+      "top": "diorite/diorite_var_5",
+      "side": "diorite/diorite_var_5",
+      "bottom": "diorite/diorite_var_5"
+    }
+  ]
+}

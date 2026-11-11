@@ -1,0 +1,18 @@
+{
+  "id": "lime_bricks",
+  "lang": "block.lime_bricks",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "loot_table": "blocks/lime_bricks",
+  "sound": "stone",
+  "textures": {
+    "top": "bricks/lime_bricks",
+    "side": "bricks/lime_bricks",
+    "bottom": "bricks/lime_bricks"
+  }
+}

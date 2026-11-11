@@ -1,0 +1,17 @@
+{
+  "id": "fluorescent_terracotta",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "terracotta",
+    "D": "fluorescent_dye"
+  },
+  "result": {
+    "item": "fluorescent_terracotta",
+    "count": 8
+  }
+}

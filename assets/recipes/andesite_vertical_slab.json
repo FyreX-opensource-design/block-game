@@ -1,0 +1,16 @@
+{
+  "id": "andesite_vertical_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "#",
+    "#"
+  ],
+  "key": {
+    "#": "andesite_slab"
+  },
+  "result": {
+    "item": "andesite_vertical_slab",
+    "count": 3
+  }
+}

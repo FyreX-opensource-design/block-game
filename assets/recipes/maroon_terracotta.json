@@ -1,0 +1,17 @@
+{
+  "id": "maroon_terracotta",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "terracotta",
+    "D": "maroon_dye"
+  },
+  "result": {
+    "item": "maroon_terracotta",
+    "count": 8
+  }
+}

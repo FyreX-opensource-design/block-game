@@ -1,0 +1,14 @@
+{
+  "id": "rose_stained_glass_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###"
+  ],
+  "key": {
+    "#": "rose_stained_glass"
+  },
+  "result": {
+    "item": "rose_stained_glass_slab",
+    "count": 6
+  }
+}

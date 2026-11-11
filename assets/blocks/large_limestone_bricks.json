@@ -1,0 +1,19 @@
+{
+  "id": "large_limestone_bricks",
+  "lang": "block.large_limestone_bricks",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/large_limestone_bricks",
+  "gravity": false,
+  "sound": "stone",
+  "textures": {
+    "top": "large_limestone_bricks",
+    "side": "large_limestone_bricks",
+    "bottom": "large_limestone_bricks"
+  }
+}

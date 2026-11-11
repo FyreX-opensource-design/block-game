@@ -1,0 +1,18 @@
+{
+  "id": "ultramarine_bricks",
+  "lang": "block.ultramarine_bricks",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "loot_table": "blocks/ultramarine_bricks",
+  "sound": "stone",
+  "textures": {
+    "top": "bricks/ultramarine_bricks",
+    "side": "bricks/ultramarine_bricks",
+    "bottom": "bricks/ultramarine_bricks"
+  }
+}

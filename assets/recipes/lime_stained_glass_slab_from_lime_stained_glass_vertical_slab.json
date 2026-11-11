@@ -1,0 +1,11 @@
+{
+  "id": "lime_stained_glass_slab_from_lime_stained_glass_vertical_slab",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "lime_stained_glass_vertical_slab"
+  ],
+  "result": {
+    "item": "lime_stained_glass_slab",
+    "count": 1
+  }
+}

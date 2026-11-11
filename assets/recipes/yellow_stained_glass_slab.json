@@ -1,0 +1,14 @@
+{
+  "id": "yellow_stained_glass_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###"
+  ],
+  "key": {
+    "#": "yellow_stained_glass"
+  },
+  "result": {
+    "item": "yellow_stained_glass_slab",
+    "count": 6
+  }
+}

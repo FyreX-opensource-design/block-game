@@ -1,0 +1,18 @@
+{
+  "id": "maroon_terracotta",
+  "lang": "block.maroon_terracotta",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 1.25,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "loot_table": "blocks/maroon_terracotta",
+  "sound": "stone",
+  "textures": {
+    "top": "terracotta/maroon_terracotta",
+    "side": "terracotta/maroon_terracotta",
+    "bottom": "terracotta/maroon_terracotta"
+  }
+}

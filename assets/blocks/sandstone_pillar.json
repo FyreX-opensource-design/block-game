@@ -1,0 +1,21 @@
+{
+  "id": "sandstone_pillar",
+  "lang": "block.sandstone_pillar",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "loot_table": "blocks/sandstone_pillar",
+  "sound": "stone",
+  "properties": {
+    "rotation": "axis"
+  },
+  "textures": {
+    "top": "sandstone_pillar_top",
+    "side": "sandstone_pillar_side",
+    "bottom": "sandstone_pillar_top"
+  }
+}

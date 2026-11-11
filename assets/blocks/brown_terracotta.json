@@ -1,0 +1,18 @@
+{
+  "id": "brown_terracotta",
+  "lang": "block.brown_terracotta",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 1.25,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "loot_table": "blocks/brown_terracotta",
+  "sound": "stone",
+  "textures": {
+    "top": "terracotta/brown_terracotta",
+    "side": "terracotta/brown_terracotta",
+    "bottom": "terracotta/brown_terracotta"
+  }
+}

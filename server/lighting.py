@@ -142,14 +142,22 @@ _EMISSION_LUT = None
 
 def _get_luts():
     global _OPACITY_LUT, _EMISSION_LUT
-    if _OPACITY_LUT is not None:
-        return _OPACITY_LUT, _EMISSION_LUT
     from server.blocks import BY_INDEX
+
+    if _OPACITY_LUT is not None and len(_OPACITY_LUT) >= len(BY_INDEX):
+        return _OPACITY_LUT, _EMISSION_LUT
 
     lut_size = max(256, len(BY_INDEX))
     op_lut = np.zeros(lut_size, dtype=np.int16)
     em_lut = np.zeros((lut_size, 5), dtype=np.int16)
-    for i, b in enumerate(BY_INDEX):
+    start = 0
+    if _OPACITY_LUT is not None:
+        prev_len = len(_OPACITY_LUT)
+        op_lut[:prev_len] = _OPACITY_LUT
+        em_lut[:prev_len] = _EMISSION_LUT
+        start = prev_len
+    for i in range(start, len(BY_INDEX)):
+        b = BY_INDEX[i]
         if b is not None:
             op_lut[i] = get_block_opacity(b)
             em_lut[i] = get_block_emission(b)

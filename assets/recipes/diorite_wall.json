@@ -1,0 +1,15 @@
+{
+  "id": "diorite_wall",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "###"
+  ],
+  "key": {
+    "#": "diorite"
+  },
+  "result": {
+    "item": "diorite_wall",
+    "count": 6
+  }
+}

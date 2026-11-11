@@ -1,0 +1,14 @@
+{
+  "id": "amber_stained_glass_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###"
+  ],
+  "key": {
+    "#": "amber_stained_glass"
+  },
+  "result": {
+    "item": "amber_stained_glass_slab",
+    "count": 6
+  }
+}

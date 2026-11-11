@@ -1,0 +1,17 @@
+{
+  "id": "gray_stained_glass",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "glass",
+    "D": "gray_dye"
+  },
+  "result": {
+    "item": "gray_stained_glass",
+    "count": 8
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "id": "granite_wall",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "###"
+  ],
+  "key": {
+    "#": "granite"
+  },
+  "result": {
+    "item": "granite_wall",
+    "count": 6
+  }
+}

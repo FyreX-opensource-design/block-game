@@ -1,0 +1,18 @@
+{
+  "id": "green_bricks",
+  "lang": "block.green_bricks",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "loot_table": "blocks/green_bricks",
+  "sound": "stone",
+  "textures": {
+    "top": "bricks/green_bricks",
+    "side": "bricks/green_bricks",
+    "bottom": "bricks/green_bricks"
+  }
+}

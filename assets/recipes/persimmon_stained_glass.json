@@ -1,0 +1,17 @@
+{
+  "id": "persimmon_stained_glass",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "glass",
+    "D": "persimmon_dye"
+  },
+  "result": {
+    "item": "persimmon_stained_glass",
+    "count": 8
+  }
+}

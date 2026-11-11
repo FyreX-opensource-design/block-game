@@ -1,0 +1,17 @@
+{
+  "id": "cyan_brick",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "brick",
+    "D": "cyan_dye"
+  },
+  "result": {
+    "item": "cyan_brick",
+    "count": 8
+  }
+}

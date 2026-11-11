@@ -1,0 +1,15 @@
+{
+  "id": "peach_bricks",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "##"
+  ],
+  "key": {
+    "#": "peach_brick"
+  },
+  "result": {
+    "item": "peach_bricks",
+    "count": 1
+  }
+}

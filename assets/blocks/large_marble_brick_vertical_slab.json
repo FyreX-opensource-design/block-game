@@ -1,0 +1,20 @@
+{
+  "id": "large_marble_brick_vertical_slab",
+  "lang": "block.large_marble_brick_vertical_slab",
+  "type": "vertical_slab",
+  "tab": [
+    "building"
+  ],
+  "model": "vertical_slab",
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/large_marble_brick_vertical_slab",
+  "full_block": "large_marble_bricks",
+  "sound": "stone",
+  "textures": {
+    "top": "large_marble_bricks",
+    "side": "large_marble_bricks",
+    "bottom": "large_marble_bricks"
+  }
+}

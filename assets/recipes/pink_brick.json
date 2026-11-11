@@ -1,0 +1,17 @@
+{
+  "id": "pink_brick",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "brick",
+    "D": "pink_dye"
+  },
+  "result": {
+    "item": "pink_brick",
+    "count": 8
+  }
+}

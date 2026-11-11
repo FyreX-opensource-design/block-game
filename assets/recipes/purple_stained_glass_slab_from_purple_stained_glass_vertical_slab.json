@@ -1,0 +1,11 @@
+{
+  "id": "purple_stained_glass_slab_from_purple_stained_glass_vertical_slab",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "purple_stained_glass_vertical_slab"
+  ],
+  "result": {
+    "item": "purple_stained_glass_slab",
+    "count": 1
+  }
+}

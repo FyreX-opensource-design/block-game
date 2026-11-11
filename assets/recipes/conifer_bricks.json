@@ -1,0 +1,15 @@
+{
+  "id": "conifer_bricks",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "##"
+  ],
+  "key": {
+    "#": "conifer_brick"
+  },
+  "result": {
+    "item": "conifer_bricks",
+    "count": 1
+  }
+}

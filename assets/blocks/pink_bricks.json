@@ -1,0 +1,18 @@
+{
+  "id": "pink_bricks",
+  "lang": "block.pink_bricks",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "loot_table": "blocks/pink_bricks",
+  "sound": "stone",
+  "textures": {
+    "top": "bricks/pink_bricks",
+    "side": "bricks/pink_bricks",
+    "bottom": "bricks/pink_bricks"
+  }
+}

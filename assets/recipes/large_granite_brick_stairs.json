@@ -1,0 +1,16 @@
+{
+  "id": "large_granite_brick_stairs",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#  ",
+    "## ",
+    "###"
+  ],
+  "key": {
+    "#": "large_granite_bricks"
+  },
+  "result": {
+    "item": "large_granite_brick_stairs",
+    "count": 4
+  }
+}

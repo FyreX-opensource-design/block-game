@@ -12,6 +12,7 @@ from server.blocks import (
     block_from_index,
     block_palette_index,
     block_palette_indices_grid,
+    get_block_ctm_uv,
     get_glass_ctm_uv,
     get_offset_info,
     has_half_offset_top,
@@ -191,6 +192,8 @@ def _mask(data, cutout):
         block = block_from_index(int(value))
         if block is None or block.cutout != cutout:
             continue
+        if getattr(block, "translucent", False):
+            continue
         if block.properties.get("fluid"):
             continue
         if not block.full_cube:
@@ -201,11 +204,25 @@ def _mask(data, cutout):
     return mask
 
 
+def _mask_translucent(data):
+    mask = np.zeros(data.shape, dtype=bool)
+    for value in np.unique(data):
+        block = block_from_index(int(value))
+        if block is None or not getattr(block, "translucent", False):
+            continue
+        if block.properties.get("fluid"):
+            continue
+        if not block.full_cube:
+            continue
+        mask |= data == value
+    return mask
+
+
 def _mask_glass(data):
     mask = np.zeros(data.shape, dtype=bool)
     for value in np.unique(data):
         block = block_from_index(int(value))
-        if block is not None and is_glass(block) and block.full_cube:
+        if block is not None and is_glass(block) and block.full_cube and not getattr(block, "translucent", False):
             mask |= data == value
     return mask
 
@@ -622,19 +639,22 @@ def build_chunk_mesh(world, cx, cy, cz):
     ]
     own = occ[1:-1, 1:-1, 1:-1].copy()
     own_see = see[1:-1, 1:-1, 1:-1].copy()
+    own_trans = _mask_translucent(chunk.data)
     if partial_ids:
         partial_mask = np.isin(chunk.data, np.asarray(partial_ids, dtype=chunk.data.dtype))
         own[partial_mask] = False
         own_see[partial_mask] = False
+        own_trans[partial_mask] = False
     faces, total = _exposed(own, occ)
     cutout_faces, cutout_total = _exposed(own_see, occ, see, glass=glass)
+    trans_faces, trans_total = _exposed(own_trans, occ)
     partial_cells = (
         np.argwhere(np.isin(chunk.data, np.asarray(partial_ids, dtype=chunk.data.dtype))) if partial_ids else ()
     )
     fluid_mask = fluid_h[1:-1, 1:-1, 1:-1] > 0
     fluid_ys, fluid_zs, fluid_xs = np.nonzero(fluid_mask) if np.any(fluid_mask) else ((), (), ())
 
-    if total == 0 and cutout_total == 0 and len(partial_cells) == 0 and len(fluid_ys) == 0:
+    if total == 0 and cutout_total == 0 and trans_total == 0 and len(partial_cells) == 0 and len(fluid_ys) == 0:
         return None
 
     l_grid = _build_light_grid(world, cx, cy, cz, chunk)
@@ -720,6 +740,13 @@ def build_chunk_mesh(world, cx, cy, cz):
         if cutout_total
         else None
     )
+    translucent_base = (
+        _emit_cutout(world, chunk.data, trans_faces, trans_total, x0, y0, z0, l_grid, grass_grid)
+        if trans_total
+        else None
+    )
+    if translucent_base is not None and len(translucent_base[0]) == 0:
+        translucent_base = None
 
     extra_vertices = []
     extra_indices = []
@@ -735,7 +762,7 @@ def build_chunk_mesh(world, cx, cy, cz):
     translucent_color = []
     cursor_opaque = total * 4
     cursor_cutout = len(cutout[0]) if cutout is not None else 0
-    cursor_translucent = 0
+    cursor_translucent = len(translucent_base[0]) if translucent_base is not None else 0
 
     from server.blocks import (
         has_half_offset_top,
@@ -804,7 +831,12 @@ def build_chunk_mesh(world, cx, cy, cz):
                 else:
                     pt_color = (1.0, 1.0, 1.0)
 
-                el_cutout = element.get("cutout", block.cutout)
+                el_translucent = (
+                    bool(element["translucent"])
+                    if "translucent" in element
+                    else bool(getattr(block, "translucent", False))
+                )
+                el_cutout = False if el_translucent else element.get("cutout", block.cutout)
                 el_is_glass = element.get("glass") if "glass" in element else is_glass(block)
                 if from_y < -1e-3:
                     if el_is_glass and _should_cull_glass_element_face(world, wx, wy, wz, block, element, normal_i):
@@ -878,7 +910,7 @@ def build_chunk_mesh(world, cx, cy, cz):
                 if el_is_glass and GLASS_CTM_UVS:
                     m = _get_glass_face_ctm_mask(world, wx, wy, wz, normal_i, block=block, element=element)
                     spec_uv = element.get("face_uv_specs", {}).get(normal_i, [0, 0, 16, 16])
-                    uvs = get_glass_ctm_uv(m, spec_uv) or uvs
+                    uvs = get_block_ctm_uv(block, m, spec_uv) or uvs
                 elif getattr(block, "ctm", False) and getattr(block, "palette_ctm_uvs", None) and len(block.palette_ctm_uvs) > 0:
                     seed = world.seed if world is not None else 0
                     num_p = len(block.palette_face_uvs) if getattr(block, "palette_face_uvs", None) else 1
@@ -901,7 +933,27 @@ def build_chunk_mesh(world, cx, cy, cz):
                     else:
                         uvs = block.palette_face_uvs[p_idx][normal_i]
                 points = _element_corners(element, normal_i)
-                if el_cutout:
+                if el_translucent:
+                    base = cursor_translucent
+                    for corner, uv in zip(points, uvs):
+                        translucent_vert.extend(
+                            (
+                                int(x) + corner[0],
+                                int(y) + corner[1],
+                                int(z) + corner[2],
+                                NORMALS[normal_i, 0],
+                                NORMALS[normal_i, 1],
+                                NORMALS[normal_i, 2],
+                                uv[0],
+                                uv[1],
+                                shade,
+                            )
+                        )
+                        translucent_light.append(l_sample)
+                        translucent_color.append(pt_color)
+                        cursor_translucent += 1
+                    translucent_ind.extend((base, base + 1, base + 2, base, base + 2, base + 3))
+                elif el_cutout:
                     base = cursor_cutout
                     for corner, uv in zip(points, uvs):
                         cutout_extra_vert.extend(
@@ -1343,12 +1395,22 @@ def build_chunk_mesh(world, cx, cy, cz):
     translucent_lights = None
     translucent_colors = None
     if translucent_vert:
-        translucent = (
-            np.asarray(translucent_vert, dtype=np.float32).reshape(-1, 9),
-            np.asarray(translucent_ind, dtype=np.uint32),
-        )
-        translucent_lights = np.asarray(translucent_light, dtype=np.float32).reshape(-1, 6)
-        translucent_colors = np.asarray(translucent_color, dtype=np.float32).reshape(-1, 3)
+        tv = np.asarray(translucent_vert, dtype=np.float32).reshape(-1, 9)
+        ti = np.asarray(translucent_ind, dtype=np.uint32)
+        tl = np.asarray(translucent_light, dtype=np.float32).reshape(-1, 6)
+        tc = np.asarray(translucent_color, dtype=np.float32).reshape(-1, 3)
+        if translucent_base is not None:
+            translucent = (np.vstack((translucent_base[0], tv)), np.concatenate((translucent_base[1], ti)))
+            translucent_lights = np.vstack((translucent_base[2], tl))
+            translucent_colors = np.vstack((translucent_base[3], tc))
+        else:
+            translucent = (tv, ti)
+            translucent_lights = tl
+            translucent_colors = tc
+    elif translucent_base is not None:
+        translucent = (translucent_base[0], translucent_base[1])
+        translucent_lights = translucent_base[2]
+        translucent_colors = translucent_base[3]
 
     if extra_vertices:
         vertices = np.vstack((vertices, np.asarray(extra_vertices, dtype=np.float32).reshape(-1, 9)))
@@ -1503,8 +1565,19 @@ def _query_nearby_elements(world, px, py, pz):
     return els
 
 
-def _is_glass_face_culled(world, wx, wy, wz, normal_i):
-    return _should_cull_glass_element_face(world, wx, wy, wz, BLOCKS.get("glass"), None, normal_i)
+def _glass_group(block):
+    if block is None:
+        return None
+    props = getattr(block, "properties", {})
+    if props.get("ctm_group"):
+        return props["ctm_group"]
+    if props.get("stained_glass") or getattr(block, "translucent", False):
+        return getattr(block, "base_id", None) or block.id
+    return "glass"
+
+
+def _is_glass_face_culled(world, wx, wy, wz, normal_i, block=None):
+    return _should_cull_glass_element_face(world, wx, wy, wz, block or BLOCKS.get("glass"), None, normal_i)
 
 
 def _glass_face_connects(world, wx, wy, wz, normal_i, d_vec, block=None, element=None):
@@ -1565,6 +1638,8 @@ def _glass_face_connects(world, wx, wy, wz, normal_i, d_vec, block=None, element
         found = False
         for nbr in _query_nearby_elements(world, q_x, q_y, q_z):
             if not nbr["glass"]:
+                continue
+            if block is not None and _glass_group(nbr["block"]) != _glass_group(block):
                 continue
             if normal_i not in nbr["faces"]:
                 continue
@@ -1694,8 +1769,11 @@ def _should_cull_glass_element_face(world, wx, wy, wz, block, element, normal_i)
                 # Skip self element
                 if nbr["box"] == my_box and (element is None or nbr["element"] is element):
                     continue
-                # Must be glass or opaque solid
-                if not (nbr["glass"] or nbr["opaque"]):
+                # Must be matching glass group or opaque solid
+                if nbr["glass"]:
+                    if block is not None and _glass_group(nbr["block"]) != _glass_group(block):
+                        continue
+                elif not nbr["opaque"]:
                     continue
                 if opp_normal_i not in nbr["faces"]:
                     continue
@@ -1790,7 +1868,7 @@ def _emit_cutout(world, data, faces, total, x0, y0, z0, l_grid=None, grass_grid=
                     wx = x0 + int(xx[i])
                     wy = y0 + int(yy[i])
                     wz = z0 + int(zz[i])
-                    if _is_glass_face_culled(world, wx, wy, wz, normal_i):
+                    if _is_glass_face_culled(world, wx, wy, wz, normal_i, block=block):
                         continue
 
                     el_u0 = _get_face_sub_element(normal_i, 0.0, 0.5, 0.0, 1.0)
@@ -1855,7 +1933,7 @@ def _emit_cutout(world, data, faces, total, x0, y0, z0, l_grid=None, grass_grid=
                             mv0 = int(round((1.0 - vb) * 16.0))
                             mv1 = int(round((1.0 - va) * 16.0))
                             spec_uv = [mu0, mv0, mu1, mv1]
-                            uv = get_glass_ctm_uv(m, spec_uv) or GLASS_CTM_UVS[m]
+                            uv = get_block_ctm_uv(block, m, spec_uv) or GLASS_CTM_UVS[m]
                             p0 = (1.0 - ua) * (1.0 - va) * v0 + ua * (1.0 - va) * v1 + ua * va * v2 + (1.0 - ua) * va * v3
                             p1 = (1.0 - ub) * (1.0 - va) * v0 + ub * (1.0 - va) * v1 + ub * va * v2 + (1.0 - ub) * va * v3
                             p2 = (1.0 - ub) * (1.0 - vb) * v0 + ub * (1.0 - vb) * v1 + ub * vb * v2 + (1.0 - ub) * vb * v3
@@ -1863,7 +1941,7 @@ def _emit_cutout(world, data, faces, total, x0, y0, z0, l_grid=None, grass_grid=
                             sub_quads.append((np.array([p0, p1, p2, p3]), uv))
                     else:
                         m = _get_glass_face_ctm_mask(world, wx, wy, wz, normal_i, block=block)
-                        sub_quads.append((positions[i], GLASS_CTM_UVS[m]))
+                        sub_quads.append((positions[i], get_block_ctm_uv(block, m) or GLASS_CTM_UVS[m]))
 
                     for h_pos, h_uv in sub_quads:
                         vertices[cursor : cursor + 4, 0:3] = h_pos

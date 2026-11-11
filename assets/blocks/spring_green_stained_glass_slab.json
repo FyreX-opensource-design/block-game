@@ -1,0 +1,42 @@
+{
+  "id": "spring_green_stained_glass_slab",
+  "lang": "block.spring_green_stained_glass_slab",
+  "type": "slab",
+  "tab": [
+    "building"
+  ],
+  "model": "slab",
+  "render": "translucent",
+  "solid": true,
+  "hardness": 0.3,
+  "tool": "none",
+  "mining_level": 0,
+  "loot_table": "blocks/spring_green_stained_glass_slab",
+  "properties": {
+    "glass": true,
+    "stained_glass": true,
+    "ctm_group": "spring_green_stained_glass"
+  },
+  "ctm": true,
+  "textures": {
+    "top": "stained_glass/spring_green/spring_green_stained_glass_0",
+    "side": "stained_glass/spring_green/spring_green_stained_glass_0",
+    "bottom": "stained_glass/spring_green/spring_green_stained_glass_0",
+    "ctm_0": "stained_glass/spring_green/spring_green_stained_glass_0",
+    "ctm_1": "stained_glass/spring_green/spring_green_stained_glass_1",
+    "ctm_2": "stained_glass/spring_green/spring_green_stained_glass_2",
+    "ctm_3": "stained_glass/spring_green/spring_green_stained_glass_3",
+    "ctm_4": "stained_glass/spring_green/spring_green_stained_glass_4",
+    "ctm_5": "stained_glass/spring_green/spring_green_stained_glass_5",
+    "ctm_6": "stained_glass/spring_green/spring_green_stained_glass_6",
+    "ctm_7": "stained_glass/spring_green/spring_green_stained_glass_7",
+    "ctm_8": "stained_glass/spring_green/spring_green_stained_glass_8",
+    "ctm_9": "stained_glass/spring_green/spring_green_stained_glass_9",
+    "ctm_10": "stained_glass/spring_green/spring_green_stained_glass_10",
+    "ctm_11": "stained_glass/spring_green/spring_green_stained_glass_11",
+    "ctm_12": "stained_glass/spring_green/spring_green_stained_glass_12",
+    "ctm_13": "stained_glass/spring_green/spring_green_stained_glass_13",
+    "ctm_14": "stained_glass/spring_green/spring_green_stained_glass_14",
+    "ctm_15": "stained_glass/spring_green/spring_green_stained_glass_15"
+  }
+}

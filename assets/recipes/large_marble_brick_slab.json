@@ -1,0 +1,14 @@
+{
+  "id": "large_marble_brick_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###"
+  ],
+  "key": {
+    "#": "large_marble_bricks"
+  },
+  "result": {
+    "item": "large_marble_brick_slab",
+    "count": 6
+  }
+}

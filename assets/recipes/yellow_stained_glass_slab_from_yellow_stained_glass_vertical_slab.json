@@ -1,0 +1,11 @@
+{
+  "id": "yellow_stained_glass_slab_from_yellow_stained_glass_vertical_slab",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "yellow_stained_glass_vertical_slab"
+  ],
+  "result": {
+    "item": "yellow_stained_glass_slab",
+    "count": 1
+  }
+}

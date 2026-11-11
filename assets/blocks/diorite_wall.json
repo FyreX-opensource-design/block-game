@@ -1,0 +1,50 @@
+{
+  "id": "diorite_wall",
+  "lang": "block.diorite_wall",
+  "tab": [
+    "building"
+  ],
+  "model": "wall_post",
+  "type": "wall",
+  "solid": true,
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "sound": "stone",
+  "loot_table": "blocks/diorite_wall",
+  "properties": {
+    "wall": true
+  },
+  "textures": {
+    "top": "diorite/diorite_var_1",
+    "side": "diorite/diorite_var_1",
+    "texture": "diorite/diorite_var_1"
+  },
+  "palettes": [
+    {
+      "top": "diorite/diorite_var_1",
+      "side": "diorite/diorite_var_1",
+      "texture": "diorite/diorite_var_1"
+    },
+    {
+      "top": "diorite/diorite_var_2",
+      "side": "diorite/diorite_var_2",
+      "texture": "diorite/diorite_var_2"
+    },
+    {
+      "top": "diorite/diorite_var_3",
+      "side": "diorite/diorite_var_3",
+      "texture": "diorite/diorite_var_3"
+    },
+    {
+      "top": "diorite/diorite_var_4",
+      "side": "diorite/diorite_var_4",
+      "texture": "diorite/diorite_var_4"
+    },
+    {
+      "top": "diorite/diorite_var_5",
+      "side": "diorite/diorite_var_5",
+      "texture": "diorite/diorite_var_5"
+    }
+  ]
+}

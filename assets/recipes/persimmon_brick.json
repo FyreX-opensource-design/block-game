@@ -1,0 +1,17 @@
+{
+  "id": "persimmon_brick",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "brick",
+    "D": "persimmon_dye"
+  },
+  "result": {
+    "item": "persimmon_brick",
+    "count": 8
+  }
+}

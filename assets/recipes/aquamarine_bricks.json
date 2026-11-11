@@ -1,0 +1,15 @@
+{
+  "id": "aquamarine_bricks",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "##"
+  ],
+  "key": {
+    "#": "aquamarine_brick"
+  },
+  "result": {
+    "item": "aquamarine_bricks",
+    "count": 1
+  }
+}

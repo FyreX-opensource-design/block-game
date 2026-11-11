@@ -1,0 +1,21 @@
+{
+  "id": "diorite_pillar",
+  "lang": "block.diorite_pillar",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "loot_table": "blocks/diorite_pillar",
+  "sound": "stone",
+  "properties": {
+    "rotation": "axis"
+  },
+  "textures": {
+    "top": "diorite_pillar_top",
+    "side": "diorite_pillar_side",
+    "bottom": "diorite_pillar_top"
+  }
+}
