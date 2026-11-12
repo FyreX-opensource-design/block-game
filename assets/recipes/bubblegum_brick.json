@@ -1,0 +1,17 @@
+{
+  "id": "bubblegum_brick",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "brick",
+    "D": "bubblegum_dye"
+  },
+  "result": {
+    "item": "bubblegum_brick",
+    "count": 8
+  }
+}

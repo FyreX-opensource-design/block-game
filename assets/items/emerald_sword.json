@@ -1,0 +1,17 @@
+{
+  "id": "emerald_sword",
+  "lang": "item.emerald_sword",
+  "tab": "tools",
+  "model": "flat",
+  "texture": "emerald_sword",
+  "tool": "sword",
+  "max_stack": 1,
+  "left": "attack",
+  "right": "none",
+  "durability": 520,
+  "mining_level": 0,
+  "mining_speed": 1.0,
+  "attack": 8.5,
+  "food": 0,
+  "repair": "emerald"
+}

@@ -1,18 +1,45 @@
 {
-    "id": "tin_ore",
-    "lang": "block.tin_ore",
-    "tab": [
-        "natural"
-    ],
-    "model": "cube",
-    "hardness": 3.0,
-    "tool": "pickaxe",
-    "mining_level": 1,
-    "loot_table": "blocks/tin_ore",
-    "sound": "stone",
-    "textures": {
-        "top": "tin_ore",
-        "side": "tin_ore",
-        "bottom": "tin_ore"
+  "id": "tin_ore",
+  "lang": "block.tin_ore",
+  "tab": [
+    "natural"
+  ],
+  "model": "cube",
+  "hardness": 3.0,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/tin_ore",
+  "sound": "stone",
+  "textures": {
+    "top": "tin_ore/tin_ore_var_1",
+    "side": "tin_ore/tin_ore_var_1",
+    "bottom": "tin_ore/tin_ore_var_1"
+  },
+  "palettes": [
+    {
+      "top": "tin_ore/tin_ore_var_1",
+      "side": "tin_ore/tin_ore_var_1",
+      "bottom": "tin_ore/tin_ore_var_1"
+    },
+    {
+      "top": "tin_ore/tin_ore_var_2",
+      "side": "tin_ore/tin_ore_var_2",
+      "bottom": "tin_ore/tin_ore_var_2"
+    },
+    {
+      "top": "tin_ore/tin_ore_var_3",
+      "side": "tin_ore/tin_ore_var_3",
+      "bottom": "tin_ore/tin_ore_var_3"
+    },
+    {
+      "top": "tin_ore/tin_ore_var_4",
+      "side": "tin_ore/tin_ore_var_4",
+      "bottom": "tin_ore/tin_ore_var_4"
+    },
+    {
+      "top": "tin_ore/tin_ore_var_5",
+      "side": "tin_ore/tin_ore_var_5",
+      "bottom": "tin_ore/tin_ore_var_5"
     }
+  ]
 }

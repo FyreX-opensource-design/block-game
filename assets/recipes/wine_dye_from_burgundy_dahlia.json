@@ -1,0 +1,11 @@
+{
+  "id": "wine_dye_from_burgundy_dahlia",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "burgundy_dahlia"
+  ],
+  "result": {
+    "item": "wine_dye",
+    "count": 1
+  }
+}

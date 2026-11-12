@@ -1,0 +1,15 @@
+{
+  "id": "chiseled_diamond",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "#"
+  ],
+  "key": {
+    "#": "cut_diamond_slab"
+  },
+  "result": {
+    "item": "chiseled_diamond",
+    "count": 1
+  }
+}

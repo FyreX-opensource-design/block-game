@@ -25,6 +25,7 @@ class Ore:
         enabled=True,
         source=None,
         max_vein_size=0,
+        target_blocks=None,
     ):
         self.id = ore_id
         self.block = block
@@ -38,6 +39,7 @@ class Ore:
         self.enabled = enabled
         self.source = str(source) if source else ore_id
         self.max_vein_size = max_vein_size
+        self.target_blocks = dict(target_blocks) if target_blocks else None
 
 
 def load_ores(folder=None):
@@ -97,6 +99,12 @@ def ore_from_mapping(fields, source):
     if values["scale"] <= 0:
         raise ValueError(f"{source}: ore scale must be positive")
 
+    target_blocks = fields.get("target_blocks")
+    if target_blocks is not None:
+        if not isinstance(target_blocks, dict):
+            raise ValueError(f"{source}: target_blocks must be an object")
+        target_blocks = {str(k): str(v) for k, v in target_blocks.items()}
+
     return Ore(
         ore_id,
         block,
@@ -110,6 +118,7 @@ def ore_from_mapping(fields, source):
         enabled=enabled,
         source=str(source),
         max_vein_size=values["max_vein_size"],
+        target_blocks=target_blocks,
     )
 
 

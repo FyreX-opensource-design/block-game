@@ -1,0 +1,11 @@
+{
+  "id": "persimmon_dye_from_tiger_lily",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "tiger_lily"
+  ],
+  "result": {
+    "item": "persimmon_dye",
+    "count": 2
+  }
+}

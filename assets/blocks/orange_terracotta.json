@@ -1,0 +1,18 @@
+{
+  "id": "orange_terracotta",
+  "lang": "block.orange_terracotta",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 1.25,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "loot_table": "blocks/orange_terracotta",
+  "sound": "stone",
+  "textures": {
+    "top": "terracotta/orange_terracotta",
+    "side": "terracotta/orange_terracotta",
+    "bottom": "terracotta/orange_terracotta"
+  }
+}

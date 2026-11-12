@@ -1,0 +1,11 @@
+{
+  "id": "light_blue_dye_from_blue_orchid",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "blue_orchid"
+  ],
+  "result": {
+    "item": "light_blue_dye",
+    "count": 1
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "id": "burgundy_dahlia",
+  "lang": "block.burgundy_dahlia",
+  "tab": "natural",
+  "model": "cross",
+  "render": "cutout",
+  "solid": false,
+  "hardness": 0.0,
+  "tool": "none",
+  "mining_level": 0,
+  "loot_table": "blocks/burgundy_dahlia",
+  "fluid_breakable": true,
+  "plant": true,
+  "requires_soil": true,
+  "textures": {
+    "cross": "burgundy_dahlia"
+  }
+}

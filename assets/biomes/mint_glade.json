@@ -1,0 +1,47 @@
+{
+  "id": "mint_glade",
+  "name": "Mint Glade",
+  "variant_of": "forest",
+  "variant_noise": {
+    "scale": 0.04,
+    "octaves": 2,
+    "seed_offset": 8606,
+    "offset": [
+      29.6,
+      -51.4
+    ],
+    "threshold": 0.62,
+    "above": true
+  },
+  "surface": "grass",
+  "soil": "dirt",
+  "soil_depth": 3,
+  "scale": 0.006,
+  "octaves": 2,
+  "seed_offset": 90,
+  "ceiling": 0.6,
+  "tree_chance": 0.004,
+  "height_offset": 1.0,
+  "height_scale": 1.0,
+  "cliff": false,
+  "transition": {
+    "blend": 0.08,
+    "curve": "smoothstep"
+  },
+  "trees": [
+    "oak",
+    "shrub"
+  ],
+  "decorations": [
+    "mint_glade_flowers",
+    {
+      "feature": "fern",
+      "chance": 0.1
+    },
+    {
+      "feature": "tall_grass",
+      "chance": 0.1
+    }
+  ],
+  "grass_color": "#4eb85c"
+}

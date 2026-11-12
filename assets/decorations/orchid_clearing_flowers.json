@@ -1,0 +1,17 @@
+{
+  "id": "orchid_clearing_flowers",
+  "blocks": {
+    "sweet_pea": 3,
+    "lilac": 2,
+    "peony": 2,
+    "blue_orchid": 4,
+    "cornflower": 3,
+    "peach_poppy": 3,
+    "aqua_iris": 2
+  },
+  "chance": 0.56,
+  "surfaces": [
+    "grass"
+  ],
+  "seed_offset": 8555
+}

@@ -1,0 +1,45 @@
+{
+  "id": "marble_ruby_ore",
+  "lang": "block.marble_ruby_ore",
+  "tab": [
+    "natural"
+  ],
+  "model": "cube",
+  "hardness": 4.2,
+  "tool": "pickaxe",
+  "mining_level": 5,
+  "loot_table": "blocks/marble_ruby_ore",
+  "sound": "stone",
+  "textures": {
+    "top": "marble_ruby_ore/marble_ruby_ore_var_1",
+    "side": "marble_ruby_ore/marble_ruby_ore_var_1",
+    "bottom": "marble_ruby_ore/marble_ruby_ore_var_1"
+  },
+  "palettes": [
+    {
+      "top": "marble_ruby_ore/marble_ruby_ore_var_1",
+      "side": "marble_ruby_ore/marble_ruby_ore_var_1",
+      "bottom": "marble_ruby_ore/marble_ruby_ore_var_1"
+    },
+    {
+      "top": "marble_ruby_ore/marble_ruby_ore_var_2",
+      "side": "marble_ruby_ore/marble_ruby_ore_var_2",
+      "bottom": "marble_ruby_ore/marble_ruby_ore_var_2"
+    },
+    {
+      "top": "marble_ruby_ore/marble_ruby_ore_var_3",
+      "side": "marble_ruby_ore/marble_ruby_ore_var_3",
+      "bottom": "marble_ruby_ore/marble_ruby_ore_var_3"
+    },
+    {
+      "top": "marble_ruby_ore/marble_ruby_ore_var_4",
+      "side": "marble_ruby_ore/marble_ruby_ore_var_4",
+      "bottom": "marble_ruby_ore/marble_ruby_ore_var_4"
+    },
+    {
+      "top": "marble_ruby_ore/marble_ruby_ore_var_5",
+      "side": "marble_ruby_ore/marble_ruby_ore_var_5",
+      "bottom": "marble_ruby_ore/marble_ruby_ore_var_5"
+    }
+  ]
+}

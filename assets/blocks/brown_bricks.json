@@ -1,0 +1,18 @@
+{
+  "id": "brown_bricks",
+  "lang": "block.brown_bricks",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "loot_table": "blocks/brown_bricks",
+  "sound": "stone",
+  "textures": {
+    "top": "bricks/brown_bricks",
+    "side": "bricks/brown_bricks",
+    "bottom": "bricks/brown_bricks"
+  }
+}

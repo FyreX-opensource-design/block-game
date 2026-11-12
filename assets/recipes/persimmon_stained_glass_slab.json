@@ -1,0 +1,14 @@
+{
+  "id": "persimmon_stained_glass_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###"
+  ],
+  "key": {
+    "#": "persimmon_stained_glass"
+  },
+  "result": {
+    "item": "persimmon_stained_glass_slab",
+    "count": 6
+  }
+}

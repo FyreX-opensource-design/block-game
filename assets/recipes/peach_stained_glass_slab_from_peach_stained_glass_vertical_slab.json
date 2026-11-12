@@ -1,0 +1,11 @@
+{
+  "id": "peach_stained_glass_slab_from_peach_stained_glass_vertical_slab",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "peach_stained_glass_vertical_slab"
+  ],
+  "result": {
+    "item": "peach_stained_glass_slab",
+    "count": 1
+  }
+}

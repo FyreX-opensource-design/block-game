@@ -1,0 +1,17 @@
+{
+  "id": "red_bricks_from_dyeing",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "bricks",
+    "D": "red_dye"
+  },
+  "result": {
+    "item": "red_bricks",
+    "count": 8
+  }
+}

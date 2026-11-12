@@ -1,0 +1,15 @@
+{
+  "id": "smooth_granite_wall",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "###"
+  ],
+  "key": {
+    "#": "smooth_granite"
+  },
+  "result": {
+    "item": "smooth_granite_wall",
+    "count": 6
+  }
+}

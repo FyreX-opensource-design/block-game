@@ -1,0 +1,17 @@
+{
+  "id": "honey_bricks_from_dyeing",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "bricks",
+    "D": "honey_dye"
+  },
+  "result": {
+    "item": "honey_bricks",
+    "count": 8
+  }
+}

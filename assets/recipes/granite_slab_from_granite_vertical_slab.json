@@ -1,0 +1,11 @@
+{
+  "id": "granite_slab_from_granite_vertical_slab",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "granite_vertical_slab"
+  ],
+  "result": {
+    "item": "granite_slab",
+    "count": 1
+  }
+}

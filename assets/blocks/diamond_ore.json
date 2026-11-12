@@ -1,0 +1,45 @@
+{
+  "id": "diamond_ore",
+  "lang": "block.diamond_ore",
+  "tab": [
+    "natural"
+  ],
+  "model": "cube",
+  "hardness": 5.0,
+  "tool": "pickaxe",
+  "mining_level": 6,
+  "loot_table": "blocks/diamond_ore",
+  "sound": "stone",
+  "textures": {
+    "top": "diamond_ore/diamond_ore_var_1",
+    "side": "diamond_ore/diamond_ore_var_1",
+    "bottom": "diamond_ore/diamond_ore_var_1"
+  },
+  "palettes": [
+    {
+      "top": "diamond_ore/diamond_ore_var_1",
+      "side": "diamond_ore/diamond_ore_var_1",
+      "bottom": "diamond_ore/diamond_ore_var_1"
+    },
+    {
+      "top": "diamond_ore/diamond_ore_var_2",
+      "side": "diamond_ore/diamond_ore_var_2",
+      "bottom": "diamond_ore/diamond_ore_var_2"
+    },
+    {
+      "top": "diamond_ore/diamond_ore_var_3",
+      "side": "diamond_ore/diamond_ore_var_3",
+      "bottom": "diamond_ore/diamond_ore_var_3"
+    },
+    {
+      "top": "diamond_ore/diamond_ore_var_4",
+      "side": "diamond_ore/diamond_ore_var_4",
+      "bottom": "diamond_ore/diamond_ore_var_4"
+    },
+    {
+      "top": "diamond_ore/diamond_ore_var_5",
+      "side": "diamond_ore/diamond_ore_var_5",
+      "bottom": "diamond_ore/diamond_ore_var_5"
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "id": "cut_diamond_vertical_slab",
+  "lang": "block.cut_diamond_vertical_slab",
+  "tab": [
+    "building"
+  ],
+  "model": "vertical_slab",
+  "hardness": 4.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/cut_diamond_vertical_slab",
+  "sound": "stone",
+  "textures": {
+    "top": "cut_diamond",
+    "side": "cut_diamond",
+    "bottom": "cut_diamond"
+  },
+  "type": "vertical_slab"
+}

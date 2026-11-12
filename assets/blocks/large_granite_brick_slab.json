@@ -1,0 +1,19 @@
+{
+  "id": "large_granite_brick_slab",
+  "lang": "block.large_granite_brick_slab",
+  "type": "slab",
+  "tab": [
+    "building"
+  ],
+  "model": "slab",
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/large_granite_brick_slab",
+  "sound": "stone",
+  "textures": {
+    "top": "large_granite_bricks",
+    "side": "large_granite_bricks",
+    "bottom": "large_granite_bricks"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "id": "andesite_pillar",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "#"
+  ],
+  "key": {
+    "#": "smooth_andesite"
+  },
+  "result": {
+    "item": "andesite_pillar",
+    "count": 2
+  }
+}

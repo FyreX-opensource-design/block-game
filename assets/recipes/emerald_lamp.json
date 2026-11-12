@@ -1,0 +1,17 @@
+{
+  "id": "emerald_lamp",
+  "type": "crafting_shaped",
+  "pattern": [
+    " # ",
+    "#T#",
+    " # "
+  ],
+  "key": {
+    "#": "emerald",
+    "T": "torch"
+  },
+  "result": {
+    "item": "emerald_lamp",
+    "count": 2
+  }
+}

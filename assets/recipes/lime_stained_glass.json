@@ -1,0 +1,17 @@
+{
+  "id": "lime_stained_glass",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "glass",
+    "D": "lime_dye"
+  },
+  "result": {
+    "item": "lime_stained_glass",
+    "count": 8
+  }
+}

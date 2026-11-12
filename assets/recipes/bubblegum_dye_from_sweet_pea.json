@@ -1,0 +1,11 @@
+{
+  "id": "bubblegum_dye_from_sweet_pea",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "sweet_pea"
+  ],
+  "result": {
+    "item": "bubblegum_dye",
+    "count": 2
+  }
+}

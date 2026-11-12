@@ -1,0 +1,17 @@
+{
+  "id": "emerald_shovel",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "X",
+    "X"
+  ],
+  "key": {
+    "#": "emerald",
+    "X": "#sticks"
+  },
+  "result": {
+    "item": "emerald_shovel",
+    "count": 1
+  }
+}

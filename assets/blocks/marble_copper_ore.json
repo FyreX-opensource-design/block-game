@@ -1,0 +1,45 @@
+{
+  "id": "marble_copper_ore",
+  "lang": "block.marble_copper_ore",
+  "tab": [
+    "natural"
+  ],
+  "model": "cube",
+  "hardness": 3.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/marble_copper_ore",
+  "sound": "stone",
+  "textures": {
+    "top": "marble_copper_ore/marble_copper_ore_var_1",
+    "side": "marble_copper_ore/marble_copper_ore_var_1",
+    "bottom": "marble_copper_ore/marble_copper_ore_var_1"
+  },
+  "palettes": [
+    {
+      "top": "marble_copper_ore/marble_copper_ore_var_1",
+      "side": "marble_copper_ore/marble_copper_ore_var_1",
+      "bottom": "marble_copper_ore/marble_copper_ore_var_1"
+    },
+    {
+      "top": "marble_copper_ore/marble_copper_ore_var_2",
+      "side": "marble_copper_ore/marble_copper_ore_var_2",
+      "bottom": "marble_copper_ore/marble_copper_ore_var_2"
+    },
+    {
+      "top": "marble_copper_ore/marble_copper_ore_var_3",
+      "side": "marble_copper_ore/marble_copper_ore_var_3",
+      "bottom": "marble_copper_ore/marble_copper_ore_var_3"
+    },
+    {
+      "top": "marble_copper_ore/marble_copper_ore_var_4",
+      "side": "marble_copper_ore/marble_copper_ore_var_4",
+      "bottom": "marble_copper_ore/marble_copper_ore_var_4"
+    },
+    {
+      "top": "marble_copper_ore/marble_copper_ore_var_5",
+      "side": "marble_copper_ore/marble_copper_ore_var_5",
+      "bottom": "marble_copper_ore/marble_copper_ore_var_5"
+    }
+  ]
+}

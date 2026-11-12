@@ -1,0 +1,11 @@
+{
+  "id": "amber_dye_from_marigold",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "marigold"
+  ],
+  "result": {
+    "item": "amber_dye",
+    "count": 1
+  }
+}

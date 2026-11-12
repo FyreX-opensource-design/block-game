@@ -1,0 +1,18 @@
+{
+  "id": "diamond_bricks",
+  "lang": "block.diamond_bricks",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 4.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/diamond_bricks",
+  "sound": "stone",
+  "textures": {
+    "top": "diamond_bricks",
+    "side": "diamond_bricks",
+    "bottom": "diamond_bricks"
+  }
+}

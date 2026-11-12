@@ -1,0 +1,17 @@
+{
+  "id": "diamond_brick_wall",
+  "lang": "block.diamond_brick_wall",
+  "tab": [
+    "building"
+  ],
+  "model": "block",
+  "block": "diamond_brick_wall",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 1,
+  "food": 0
+}

@@ -1,0 +1,16 @@
+{
+  "id": "malachite_brick_vertical_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "#",
+    "#"
+  ],
+  "key": {
+    "#": "malachite_brick_slab"
+  },
+  "result": {
+    "item": "malachite_brick_vertical_slab",
+    "count": 3
+  }
+}

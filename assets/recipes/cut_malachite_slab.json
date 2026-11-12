@@ -1,0 +1,14 @@
+{
+  "id": "cut_malachite_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###"
+  ],
+  "key": {
+    "#": "cut_malachite"
+  },
+  "result": {
+    "item": "cut_malachite_slab",
+    "count": 6
+  }
+}

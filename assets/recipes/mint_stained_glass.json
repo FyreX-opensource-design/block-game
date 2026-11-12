@@ -1,0 +1,17 @@
+{
+  "id": "mint_stained_glass",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "glass",
+    "D": "mint_dye"
+  },
+  "result": {
+    "item": "mint_stained_glass",
+    "count": 8
+  }
+}

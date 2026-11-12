@@ -1,0 +1,17 @@
+{
+  "id": "light_blue_terracotta",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "terracotta",
+    "D": "light_blue_dye"
+  },
+  "result": {
+    "item": "light_blue_terracotta",
+    "count": 8
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "id": "marble_wall",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "###"
+  ],
+  "key": {
+    "#": "marble"
+  },
+  "result": {
+    "item": "marble_wall",
+    "count": 6
+  }
+}

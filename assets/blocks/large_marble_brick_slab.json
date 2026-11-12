@@ -1,0 +1,19 @@
+{
+  "id": "large_marble_brick_slab",
+  "lang": "block.large_marble_brick_slab",
+  "type": "slab",
+  "tab": [
+    "building"
+  ],
+  "model": "slab",
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/large_marble_brick_slab",
+  "sound": "stone",
+  "textures": {
+    "top": "large_marble_bricks",
+    "side": "large_marble_bricks",
+    "bottom": "large_marble_bricks"
+  }
+}

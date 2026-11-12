@@ -1,0 +1,17 @@
+{
+  "id": "navy_bricks_from_dyeing",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "bricks",
+    "D": "navy_dye"
+  },
+  "result": {
+    "item": "navy_bricks",
+    "count": 8
+  }
+}

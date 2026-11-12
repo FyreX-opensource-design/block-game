@@ -356,3 +356,25 @@ class TestFallingBlocksAndClay(unittest.TestCase):
             self.assertEqual(world.get_block(2, 5, 2), AIR)
             self.assertEqual(world.get_block(2, 2, 2), "sand")
 
+    def test_falling_underwater_block_leaves_water_not_air(self):
+        # A sand block underwater that falls must leave water, preventing an air bubble vacuum
+        self.chunk.data[3, 4, 4] = block_index("stone")
+        self.chunk.data[4, 4, 4] = block_index(AIR)
+        self.chunk.data[5, 4, 4] = block_index("sand")
+        self.chunk.data[6, 4, 4] = block_index("water")
+
+        self.world.entities.clear()
+        fell = self.world.check_falling(4, 5, 4)
+        self.assertIsNotNone(fell)
+        self.assertEqual(self.world.get_block(4, 5, 4), "water")
+
+    def test_horizontal_floating_neighbors_do_not_runaway_cascade(self):
+        # A horizontal row of floating sand blocks: breaking support under one
+        # should only drop that column, not flood-fill across the entire row.
+        for x in range(10):
+            self.chunk.data[5, 5, x] = block_index("sand")
+        self.world.entities.clear()
+
+        self.world.notify_neighbors_falling(0, 5, 5)
+        self.assertLess(len(self.world.entities), 5)
+

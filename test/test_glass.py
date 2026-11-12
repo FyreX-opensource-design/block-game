@@ -23,6 +23,10 @@ from server.recipes import RECIPES
 from server.world import World
 
 
+def _round_uv(uv):
+    return (round(float(np.float32(uv[0])), 4), round(float(np.float32(uv[1])), 4))
+
+
 def test_glass_registration():
     assert "glass" in BLOCKS
     glass = BLOCKS["glass"]
@@ -530,15 +534,15 @@ def test_mixed_double_slab_with_glass_ctm_and_culling():
     assert not has_contact_x5, "Contact face between left slab and center mixed double slab should be culled"
 
     # Full glass South face at (5, 6, 6) should connect Down (mask 2)
-    expected_full_uv0 = (round(GLASS_CTM_UVS[2][0][0], 4), round(GLASS_CTM_UVS[2][0][1], 4))
+    expected_full_uv0 = _round_uv(GLASS_CTM_UVS[2][0])
     assert south_quads.get((5.0, 6.0, 6.0)) == expected_full_uv0, f"Full glass south face should connect down, got {south_quads.get((5.0, 6.0, 6.0))}"
 
     # Left slab South face at (4, 5.5, 6) should connect Right (mask 8)
-    expected_left_uv0 = (round(get_glass_ctm_uv(8, [0, 0, 16, 8])[0][0], 4), round(get_glass_ctm_uv(8, [0, 0, 16, 8])[0][1], 4))
+    expected_left_uv0 = _round_uv(get_glass_ctm_uv(8, [0, 0, 16, 8])[0])
     assert south_quads.get((4.0, 5.5, 6.0)) == expected_left_uv0, f"Left slab south face should connect right, got {south_quads.get((4.0, 5.5, 6.0))}"
 
     # Center mixed double slab glass South face at (5, 5.5, 6) should connect Up and Left (mask 5)
-    expected_center_uv0 = (round(get_glass_ctm_uv(5, [0, 0, 16, 8])[0][0], 4), round(get_glass_ctm_uv(5, [0, 0, 16, 8])[0][1], 4))
+    expected_center_uv0 = _round_uv(get_glass_ctm_uv(5, [0, 0, 16, 8])[0])
     assert south_quads.get((5.0, 5.5, 6.0)) == expected_center_uv0, f"Center slab south face should connect up+left, got {south_quads.get((5.0, 5.5, 6.0))}"
 
 
@@ -594,19 +598,19 @@ def test_glass_full_block_adjacent_to_half_slabs_step_ctm_and_culling():
 
     # Verify South face CTM split on full glass block:
     # Bottom half (5, 5.0, 6): connects Up (1) and Right (8) = mask 9
-    expected_bot_uv0 = (round(get_glass_ctm_uv(9, [0, 8, 16, 16])[0][0], 4), round(get_glass_ctm_uv(9, [0, 8, 16, 16])[0][1], 4))
+    expected_bot_uv0 = _round_uv(get_glass_ctm_uv(9, [0, 8, 16, 16])[0])
     assert south_quads.get((5.0, 5.0, 6.0)) == expected_bot_uv0, f"Full glass bottom half south face should connect up+right (mask 9), got {south_quads.get((5.0, 5.0, 6.0))}"
 
     # Upper half (5, 5.5, 6): connects Down (2) and Left (4) = mask 6
-    expected_top_uv0 = (round(get_glass_ctm_uv(6, [0, 0, 16, 8])[0][0], 4), round(get_glass_ctm_uv(6, [0, 0, 16, 8])[0][1], 4))
+    expected_top_uv0 = _round_uv(get_glass_ctm_uv(6, [0, 0, 16, 8])[0])
     assert south_quads.get((5.0, 5.5, 6.0)) == expected_top_uv0, f"Full glass top half south face should connect down+left (mask 6), got {south_quads.get((5.0, 5.5, 6.0))}"
 
     # Left slab South face (4, 5.5, 6): connects Right (8)
-    expected_left_uv0 = (round(get_glass_ctm_uv(8, [0, 0, 16, 8])[0][0], 4), round(get_glass_ctm_uv(8, [0, 0, 16, 8])[0][1], 4))
+    expected_left_uv0 = _round_uv(get_glass_ctm_uv(8, [0, 0, 16, 8])[0])
     assert south_quads.get((4.0, 5.5, 6.0)) == expected_left_uv0, f"Left slab south face should connect right (mask 8), got {south_quads.get((4.0, 5.5, 6.0))}"
 
     # Right slab South face (6, 5.0, 6): connects Left (4)
-    expected_right_uv0 = (round(get_glass_ctm_uv(4, [0, 8, 16, 16])[0][0], 4), round(get_glass_ctm_uv(4, [0, 8, 16, 16])[0][1], 4))
+    expected_right_uv0 = _round_uv(get_glass_ctm_uv(4, [0, 8, 16, 16])[0])
     assert south_quads.get((6.0, 5.0, 6.0)) == expected_right_uv0, f"Right slab south face should connect left (mask 4), got {south_quads.get((6.0, 5.0, 6.0))}"
 
 
@@ -667,18 +671,18 @@ def test_glass_full_block_adjacent_to_vertical_slabs_step_ctm_and_culling():
     # Verify Top face CTM split on full glass block:
     # North half connects Down (2) and Left (4) = mask 6
     # South half connects Up (1) and Right (8) = mask 9
-    expected_north_uv0 = (round(get_glass_ctm_uv(6, [0, 0, 16, 8])[0][0], 4), round(get_glass_ctm_uv(6, [0, 0, 16, 8])[0][1], 4))
-    expected_south_uv0 = (round(get_glass_ctm_uv(9, [0, 8, 16, 16])[0][0], 4), round(get_glass_ctm_uv(9, [0, 8, 16, 16])[0][1], 4))
+    expected_north_uv0 = _round_uv(get_glass_ctm_uv(6, [0, 0, 16, 8])[0])
+    expected_south_uv0 = _round_uv(get_glass_ctm_uv(9, [0, 8, 16, 16])[0])
 
     assert top_quads.get((5.0, 6.0, 5.5)) == expected_north_uv0, f"Full glass north half top face should connect left+down (mask 6), got {top_quads.get((5.0, 6.0, 5.5))}"
     assert top_quads.get((5.0, 6.0, 6.0)) == expected_south_uv0, f"Full glass south half top face should connect right+up (mask 9), got {top_quads.get((5.0, 6.0, 6.0))}"
 
     # Left vertical slab top face: connects Right (8)
-    expected_left_uv0 = (round(get_glass_ctm_uv(8, [0, 0, 16, 8])[0][0], 4), round(get_glass_ctm_uv(8, [0, 0, 16, 8])[0][1], 4))
+    expected_left_uv0 = _round_uv(get_glass_ctm_uv(8, [0, 0, 16, 8])[0])
     assert top_quads.get((4.0, 6.0, 5.5)) == expected_left_uv0, f"Left slab top face should connect right (mask 8), got {top_quads.get((4.0, 6.0, 5.5))}"
 
     # Right vertical slab top face: connects Left (4)
-    expected_right_uv0 = (round(get_glass_ctm_uv(4, [0, 8, 16, 16])[0][0], 4), round(get_glass_ctm_uv(4, [0, 8, 16, 16])[0][1], 4))
+    expected_right_uv0 = _round_uv(get_glass_ctm_uv(4, [0, 8, 16, 16])[0])
     assert top_quads.get((6.0, 6.0, 6.0)) == expected_right_uv0, f"Right slab top face should connect left (mask 4), got {top_quads.get((6.0, 6.0, 6.0))}"
 
 
@@ -740,8 +744,8 @@ def test_glass_full_block_adjacent_to_east_west_vertical_slabs():
     # Top face of full glass block:
     # West half (u in [0, 8]): connects Up (+v, -Z) to west slab (mask 1) + Right (8) to east half = mask 9
     # East half (u in [8, 16]): connects Down (-v, +Z) to east slab (mask 2) + Left (4) to west half = mask 6
-    expected_west_uv0 = (round(get_glass_ctm_uv(9, [0, 0, 8, 16])[0][0], 4), round(get_glass_ctm_uv(9, [0, 0, 8, 16])[0][1], 4))
-    expected_east_uv0 = (round(get_glass_ctm_uv(6, [8, 0, 16, 16])[0][0], 4), round(get_glass_ctm_uv(6, [8, 0, 16, 16])[0][1], 4))
+    expected_west_uv0 = _round_uv(get_glass_ctm_uv(9, [0, 0, 8, 16])[0])
+    expected_east_uv0 = _round_uv(get_glass_ctm_uv(6, [8, 0, 16, 16])[0])
 
     assert top_quads.get((5.0, 6.0, 6.0)) == expected_west_uv0, f"Full glass west half top face should connect up+right (mask 9), got {top_quads.get((5.0, 6.0, 6.0))}"
     assert top_quads.get((5.5, 6.0, 6.0)) == expected_east_uv0, f"Full glass east half top face should connect down+left (mask 6), got {top_quads.get((5.5, 6.0, 6.0))}"

@@ -1,0 +1,15 @@
+{
+  "id": "chiseled_ruby",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "#"
+  ],
+  "key": {
+    "#": "cut_ruby_slab"
+  },
+  "result": {
+    "item": "chiseled_ruby",
+    "count": 1
+  }
+}

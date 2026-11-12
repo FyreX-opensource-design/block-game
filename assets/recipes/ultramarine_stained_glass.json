@@ -1,0 +1,17 @@
+{
+  "id": "ultramarine_stained_glass",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "glass",
+    "D": "ultramarine_dye"
+  },
+  "result": {
+    "item": "ultramarine_stained_glass",
+    "count": 8
+  }
+}

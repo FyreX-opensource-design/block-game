@@ -1,0 +1,11 @@
+{
+  "id": "diorite_slab_from_diorite_vertical_slab",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "diorite_vertical_slab"
+  ],
+  "result": {
+    "item": "diorite_slab",
+    "count": 1
+  }
+}

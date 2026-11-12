@@ -1,0 +1,18 @@
+{
+  "id": "emerald_bricks",
+  "lang": "block.emerald_bricks",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 4.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/emerald_bricks",
+  "sound": "stone",
+  "textures": {
+    "top": "emerald_bricks",
+    "side": "emerald_bricks",
+    "bottom": "emerald_bricks"
+  }
+}

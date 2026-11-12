@@ -1,0 +1,11 @@
+{
+  "id": "conifer_stained_glass_slab_from_conifer_stained_glass_vertical_slab",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "conifer_stained_glass_vertical_slab"
+  ],
+  "result": {
+    "item": "conifer_stained_glass_slab",
+    "count": 1
+  }
+}

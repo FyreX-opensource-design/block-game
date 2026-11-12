@@ -1,0 +1,50 @@
+{
+  "id": "andesite_wall",
+  "lang": "block.andesite_wall",
+  "tab": [
+    "building"
+  ],
+  "model": "wall_post",
+  "type": "wall",
+  "solid": true,
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "sound": "stone",
+  "loot_table": "blocks/andesite_wall",
+  "properties": {
+    "wall": true
+  },
+  "textures": {
+    "top": "andesite/andesite_var_1",
+    "side": "andesite/andesite_var_1",
+    "texture": "andesite/andesite_var_1"
+  },
+  "palettes": [
+    {
+      "top": "andesite/andesite_var_1",
+      "side": "andesite/andesite_var_1",
+      "texture": "andesite/andesite_var_1"
+    },
+    {
+      "top": "andesite/andesite_var_2",
+      "side": "andesite/andesite_var_2",
+      "texture": "andesite/andesite_var_2"
+    },
+    {
+      "top": "andesite/andesite_var_3",
+      "side": "andesite/andesite_var_3",
+      "texture": "andesite/andesite_var_3"
+    },
+    {
+      "top": "andesite/andesite_var_4",
+      "side": "andesite/andesite_var_4",
+      "texture": "andesite/andesite_var_4"
+    },
+    {
+      "top": "andesite/andesite_var_5",
+      "side": "andesite/andesite_var_5",
+      "texture": "andesite/andesite_var_5"
+    }
+  ]
+}

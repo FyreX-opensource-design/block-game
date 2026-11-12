@@ -1,0 +1,15 @@
+{
+  "id": "sapphire_pillar",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "#"
+  ],
+  "key": {
+    "#": "cut_sapphire"
+  },
+  "result": {
+    "item": "sapphire_pillar",
+    "count": 2
+  }
+}

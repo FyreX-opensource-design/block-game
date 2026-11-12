@@ -1,0 +1,45 @@
+{
+  "id": "diorite_malachite_ore",
+  "lang": "block.diorite_malachite_ore",
+  "tab": [
+    "natural"
+  ],
+  "model": "cube",
+  "hardness": 3.5,
+  "tool": "pickaxe",
+  "mining_level": 4,
+  "loot_table": "blocks/diorite_malachite_ore",
+  "sound": "stone",
+  "textures": {
+    "top": "diorite_malachite_ore/diorite_malachite_ore_var_1",
+    "side": "diorite_malachite_ore/diorite_malachite_ore_var_1",
+    "bottom": "diorite_malachite_ore/diorite_malachite_ore_var_1"
+  },
+  "palettes": [
+    {
+      "top": "diorite_malachite_ore/diorite_malachite_ore_var_1",
+      "side": "diorite_malachite_ore/diorite_malachite_ore_var_1",
+      "bottom": "diorite_malachite_ore/diorite_malachite_ore_var_1"
+    },
+    {
+      "top": "diorite_malachite_ore/diorite_malachite_ore_var_2",
+      "side": "diorite_malachite_ore/diorite_malachite_ore_var_2",
+      "bottom": "diorite_malachite_ore/diorite_malachite_ore_var_2"
+    },
+    {
+      "top": "diorite_malachite_ore/diorite_malachite_ore_var_3",
+      "side": "diorite_malachite_ore/diorite_malachite_ore_var_3",
+      "bottom": "diorite_malachite_ore/diorite_malachite_ore_var_3"
+    },
+    {
+      "top": "diorite_malachite_ore/diorite_malachite_ore_var_4",
+      "side": "diorite_malachite_ore/diorite_malachite_ore_var_4",
+      "bottom": "diorite_malachite_ore/diorite_malachite_ore_var_4"
+    },
+    {
+      "top": "diorite_malachite_ore/diorite_malachite_ore_var_5",
+      "side": "diorite_malachite_ore/diorite_malachite_ore_var_5",
+      "bottom": "diorite_malachite_ore/diorite_malachite_ore_var_5"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "id": "aquamarine_stained_glass_slab_from_aquamarine_stained_glass_vertical_slab",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "aquamarine_stained_glass_vertical_slab"
+  ],
+  "result": {
+    "item": "aquamarine_stained_glass_slab",
+    "count": 1
+  }
+}

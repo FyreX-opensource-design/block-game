@@ -1,0 +1,15 @@
+{
+  "id": "navy_bricks",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "##"
+  ],
+  "key": {
+    "#": "navy_brick"
+  },
+  "result": {
+    "item": "navy_bricks",
+    "count": 1
+  }
+}

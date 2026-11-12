@@ -1,0 +1,17 @@
+{
+  "id": "ruby_axe_mirrored",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "X#",
+    "X "
+  ],
+  "key": {
+    "#": "ruby",
+    "X": "#sticks"
+  },
+  "result": {
+    "item": "ruby_axe",
+    "count": 1
+  }
+}

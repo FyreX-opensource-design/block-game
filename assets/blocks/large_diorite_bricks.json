@@ -1,0 +1,19 @@
+{
+  "id": "large_diorite_bricks",
+  "lang": "block.large_diorite_bricks",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/large_diorite_bricks",
+  "gravity": false,
+  "sound": "stone",
+  "textures": {
+    "top": "large_diorite_bricks",
+    "side": "large_diorite_bricks",
+    "bottom": "large_diorite_bricks"
+  }
+}

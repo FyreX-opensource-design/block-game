@@ -1,0 +1,22 @@
+{
+  "id": "pine_wood",
+  "lang": "block.pine_wood",
+  "tab": [
+    "building",
+    "natural"
+  ],
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "axe",
+  "mining_level": 0,
+  "loot_table": "blocks/pine_wood",
+  "sound": "wood",
+  "properties": {
+    "rotation": "axis"
+  },
+  "textures": {
+    "top": "pine_log_side",
+    "side": "pine_log_side",
+    "bottom": "pine_log_side"
+  }
+}

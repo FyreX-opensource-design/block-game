@@ -1,0 +1,18 @@
+{
+  "id": "navy_bricks",
+  "lang": "block.navy_bricks",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "loot_table": "blocks/navy_bricks",
+  "sound": "stone",
+  "textures": {
+    "top": "bricks/navy_bricks",
+    "side": "bricks/navy_bricks",
+    "bottom": "bricks/navy_bricks"
+  }
+}

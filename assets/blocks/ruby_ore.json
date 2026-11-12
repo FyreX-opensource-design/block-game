@@ -1,0 +1,45 @@
+{
+  "id": "ruby_ore",
+  "lang": "block.ruby_ore",
+  "tab": [
+    "natural"
+  ],
+  "model": "cube",
+  "hardness": 4.2,
+  "tool": "pickaxe",
+  "mining_level": 5,
+  "loot_table": "blocks/ruby_ore",
+  "sound": "stone",
+  "textures": {
+    "top": "ruby_ore/ruby_ore_var_1",
+    "side": "ruby_ore/ruby_ore_var_1",
+    "bottom": "ruby_ore/ruby_ore_var_1"
+  },
+  "palettes": [
+    {
+      "top": "ruby_ore/ruby_ore_var_1",
+      "side": "ruby_ore/ruby_ore_var_1",
+      "bottom": "ruby_ore/ruby_ore_var_1"
+    },
+    {
+      "top": "ruby_ore/ruby_ore_var_2",
+      "side": "ruby_ore/ruby_ore_var_2",
+      "bottom": "ruby_ore/ruby_ore_var_2"
+    },
+    {
+      "top": "ruby_ore/ruby_ore_var_3",
+      "side": "ruby_ore/ruby_ore_var_3",
+      "bottom": "ruby_ore/ruby_ore_var_3"
+    },
+    {
+      "top": "ruby_ore/ruby_ore_var_4",
+      "side": "ruby_ore/ruby_ore_var_4",
+      "bottom": "ruby_ore/ruby_ore_var_4"
+    },
+    {
+      "top": "ruby_ore/ruby_ore_var_5",
+      "side": "ruby_ore/ruby_ore_var_5",
+      "bottom": "ruby_ore/ruby_ore_var_5"
+    }
+  ]
+}

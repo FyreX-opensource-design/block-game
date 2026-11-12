@@ -1,0 +1,18 @@
+{
+  "id": "chiseled_emerald",
+  "lang": "block.chiseled_emerald",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 4.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/chiseled_emerald",
+  "sound": "stone",
+  "textures": {
+    "top": "chiseled_emerald",
+    "side": "chiseled_emerald",
+    "bottom": "chiseled_emerald"
+  }
+}

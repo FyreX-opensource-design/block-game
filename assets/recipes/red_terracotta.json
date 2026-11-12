@@ -1,0 +1,17 @@
+{
+  "id": "red_terracotta",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "terracotta",
+    "D": "red_dye"
+  },
+  "result": {
+    "item": "red_terracotta",
+    "count": 8
+  }
+}

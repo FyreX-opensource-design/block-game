@@ -1,0 +1,11 @@
+{
+  "id": "sapphire_from_blasting_andesite_sapphire_ore",
+  "type": "blasting",
+  "ingredient": "andesite_sapphire_ore",
+  "result": {
+    "item": "sapphire",
+    "count": 1
+  },
+  "cookingtime": 5.0,
+  "experience": 1.0
+}

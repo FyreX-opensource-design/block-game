@@ -1,0 +1,17 @@
+{
+  "id": "rose_dye",
+  "lang": "item.rose_dye",
+  "tab": [
+    "materials"
+  ],
+  "model": "flat",
+  "texture": "rose_dye",
+  "max_stack": 64,
+  "left": "none",
+  "right": "use",
+  "durability": 0,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 1,
+  "food": 0
+}

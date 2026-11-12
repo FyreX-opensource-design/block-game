@@ -1,0 +1,45 @@
+{
+  "id": "diorite_ruby_ore",
+  "lang": "block.diorite_ruby_ore",
+  "tab": [
+    "natural"
+  ],
+  "model": "cube",
+  "hardness": 4.2,
+  "tool": "pickaxe",
+  "mining_level": 5,
+  "loot_table": "blocks/diorite_ruby_ore",
+  "sound": "stone",
+  "textures": {
+    "top": "diorite_ruby_ore/diorite_ruby_ore_var_1",
+    "side": "diorite_ruby_ore/diorite_ruby_ore_var_1",
+    "bottom": "diorite_ruby_ore/diorite_ruby_ore_var_1"
+  },
+  "palettes": [
+    {
+      "top": "diorite_ruby_ore/diorite_ruby_ore_var_1",
+      "side": "diorite_ruby_ore/diorite_ruby_ore_var_1",
+      "bottom": "diorite_ruby_ore/diorite_ruby_ore_var_1"
+    },
+    {
+      "top": "diorite_ruby_ore/diorite_ruby_ore_var_2",
+      "side": "diorite_ruby_ore/diorite_ruby_ore_var_2",
+      "bottom": "diorite_ruby_ore/diorite_ruby_ore_var_2"
+    },
+    {
+      "top": "diorite_ruby_ore/diorite_ruby_ore_var_3",
+      "side": "diorite_ruby_ore/diorite_ruby_ore_var_3",
+      "bottom": "diorite_ruby_ore/diorite_ruby_ore_var_3"
+    },
+    {
+      "top": "diorite_ruby_ore/diorite_ruby_ore_var_4",
+      "side": "diorite_ruby_ore/diorite_ruby_ore_var_4",
+      "bottom": "diorite_ruby_ore/diorite_ruby_ore_var_4"
+    },
+    {
+      "top": "diorite_ruby_ore/diorite_ruby_ore_var_5",
+      "side": "diorite_ruby_ore/diorite_ruby_ore_var_5",
+      "bottom": "diorite_ruby_ore/diorite_ruby_ore_var_5"
+    }
+  ]
+}

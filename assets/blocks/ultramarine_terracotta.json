@@ -1,0 +1,18 @@
+{
+  "id": "ultramarine_terracotta",
+  "lang": "block.ultramarine_terracotta",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 1.25,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "loot_table": "blocks/ultramarine_terracotta",
+  "sound": "stone",
+  "textures": {
+    "top": "terracotta/ultramarine_terracotta",
+    "side": "terracotta/ultramarine_terracotta",
+    "bottom": "terracotta/ultramarine_terracotta"
+  }
+}

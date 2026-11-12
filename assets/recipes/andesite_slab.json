@@ -1,0 +1,14 @@
+{
+  "id": "andesite_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###"
+  ],
+  "key": {
+    "#": "andesite"
+  },
+  "result": {
+    "item": "andesite_slab",
+    "count": 6
+  }
+}

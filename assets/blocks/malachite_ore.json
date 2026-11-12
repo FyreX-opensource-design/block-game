@@ -1,0 +1,45 @@
+{
+  "id": "malachite_ore",
+  "lang": "block.malachite_ore",
+  "tab": [
+    "natural"
+  ],
+  "model": "cube",
+  "hardness": 3.5,
+  "tool": "pickaxe",
+  "mining_level": 4,
+  "loot_table": "blocks/malachite_ore",
+  "sound": "stone",
+  "textures": {
+    "top": "malachite_ore/malachite_ore_var_1",
+    "side": "malachite_ore/malachite_ore_var_1",
+    "bottom": "malachite_ore/malachite_ore_var_1"
+  },
+  "palettes": [
+    {
+      "top": "malachite_ore/malachite_ore_var_1",
+      "side": "malachite_ore/malachite_ore_var_1",
+      "bottom": "malachite_ore/malachite_ore_var_1"
+    },
+    {
+      "top": "malachite_ore/malachite_ore_var_2",
+      "side": "malachite_ore/malachite_ore_var_2",
+      "bottom": "malachite_ore/malachite_ore_var_2"
+    },
+    {
+      "top": "malachite_ore/malachite_ore_var_3",
+      "side": "malachite_ore/malachite_ore_var_3",
+      "bottom": "malachite_ore/malachite_ore_var_3"
+    },
+    {
+      "top": "malachite_ore/malachite_ore_var_4",
+      "side": "malachite_ore/malachite_ore_var_4",
+      "bottom": "malachite_ore/malachite_ore_var_4"
+    },
+    {
+      "top": "malachite_ore/malachite_ore_var_5",
+      "side": "malachite_ore/malachite_ore_var_5",
+      "bottom": "malachite_ore/malachite_ore_var_5"
+    }
+  ]
+}

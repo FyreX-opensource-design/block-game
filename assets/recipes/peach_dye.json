@@ -1,0 +1,12 @@
+{
+  "id": "peach_dye",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "orange_dye",
+    "white_dye"
+  ],
+  "result": {
+    "item": "peach_dye",
+    "count": 2
+  }
+}

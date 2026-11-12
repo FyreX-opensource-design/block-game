@@ -1,0 +1,17 @@
+{
+  "id": "peach_bricks_from_dyeing",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "bricks",
+    "D": "peach_dye"
+  },
+  "result": {
+    "item": "peach_bricks",
+    "count": 8
+  }
+}

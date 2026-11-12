@@ -1,0 +1,16 @@
+{
+  "id": "ruby_brick_stairs",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#  ",
+    "## ",
+    "###"
+  ],
+  "key": {
+    "#": "ruby_bricks"
+  },
+  "result": {
+    "item": "ruby_brick_stairs",
+    "count": 4
+  }
+}

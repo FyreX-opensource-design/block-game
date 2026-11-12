@@ -1,0 +1,21 @@
+{
+  "id": "cyan_wool",
+  "lang": "block.cyan_wool",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 0.8,
+  "tool": "shears",
+  "mining_level": 0,
+  "textures": {
+    "top": "cyan_wool",
+    "side": "cyan_wool",
+    "bottom": "cyan_wool"
+  },
+  "properties": {
+    "tags": [
+      "wool"
+    ]
+  }
+}

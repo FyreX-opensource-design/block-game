@@ -11,8 +11,35 @@
   "loot_table": "blocks/copper_ore",
   "sound": "stone",
   "textures": {
-    "top": "copper_ore",
-    "side": "copper_ore",
-    "bottom": "copper_ore"
-  }
+    "top": "copper_ore/copper_ore_var_1",
+    "side": "copper_ore/copper_ore_var_1",
+    "bottom": "copper_ore/copper_ore_var_1"
+  },
+  "palettes": [
+    {
+      "top": "copper_ore/copper_ore_var_1",
+      "side": "copper_ore/copper_ore_var_1",
+      "bottom": "copper_ore/copper_ore_var_1"
+    },
+    {
+      "top": "copper_ore/copper_ore_var_2",
+      "side": "copper_ore/copper_ore_var_2",
+      "bottom": "copper_ore/copper_ore_var_2"
+    },
+    {
+      "top": "copper_ore/copper_ore_var_3",
+      "side": "copper_ore/copper_ore_var_3",
+      "bottom": "copper_ore/copper_ore_var_3"
+    },
+    {
+      "top": "copper_ore/copper_ore_var_4",
+      "side": "copper_ore/copper_ore_var_4",
+      "bottom": "copper_ore/copper_ore_var_4"
+    },
+    {
+      "top": "copper_ore/copper_ore_var_5",
+      "side": "copper_ore/copper_ore_var_5",
+      "bottom": "copper_ore/copper_ore_var_5"
+    }
+  ]
 }

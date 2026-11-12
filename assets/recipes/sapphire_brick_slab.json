@@ -1,0 +1,14 @@
+{
+  "id": "sapphire_brick_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###"
+  ],
+  "key": {
+    "#": "sapphire_bricks"
+  },
+  "result": {
+    "item": "sapphire_brick_slab",
+    "count": 6
+  }
+}

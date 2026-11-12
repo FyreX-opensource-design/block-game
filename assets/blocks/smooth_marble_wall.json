@@ -1,0 +1,50 @@
+{
+  "id": "smooth_marble_wall",
+  "lang": "block.smooth_marble_wall",
+  "tab": [
+    "building"
+  ],
+  "model": "wall_post",
+  "type": "wall",
+  "solid": true,
+  "hardness": 2.0,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "sound": "stone",
+  "loot_table": "blocks/smooth_marble_wall",
+  "properties": {
+    "wall": true
+  },
+  "textures": {
+    "top": "smooth_marble/smooth_marble_var_0_1",
+    "side": "smooth_marble/smooth_marble_var_0_1",
+    "texture": "smooth_marble/smooth_marble_var_0_1"
+  },
+  "palettes": [
+    {
+      "top": "smooth_marble/smooth_marble_var_0_1",
+      "side": "smooth_marble/smooth_marble_var_0_1",
+      "texture": "smooth_marble/smooth_marble_var_0_1"
+    },
+    {
+      "top": "smooth_marble/smooth_marble_var_0_2",
+      "side": "smooth_marble/smooth_marble_var_0_2",
+      "texture": "smooth_marble/smooth_marble_var_0_2"
+    },
+    {
+      "top": "smooth_marble/smooth_marble_var_0_3",
+      "side": "smooth_marble/smooth_marble_var_0_3",
+      "texture": "smooth_marble/smooth_marble_var_0_3"
+    },
+    {
+      "top": "smooth_marble/smooth_marble_var_0_4",
+      "side": "smooth_marble/smooth_marble_var_0_4",
+      "texture": "smooth_marble/smooth_marble_var_0_4"
+    },
+    {
+      "top": "smooth_marble/smooth_marble_var_0_5",
+      "side": "smooth_marble/smooth_marble_var_0_5",
+      "texture": "smooth_marble/smooth_marble_var_0_5"
+    }
+  ]
+}

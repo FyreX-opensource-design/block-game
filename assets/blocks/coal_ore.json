@@ -11,8 +11,35 @@
   "loot_table": "blocks/coal_ore",
   "sound": "stone",
   "textures": {
-    "top": "coal_ore",
-    "side": "coal_ore",
-    "bottom": "coal_ore"
-  }
+    "top": "coal_ore/coal_ore_var_1",
+    "side": "coal_ore/coal_ore_var_1",
+    "bottom": "coal_ore/coal_ore_var_1"
+  },
+  "palettes": [
+    {
+      "top": "coal_ore/coal_ore_var_1",
+      "side": "coal_ore/coal_ore_var_1",
+      "bottom": "coal_ore/coal_ore_var_1"
+    },
+    {
+      "top": "coal_ore/coal_ore_var_2",
+      "side": "coal_ore/coal_ore_var_2",
+      "bottom": "coal_ore/coal_ore_var_2"
+    },
+    {
+      "top": "coal_ore/coal_ore_var_3",
+      "side": "coal_ore/coal_ore_var_3",
+      "bottom": "coal_ore/coal_ore_var_3"
+    },
+    {
+      "top": "coal_ore/coal_ore_var_4",
+      "side": "coal_ore/coal_ore_var_4",
+      "bottom": "coal_ore/coal_ore_var_4"
+    },
+    {
+      "top": "coal_ore/coal_ore_var_5",
+      "side": "coal_ore/coal_ore_var_5",
+      "bottom": "coal_ore/coal_ore_var_5"
+    }
+  ]
 }

@@ -1,0 +1,16 @@
+{
+  "id": "tiger_lily",
+  "lang": "block.tiger_lily",
+  "tab": "natural",
+  "model": "flat",
+  "block": "tiger_lily",
+  "texture": "tiger_lily_top",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 1,
+  "food": 0
+}

@@ -1,0 +1,11 @@
+{
+  "id": "purple_dye_from_delphinium",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "delphinium"
+  ],
+  "result": {
+    "item": "purple_dye",
+    "count": 2
+  }
+}

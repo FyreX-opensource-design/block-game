@@ -1,0 +1,20 @@
+{
+  "id": "tiger_lily",
+  "lang": "block.tiger_lily",
+  "tab": "natural",
+  "type": "tall_plant",
+  "model": "cross",
+  "render": "cutout",
+  "solid": false,
+  "hardness": 0.0,
+  "tool": "none",
+  "mining_level": 0,
+  "loot_table": "blocks/tiger_lily",
+  "fluid_breakable": true,
+  "plant": true,
+  "requires_soil": true,
+  "textures": {
+    "cross": "tiger_lily_bottom",
+    "upper": "tiger_lily_top"
+  }
+}

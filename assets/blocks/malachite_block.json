@@ -1,0 +1,19 @@
+{
+  "id": "malachite_block",
+  "lang": "block.malachite_block",
+  "tab": [
+    "building",
+    "materials"
+  ],
+  "model": "cube",
+  "hardness": 4.5,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/malachite_block",
+  "sound": "stone",
+  "textures": {
+    "top": "malachite_block",
+    "side": "malachite_block",
+    "bottom": "malachite_block"
+  }
+}

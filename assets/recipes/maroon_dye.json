@@ -1,0 +1,12 @@
+{
+  "id": "maroon_dye",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "red_dye",
+    "black_dye"
+  ],
+  "result": {
+    "item": "maroon_dye",
+    "count": 2
+  }
+}

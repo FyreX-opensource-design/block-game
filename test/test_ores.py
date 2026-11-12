@@ -14,6 +14,7 @@ from server.blocks import (
     GRAVEL,
     IRON_ORE,
     STONE,
+    block_index,
 )
 from server.items import ITEMS
 from server.loot import get_block_drops
@@ -92,6 +93,88 @@ class OreTests(unittest.TestCase):
             "iron_ingot",
         ):
             self.assertIn(item_id, ITEMS)
+
+    def test_stone_ore_variants_registered(self):
+        stones = ("granite", "diorite", "andesite", "marble", "limestone")
+        ores = ("coal", "copper", "iron", "tin")
+        mining_levels = {"coal": 1, "tin": 1, "copper": 2, "iron": 3}
+
+        for s in stones:
+            for o in ores:
+                ore_block = f"{s}_{o}_ore"
+                self.assertIn(ore_block, BLOCKS)
+                self.assertIn(ore_block, ITEMS)
+                self.assertEqual(ITEMS[ore_block].block, ore_block)
+                self.assertEqual(BLOCKS[ore_block].mining_level, mining_levels[o])
+
+    def test_stone_ore_variants_loot_drops(self):
+        flint_pick = ITEMS["flint_pickaxe"]  # mining level 1
+        stone_pick = ITEMS["stone_pickaxe"]  # mining level 2
+        iron_pick = ITEMS["iron_pickaxe"]    # mining level 3
+        stones = ("granite", "diorite", "andesite", "marble", "limestone")
+
+        for s in stones:
+            # Coal ore drops coal with flint pickaxe
+            coal_drops = dict(get_block_drops(f"{s}_coal_ore", held_item=flint_pick))
+            self.assertEqual(coal_drops.get("coal"), 1)
+
+            # Tin ore drops raw_tin and bits with flint pickaxe
+            tin_drops = dict(get_block_drops(f"{s}_tin_ore", held_item=flint_pick))
+            self.assertEqual(tin_drops.get("raw_tin"), 1)
+            self.assertIn("raw_tin_bit", tin_drops)
+
+            # Copper ore drops raw_copper with flint pickaxe (min_level 1)
+            copper_drops = dict(get_block_drops(f"{s}_copper_ore", held_item=flint_pick))
+            self.assertEqual(copper_drops.get("raw_copper"), 1)
+
+            # Iron ore requires min_level 2 (stone pickaxe); flint pick drops nothing
+            self.assertEqual(get_block_drops(f"{s}_iron_ore", held_item=flint_pick), [])
+            iron_drops = dict(get_block_drops(f"{s}_iron_ore", held_item=stone_pick))
+            self.assertEqual(iron_drops.get("raw_iron"), 1)
+
+            # Mining without pickaxe yields nothing
+            self.assertEqual(get_block_drops(f"{s}_coal_ore", held_item=None), [])
+            self.assertEqual(get_block_drops(f"{s}_iron_ore", held_item=None), [])
+
+    def test_stone_ore_variants_smelting(self):
+        stones = ("granite", "diorite", "andesite", "marble", "limestone")
+        for s in stones:
+            self.assertEqual(smelt_match(f"{s}_copper_ore")[:2], ("copper_ingot", 1))
+            self.assertEqual(smelt_match(f"{s}_iron_ore")[:2], ("iron_ingot", 1))
+            self.assertEqual(smelt_match(f"{s}_tin_ore")[:2], ("tin_ingot", 1))
+
+    def test_ore_target_blocks_generation(self):
+        # Test that an Ore with target_blocks mapping replaces stone variants accordingly
+        target_map = {
+            "stone": "coal_ore",
+            "granite": "granite_coal_ore",
+            "diorite": "diorite_coal_ore",
+        }
+        test_ore = Ore(
+            "test_target_map_ore",
+            "coal_ore",
+            "stone",
+            min_y=1,
+            max_y=100,
+            scale=0.1,
+            threshold=-2.0,
+            octaves=1,
+            seed_offset=1,
+            enabled=True,
+            target_blocks=target_map,
+        )
+        world = World(seed=1, ores=[test_ore], caves=[])
+        data = np.zeros((16, 16, 16), dtype=np.uint16)
+        data[0, 0, 0] = block_index("stone")
+        data[0, 0, 1] = block_index("granite")
+        data[0, 0, 2] = block_index("diorite")
+        data[0, 0, 3] = block_index("dirt")
+
+        world._place_ores(data, 0, 16, 0)
+        self.assertEqual(data[0, 0, 0], block_index("coal_ore"))
+        self.assertEqual(data[0, 0, 1], block_index("granite_coal_ore"))
+        self.assertEqual(data[0, 0, 2], block_index("diorite_coal_ore"))
+        self.assertEqual(data[0, 0, 3], block_index("dirt"))
 
     def test_world_generation_contains_ores_and_gravel_in_stone(self):
         world = World(seed=42)
@@ -272,6 +355,48 @@ class OreTests(unittest.TestCase):
         for feat in range(1, num_features + 1):
             cluster_size = np.sum(labeled == feat)
             self.assertLessEqual(cluster_size, 5)
+
+    def test_ores_generate_in_soil_layers_of_stone_surfaced_biomes(self):
+        # In stone-surfaced biomes (such as cliff_beach), soil and subsoil are stone.
+        # Ores targeting stone generate in these stone soil layers.
+        from server.biomes import BIOMES, biome_at
+        from server.noise import terrain_height
+
+        everywhere_ore = Ore(
+            "test_surface_ore",
+            "iron_ore",
+            "stone",
+            min_y=1,
+            max_y=255,
+            scale=0.01,
+            threshold=-2.0,  # Guarantees ore placement wherever target block is present
+            octaves=1,
+            seed_offset=0,
+            enabled=True,
+            max_vein_size=0,
+        )
+        world = World(seed=1, ores=[everywhere_ore], caves=[])
+
+        cliff_pt = None
+        for z in range(-300, 301, 8):
+            for x in range(-300, 301, 8):
+                b = biome_at(x, z, 1, BIOMES)
+                if b.id == "cliff_beach":
+                    h = terrain_height(x, z, 1)
+                    if h >= 64:
+                        cliff_pt = (x, z)
+                        break
+            if cliff_pt:
+                break
+
+        self.assertIsNotNone(cliff_pt, "Should find a cliff_beach coordinate")
+        cx, cz = cliff_pt
+        h = terrain_height(cx, cz, 1)
+        world.generate_column(cx // 16, cz // 16)
+
+        # The soil layer beneath the surface in cliff_beach is stone, so it should have ores placed
+        soil_block = world.get_block(cx, h - 1, cz)
+        self.assertEqual(soil_block, "iron_ore")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,12 @@
+{
+  "id": "persimmon_dye",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "red_dye",
+    "orange_dye"
+  ],
+  "result": {
+    "item": "persimmon_dye",
+    "count": 2
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "id": "mint_dye",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "lime_dye",
+    "white_dye"
+  ],
+  "result": {
+    "item": "mint_dye",
+    "count": 2
+  }
+}

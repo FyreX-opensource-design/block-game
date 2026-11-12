@@ -1,0 +1,12 @@
+{
+  "id": "brown_dye",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "red_dye",
+    "green_dye"
+  ],
+  "result": {
+    "item": "brown_dye",
+    "count": 2
+  }
+}

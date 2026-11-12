@@ -1,0 +1,12 @@
+{
+  "id": "wine_dye",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "purple_dye",
+    "maroon_dye"
+  ],
+  "result": {
+    "item": "wine_dye",
+    "count": 2
+  }
+}

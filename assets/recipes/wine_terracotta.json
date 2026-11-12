@@ -1,0 +1,17 @@
+{
+  "id": "wine_terracotta",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "terracotta",
+    "D": "wine_dye"
+  },
+  "result": {
+    "item": "wine_terracotta",
+    "count": 8
+  }
+}

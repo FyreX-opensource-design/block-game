@@ -1,0 +1,18 @@
+{
+  "id": "chiseled_sapphire",
+  "lang": "block.chiseled_sapphire",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 4.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/chiseled_sapphire",
+  "sound": "stone",
+  "textures": {
+    "top": "chiseled_sapphire",
+    "side": "chiseled_sapphire",
+    "bottom": "chiseled_sapphire"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "id": "wine_stained_glass",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "glass",
+    "D": "wine_dye"
+  },
+  "result": {
+    "item": "wine_stained_glass",
+    "count": 8
+  }
+}

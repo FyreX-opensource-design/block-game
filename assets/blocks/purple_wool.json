@@ -1,0 +1,21 @@
+{
+  "id": "purple_wool",
+  "lang": "block.purple_wool",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 0.8,
+  "tool": "shears",
+  "mining_level": 0,
+  "textures": {
+    "top": "purple_wool",
+    "side": "purple_wool",
+    "bottom": "purple_wool"
+  },
+  "properties": {
+    "tags": [
+      "wool"
+    ]
+  }
+}

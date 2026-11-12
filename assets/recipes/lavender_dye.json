@@ -1,0 +1,12 @@
+{
+  "id": "lavender_dye",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "purple_dye",
+    "white_dye"
+  ],
+  "result": {
+    "item": "lavender_dye",
+    "count": 2
+  }
+}

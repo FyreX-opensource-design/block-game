@@ -1,0 +1,45 @@
+{
+  "id": "andesite_diamond_ore",
+  "lang": "block.andesite_diamond_ore",
+  "tab": [
+    "natural"
+  ],
+  "model": "cube",
+  "hardness": 5.0,
+  "tool": "pickaxe",
+  "mining_level": 6,
+  "loot_table": "blocks/andesite_diamond_ore",
+  "sound": "stone",
+  "textures": {
+    "top": "andesite_diamond_ore/andesite_diamond_ore_var_1",
+    "side": "andesite_diamond_ore/andesite_diamond_ore_var_1",
+    "bottom": "andesite_diamond_ore/andesite_diamond_ore_var_1"
+  },
+  "palettes": [
+    {
+      "top": "andesite_diamond_ore/andesite_diamond_ore_var_1",
+      "side": "andesite_diamond_ore/andesite_diamond_ore_var_1",
+      "bottom": "andesite_diamond_ore/andesite_diamond_ore_var_1"
+    },
+    {
+      "top": "andesite_diamond_ore/andesite_diamond_ore_var_2",
+      "side": "andesite_diamond_ore/andesite_diamond_ore_var_2",
+      "bottom": "andesite_diamond_ore/andesite_diamond_ore_var_2"
+    },
+    {
+      "top": "andesite_diamond_ore/andesite_diamond_ore_var_3",
+      "side": "andesite_diamond_ore/andesite_diamond_ore_var_3",
+      "bottom": "andesite_diamond_ore/andesite_diamond_ore_var_3"
+    },
+    {
+      "top": "andesite_diamond_ore/andesite_diamond_ore_var_4",
+      "side": "andesite_diamond_ore/andesite_diamond_ore_var_4",
+      "bottom": "andesite_diamond_ore/andesite_diamond_ore_var_4"
+    },
+    {
+      "top": "andesite_diamond_ore/andesite_diamond_ore_var_5",
+      "side": "andesite_diamond_ore/andesite_diamond_ore_var_5",
+      "bottom": "andesite_diamond_ore/andesite_diamond_ore_var_5"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "id": "light_gray_brick",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "brick",
+    "D": "light_gray_dye"
+  },
+  "result": {
+    "item": "light_gray_brick",
+    "count": 8
+  }
+}

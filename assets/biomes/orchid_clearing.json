@@ -1,0 +1,43 @@
+{
+  "id": "orchid_clearing",
+  "name": "Orchid Clearing",
+  "variant_of": "highland_plains",
+  "variant_noise": {
+    "scale": 0.042,
+    "octaves": 2,
+    "seed_offset": 8505,
+    "offset": [
+      -61.2,
+      23.7
+    ],
+    "threshold": 0.63,
+    "above": true
+  },
+  "surface": "grass",
+  "soil": "dirt",
+  "soil_depth": 3,
+  "scale": 0.006,
+  "octaves": 2,
+  "seed_offset": 90,
+  "ceiling": 0.54,
+  "tree_chance": 0.0015,
+  "height_offset": -1.0,
+  "height_scale": 0.95,
+  "cliff": false,
+  "transition": {
+    "blend": 0.08,
+    "curve": "smoothstep"
+  },
+  "trees": [
+    "oak",
+    "shrub"
+  ],
+  "decorations": [
+    "orchid_clearing_flowers",
+    {
+      "feature": "tall_grass",
+      "chance": 0.14
+    }
+  ],
+  "grass_color": "#66bd4b"
+}

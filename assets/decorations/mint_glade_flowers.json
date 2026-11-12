@@ -1,0 +1,17 @@
+{
+  "id": "mint_glade_flowers",
+  "blocks": {
+    "mint_blossom": 4,
+    "lime_blossom": 3,
+    "green_carnation": 3,
+    "aqua_iris": 3,
+    "sea_holly": 3,
+    "pine_lily": 2,
+    "vernal_tulip": 2
+  },
+  "chance": 0.56,
+  "surfaces": [
+    "grass"
+  ],
+  "seed_offset": 8656
+}

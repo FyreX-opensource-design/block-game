@@ -1,0 +1,18 @@
+{
+  "id": "cut_diamond",
+  "lang": "block.cut_diamond",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 4.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/cut_diamond",
+  "sound": "stone",
+  "textures": {
+    "top": "cut_diamond",
+    "side": "cut_diamond",
+    "bottom": "cut_diamond"
+  }
+}

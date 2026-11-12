@@ -234,18 +234,21 @@ class AssetTests(unittest.TestCase):
         self.assertEqual(frame.labels[0].text, "Natural Blocks")
 
     def test_shorter_model_lowers_the_top_face(self):
+        from server.blocks import BY_INDEX
+
         uvs = ((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0))
         element = {
             "from": [0.0, 0.0, 0.0],
             "to": [16.0, 8.0, 16.0],
             "faces": {index: uvs for index in range(6)},
         }
+        slot = len(BY_INDEX)
         block = Block("slab", "Slab", True, False, [uvs] * 6, [element])
-        install(block, 200)
+        install(block, slot)
         try:
             world = World()
             chunk = Chunk(0, 0, 0)
-            chunk.data[3, 2, 4] = 200
+            chunk.data[3, 2, 4] = slot
             world.chunks[(0, 0, 0)] = chunk
             mesh = build_chunk_mesh(world, 0, 0, 0)
             self.assertEqual(len(mesh.vertices), 24)
@@ -253,3 +256,5 @@ class AssetTests(unittest.TestCase):
             self.assertAlmostEqual(float(mesh.vertices[:, 1].min()), 3.0)
         finally:
             uninstall("slab")
+            while BY_INDEX and BY_INDEX[-1] is None:
+                BY_INDEX.pop()

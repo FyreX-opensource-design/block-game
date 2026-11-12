@@ -1,0 +1,21 @@
+{
+  "id": "andesite_pillar",
+  "lang": "block.andesite_pillar",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "loot_table": "blocks/andesite_pillar",
+  "sound": "stone",
+  "properties": {
+    "rotation": "axis"
+  },
+  "textures": {
+    "top": "andesite_pillar_top",
+    "side": "andesite_pillar_side",
+    "bottom": "andesite_pillar_top"
+  }
+}

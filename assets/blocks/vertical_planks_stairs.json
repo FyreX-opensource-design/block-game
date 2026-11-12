@@ -1,0 +1,19 @@
+{
+  "id": "vertical_planks_stairs",
+  "lang": "block.vertical_planks_stairs",
+  "type": "stairs",
+  "tab": [
+    "building"
+  ],
+  "model": "stairs",
+  "hardness": 2.0,
+  "tool": "axe",
+  "mining_level": 0,
+  "sound": "wood",
+  "loot_table": "blocks/vertical_planks_stairs",
+  "textures": {
+    "top": "vertical_oak_planks",
+    "side": "vertical_oak_planks",
+    "bottom": "vertical_oak_planks"
+  }
+}

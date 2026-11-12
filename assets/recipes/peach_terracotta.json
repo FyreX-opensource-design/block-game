@@ -1,0 +1,17 @@
+{
+  "id": "peach_terracotta",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "terracotta",
+    "D": "peach_dye"
+  },
+  "result": {
+    "item": "peach_terracotta",
+    "count": 8
+  }
+}

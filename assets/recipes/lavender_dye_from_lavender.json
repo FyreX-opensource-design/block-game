@@ -1,0 +1,11 @@
+{
+  "id": "lavender_dye_from_lavender",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "lavender"
+  ],
+  "result": {
+    "item": "lavender_dye",
+    "count": 1
+  }
+}

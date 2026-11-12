@@ -1,0 +1,43 @@
+{
+  "id": "autumn_blossom_patch",
+  "name": "Autumn Blossom Patch",
+  "variant_of": "pine_forest",
+  "variant_noise": {
+    "scale": 0.04,
+    "octaves": 2,
+    "seed_offset": 8707,
+    "offset": [
+      -24.9,
+      -44.1
+    ],
+    "threshold": 0.61,
+    "above": true
+  },
+  "surface": "grass",
+  "soil": "dirt",
+  "soil_depth": 3,
+  "scale": 0.006,
+  "octaves": 2,
+  "seed_offset": 90,
+  "ceiling": 0.65,
+  "tree_chance": 0.005,
+  "height_offset": 6.0,
+  "height_scale": 1.1,
+  "cliff": false,
+  "transition": {
+    "blend": 0.08,
+    "curve": "smoothstep"
+  },
+  "trees": [
+    "pine",
+    "shrub"
+  ],
+  "decorations": [
+    "autumn_blossom_patch_flowers",
+    {
+      "feature": "fern",
+      "chance": 0.14
+    }
+  ],
+  "grass_color": "#5ea149"
+}

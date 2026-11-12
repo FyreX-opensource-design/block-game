@@ -1,0 +1,11 @@
+{
+  "id": "navy_stained_glass_slab_from_navy_stained_glass_vertical_slab",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "navy_stained_glass_vertical_slab"
+  ],
+  "result": {
+    "item": "navy_stained_glass_slab",
+    "count": 1
+  }
+}

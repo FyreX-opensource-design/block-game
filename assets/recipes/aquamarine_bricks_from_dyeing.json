@@ -1,0 +1,17 @@
+{
+  "id": "aquamarine_bricks_from_dyeing",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "bricks",
+    "D": "aquamarine_dye"
+  },
+  "result": {
+    "item": "aquamarine_bricks",
+    "count": 8
+  }
+}

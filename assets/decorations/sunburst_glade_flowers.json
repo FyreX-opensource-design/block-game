@@ -1,0 +1,16 @@
+{
+  "id": "sunburst_glade_flowers",
+  "blocks": {
+    "sunburst_lupine": 3,
+    "sunflower": 3,
+    "tiger_lily": 3,
+    "peach_poppy": 3,
+    "marigold": 2,
+    "orange_tulip": 2
+  },
+  "chance": 0.56,
+  "surfaces": [
+    "grass"
+  ],
+  "seed_offset": 8252
+}

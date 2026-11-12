@@ -1,0 +1,14 @@
+{
+  "id": "large_diorite_brick_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###"
+  ],
+  "key": {
+    "#": "large_diorite_bricks"
+  },
+  "result": {
+    "item": "large_diorite_brick_slab",
+    "count": 6
+  }
+}

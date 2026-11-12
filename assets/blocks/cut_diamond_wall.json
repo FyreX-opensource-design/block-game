@@ -1,0 +1,19 @@
+{
+  "id": "cut_diamond_wall",
+  "lang": "block.cut_diamond_wall",
+  "tab": [
+    "building"
+  ],
+  "model": "wall_post",
+  "hardness": 4.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/cut_diamond_wall",
+  "sound": "stone",
+  "textures": {
+    "top": "cut_diamond",
+    "side": "cut_diamond",
+    "bottom": "cut_diamond"
+  },
+  "type": "wall"
+}

@@ -1,0 +1,12 @@
+{
+  "id": "fluorescent_dye",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "lime_dye",
+    "yellow_dye"
+  ],
+  "result": {
+    "item": "fluorescent_dye",
+    "count": 2
+  }
+}

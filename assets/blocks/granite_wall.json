@@ -1,0 +1,50 @@
+{
+  "id": "granite_wall",
+  "lang": "block.granite_wall",
+  "tab": [
+    "building"
+  ],
+  "model": "wall_post",
+  "type": "wall",
+  "solid": true,
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "sound": "stone",
+  "loot_table": "blocks/granite_wall",
+  "properties": {
+    "wall": true
+  },
+  "textures": {
+    "top": "granite/granite_var_1",
+    "side": "granite/granite_var_1",
+    "texture": "granite/granite_var_1"
+  },
+  "palettes": [
+    {
+      "top": "granite/granite_var_1",
+      "side": "granite/granite_var_1",
+      "texture": "granite/granite_var_1"
+    },
+    {
+      "top": "granite/granite_var_2",
+      "side": "granite/granite_var_2",
+      "texture": "granite/granite_var_2"
+    },
+    {
+      "top": "granite/granite_var_3",
+      "side": "granite/granite_var_3",
+      "texture": "granite/granite_var_3"
+    },
+    {
+      "top": "granite/granite_var_4",
+      "side": "granite/granite_var_4",
+      "texture": "granite/granite_var_4"
+    },
+    {
+      "top": "granite/granite_var_5",
+      "side": "granite/granite_var_5",
+      "texture": "granite/granite_var_5"
+    }
+  ]
+}

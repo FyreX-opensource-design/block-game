@@ -1,0 +1,18 @@
+{
+  "id": "chiseled_diamond",
+  "lang": "block.chiseled_diamond",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 4.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/chiseled_diamond",
+  "sound": "stone",
+  "textures": {
+    "top": "chiseled_diamond",
+    "side": "chiseled_diamond",
+    "bottom": "chiseled_diamond"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "id": "blue_orchid",
+  "lang": "block.blue_orchid",
+  "tab": "natural",
+  "model": "cross",
+  "render": "cutout",
+  "solid": false,
+  "hardness": 0.0,
+  "tool": "none",
+  "mining_level": 0,
+  "loot_table": "blocks/blue_orchid",
+  "fluid_breakable": true,
+  "plant": true,
+  "requires_soil": true,
+  "textures": {
+    "cross": "blue_orchid"
+  }
+}

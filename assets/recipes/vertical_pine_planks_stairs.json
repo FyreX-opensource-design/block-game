@@ -1,0 +1,16 @@
+{
+  "id": "vertical_pine_planks_stairs",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#  ",
+    "## ",
+    "###"
+  ],
+  "key": {
+    "#": "vertical_pine_planks"
+  },
+  "result": {
+    "item": "vertical_pine_planks_stairs",
+    "count": 4
+  }
+}

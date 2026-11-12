@@ -1,0 +1,18 @@
+{
+  "id": "autumn_blossom_patch_flowers",
+  "blocks": {
+    "pine_lily": 3,
+    "green_carnation": 2,
+    "chocolate_cosmos": 3,
+    "burgundy_dahlia": 3,
+    "tiger_lily": 3,
+    "crimson_hollyhock": 3,
+    "rose_bush": 2,
+    "marigold": 2
+  },
+  "chance": 0.56,
+  "surfaces": [
+    "grass"
+  ],
+  "seed_offset": 8757
+}

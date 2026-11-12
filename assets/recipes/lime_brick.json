@@ -1,0 +1,17 @@
+{
+  "id": "lime_brick",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "brick",
+    "D": "lime_dye"
+  },
+  "result": {
+    "item": "lime_brick",
+    "count": 8
+  }
+}

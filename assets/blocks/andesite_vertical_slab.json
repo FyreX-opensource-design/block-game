@@ -1,0 +1,47 @@
+{
+  "id": "andesite_vertical_slab",
+  "lang": "block.andesite_vertical_slab",
+  "type": "vertical_slab",
+  "tab": [
+    "building"
+  ],
+  "model": "vertical_slab",
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/andesite_vertical_slab",
+  "full_block": "andesite",
+  "sound": "stone",
+  "textures": {
+    "top": "andesite/andesite_var_1",
+    "side": "andesite/andesite_var_1",
+    "bottom": "andesite/andesite_var_1"
+  },
+  "palettes": [
+    {
+      "top": "andesite/andesite_var_1",
+      "side": "andesite/andesite_var_1",
+      "bottom": "andesite/andesite_var_1"
+    },
+    {
+      "top": "andesite/andesite_var_2",
+      "side": "andesite/andesite_var_2",
+      "bottom": "andesite/andesite_var_2"
+    },
+    {
+      "top": "andesite/andesite_var_3",
+      "side": "andesite/andesite_var_3",
+      "bottom": "andesite/andesite_var_3"
+    },
+    {
+      "top": "andesite/andesite_var_4",
+      "side": "andesite/andesite_var_4",
+      "bottom": "andesite/andesite_var_4"
+    },
+    {
+      "top": "andesite/andesite_var_5",
+      "side": "andesite/andesite_var_5",
+      "bottom": "andesite/andesite_var_5"
+    }
+  ]
+}

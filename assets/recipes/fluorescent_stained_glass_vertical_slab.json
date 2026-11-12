@@ -1,0 +1,16 @@
+{
+  "id": "fluorescent_stained_glass_vertical_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "#",
+    "#"
+  ],
+  "key": {
+    "#": "fluorescent_stained_glass_slab"
+  },
+  "result": {
+    "item": "fluorescent_stained_glass_vertical_slab",
+    "count": 3
+  }
+}

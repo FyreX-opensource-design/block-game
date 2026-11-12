@@ -1,0 +1,17 @@
+{
+  "id": "amber_brick",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "brick",
+    "D": "amber_dye"
+  },
+  "result": {
+    "item": "amber_brick",
+    "count": 8
+  }
+}

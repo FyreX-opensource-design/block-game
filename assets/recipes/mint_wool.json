@@ -1,0 +1,12 @@
+{
+  "id": "mint_wool",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "#wool",
+    "mint_dye"
+  ],
+  "result": {
+    "item": "mint_wool",
+    "count": 1
+  }
+}

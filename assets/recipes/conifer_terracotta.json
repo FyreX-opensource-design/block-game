@@ -1,0 +1,17 @@
+{
+  "id": "conifer_terracotta",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "terracotta",
+    "D": "conifer_dye"
+  },
+  "result": {
+    "item": "conifer_terracotta",
+    "count": 8
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "id": "spring_green_bricks",
+  "lang": "block.spring_green_bricks",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "loot_table": "blocks/spring_green_bricks",
+  "sound": "stone",
+  "textures": {
+    "top": "bricks/spring_green_bricks",
+    "side": "bricks/spring_green_bricks",
+    "bottom": "bricks/spring_green_bricks"
+  }
+}

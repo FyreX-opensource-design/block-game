@@ -1,0 +1,14 @@
+{
+  "id": "cut_ruby_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###"
+  ],
+  "key": {
+    "#": "cut_ruby"
+  },
+  "result": {
+    "item": "cut_ruby_slab",
+    "count": 6
+  }
+}

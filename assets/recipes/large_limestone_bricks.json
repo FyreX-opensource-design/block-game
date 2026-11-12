@@ -1,0 +1,15 @@
+{
+  "id": "large_limestone_bricks",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "##"
+  ],
+  "key": {
+    "#": "smooth_limestone"
+  },
+  "result": {
+    "item": "large_limestone_bricks",
+    "count": 4
+  }
+}

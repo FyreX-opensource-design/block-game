@@ -1,0 +1,50 @@
+{
+  "id": "marble_wall",
+  "lang": "block.marble_wall",
+  "tab": [
+    "building"
+  ],
+  "model": "wall_post",
+  "type": "wall",
+  "solid": true,
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "sound": "stone",
+  "loot_table": "blocks/marble_wall",
+  "properties": {
+    "wall": true
+  },
+  "textures": {
+    "top": "marble/marble_var_1",
+    "side": "marble/marble_var_1",
+    "texture": "marble/marble_var_1"
+  },
+  "palettes": [
+    {
+      "top": "marble/marble_var_1",
+      "side": "marble/marble_var_1",
+      "texture": "marble/marble_var_1"
+    },
+    {
+      "top": "marble/marble_var_2",
+      "side": "marble/marble_var_2",
+      "texture": "marble/marble_var_2"
+    },
+    {
+      "top": "marble/marble_var_3",
+      "side": "marble/marble_var_3",
+      "texture": "marble/marble_var_3"
+    },
+    {
+      "top": "marble/marble_var_4",
+      "side": "marble/marble_var_4",
+      "texture": "marble/marble_var_4"
+    },
+    {
+      "top": "marble/marble_var_5",
+      "side": "marble/marble_var_5",
+      "texture": "marble/marble_var_5"
+    }
+  ]
+}

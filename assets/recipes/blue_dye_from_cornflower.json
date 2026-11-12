@@ -1,0 +1,11 @@
+{
+  "id": "blue_dye_from_cornflower",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "cornflower"
+  ],
+  "result": {
+    "item": "blue_dye",
+    "count": 1
+  }
+}

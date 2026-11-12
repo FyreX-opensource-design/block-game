@@ -1,0 +1,15 @@
+{
+  "id": "chiseled_emerald",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "#"
+  ],
+  "key": {
+    "#": "cut_emerald_slab"
+  },
+  "result": {
+    "item": "chiseled_emerald",
+    "count": 1
+  }
+}

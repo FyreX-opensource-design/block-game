@@ -1,0 +1,47 @@
+{
+  "id": "marble_vertical_slab",
+  "lang": "block.marble_vertical_slab",
+  "type": "vertical_slab",
+  "tab": [
+    "building"
+  ],
+  "model": "vertical_slab",
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/marble_vertical_slab",
+  "full_block": "marble",
+  "sound": "stone",
+  "textures": {
+    "top": "marble/marble_var_1",
+    "side": "marble/marble_var_1",
+    "bottom": "marble/marble_var_1"
+  },
+  "palettes": [
+    {
+      "top": "marble/marble_var_1",
+      "side": "marble/marble_var_1",
+      "bottom": "marble/marble_var_1"
+    },
+    {
+      "top": "marble/marble_var_2",
+      "side": "marble/marble_var_2",
+      "bottom": "marble/marble_var_2"
+    },
+    {
+      "top": "marble/marble_var_3",
+      "side": "marble/marble_var_3",
+      "bottom": "marble/marble_var_3"
+    },
+    {
+      "top": "marble/marble_var_4",
+      "side": "marble/marble_var_4",
+      "bottom": "marble/marble_var_4"
+    },
+    {
+      "top": "marble/marble_var_5",
+      "side": "marble/marble_var_5",
+      "bottom": "marble/marble_var_5"
+    }
+  ]
+}

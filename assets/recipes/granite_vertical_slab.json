@@ -1,0 +1,16 @@
+{
+  "id": "granite_vertical_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "#",
+    "#"
+  ],
+  "key": {
+    "#": "granite_slab"
+  },
+  "result": {
+    "item": "granite_vertical_slab",
+    "count": 3
+  }
+}

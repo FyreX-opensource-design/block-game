@@ -1,0 +1,12 @@
+{
+  "id": "honey_dye",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "yellow_dye",
+    "white_dye"
+  ],
+  "result": {
+    "item": "honey_dye",
+    "count": 2
+  }
+}

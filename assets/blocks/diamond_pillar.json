@@ -1,0 +1,21 @@
+{
+  "id": "diamond_pillar",
+  "lang": "block.diamond_pillar",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 4.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/diamond_pillar",
+  "sound": "stone",
+  "textures": {
+    "top": "diamond_pillar_top",
+    "side": "diamond_pillar_side",
+    "bottom": "diamond_pillar_top"
+  },
+  "properties": {
+    "rotation": "axis"
+  }
+}

@@ -12,8 +12,35 @@
   "loot_table": "blocks/andesite",
   "sound": "stone",
   "textures": {
-    "top": "andesite",
-    "side": "andesite",
-    "bottom": "andesite"
-  }
+    "top": "andesite/andesite_var_1",
+    "side": "andesite/andesite_var_1",
+    "bottom": "andesite/andesite_var_1"
+  },
+  "palettes": [
+    {
+      "top": "andesite/andesite_var_1",
+      "side": "andesite/andesite_var_1",
+      "bottom": "andesite/andesite_var_1"
+    },
+    {
+      "top": "andesite/andesite_var_2",
+      "side": "andesite/andesite_var_2",
+      "bottom": "andesite/andesite_var_2"
+    },
+    {
+      "top": "andesite/andesite_var_3",
+      "side": "andesite/andesite_var_3",
+      "bottom": "andesite/andesite_var_3"
+    },
+    {
+      "top": "andesite/andesite_var_4",
+      "side": "andesite/andesite_var_4",
+      "bottom": "andesite/andesite_var_4"
+    },
+    {
+      "top": "andesite/andesite_var_5",
+      "side": "andesite/andesite_var_5",
+      "bottom": "andesite/andesite_var_5"
+    }
+  ]
 }

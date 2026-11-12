@@ -1,0 +1,17 @@
+{
+  "id": "rose_brick",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "brick",
+    "D": "rose_dye"
+  },
+  "result": {
+    "item": "rose_brick",
+    "count": 8
+  }
+}

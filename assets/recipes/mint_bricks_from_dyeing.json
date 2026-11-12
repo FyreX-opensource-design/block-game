@@ -1,0 +1,17 @@
+{
+  "id": "mint_bricks_from_dyeing",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "bricks",
+    "D": "mint_dye"
+  },
+  "result": {
+    "item": "mint_bricks",
+    "count": 8
+  }
+}

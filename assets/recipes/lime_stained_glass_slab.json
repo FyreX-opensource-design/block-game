@@ -1,0 +1,14 @@
+{
+  "id": "lime_stained_glass_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###"
+  ],
+  "key": {
+    "#": "lime_stained_glass"
+  },
+  "result": {
+    "item": "lime_stained_glass_slab",
+    "count": 6
+  }
+}

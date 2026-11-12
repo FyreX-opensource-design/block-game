@@ -1,0 +1,21 @@
+{
+  "id": "aquamarine_wool",
+  "lang": "block.aquamarine_wool",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 0.8,
+  "tool": "shears",
+  "mining_level": 0,
+  "textures": {
+    "top": "aquamarine_wool",
+    "side": "aquamarine_wool",
+    "bottom": "aquamarine_wool"
+  },
+  "properties": {
+    "tags": [
+      "wool"
+    ]
+  }
+}

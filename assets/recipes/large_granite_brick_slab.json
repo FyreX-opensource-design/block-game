@@ -1,0 +1,14 @@
+{
+  "id": "large_granite_brick_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###"
+  ],
+  "key": {
+    "#": "large_granite_bricks"
+  },
+  "result": {
+    "item": "large_granite_brick_slab",
+    "count": 6
+  }
+}

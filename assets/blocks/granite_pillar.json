@@ -1,0 +1,21 @@
+{
+  "id": "granite_pillar",
+  "lang": "block.granite_pillar",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "loot_table": "blocks/granite_pillar",
+  "sound": "stone",
+  "properties": {
+    "rotation": "axis"
+  },
+  "textures": {
+    "top": "granite_pillar_top",
+    "side": "granite_pillar_side",
+    "bottom": "granite_pillar_top"
+  }
+}

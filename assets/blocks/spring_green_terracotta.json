@@ -1,0 +1,18 @@
+{
+  "id": "spring_green_terracotta",
+  "lang": "block.spring_green_terracotta",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 1.25,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "loot_table": "blocks/spring_green_terracotta",
+  "sound": "stone",
+  "textures": {
+    "top": "terracotta/spring_green_terracotta",
+    "side": "terracotta/spring_green_terracotta",
+    "bottom": "terracotta/spring_green_terracotta"
+  }
+}

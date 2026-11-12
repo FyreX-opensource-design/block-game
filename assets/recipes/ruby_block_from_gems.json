@@ -1,0 +1,16 @@
+{
+  "id": "ruby_block_from_gems",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "###",
+    "###"
+  ],
+  "key": {
+    "#": "ruby"
+  },
+  "result": {
+    "item": "ruby_block",
+    "count": 1
+  }
+}

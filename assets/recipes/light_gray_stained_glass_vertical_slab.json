@@ -1,0 +1,16 @@
+{
+  "id": "light_gray_stained_glass_vertical_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "#",
+    "#"
+  ],
+  "key": {
+    "#": "light_gray_stained_glass_slab"
+  },
+  "result": {
+    "item": "light_gray_stained_glass_vertical_slab",
+    "count": 3
+  }
+}

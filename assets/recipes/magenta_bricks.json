@@ -1,0 +1,15 @@
+{
+  "id": "magenta_bricks",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "##"
+  ],
+  "key": {
+    "#": "magenta_brick"
+  },
+  "result": {
+    "item": "magenta_bricks",
+    "count": 1
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "id": "diamond_brick_wall",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "###"
+  ],
+  "key": {
+    "#": "diamond_bricks"
+  },
+  "result": {
+    "item": "diamond_brick_wall",
+    "count": 6
+  }
+}

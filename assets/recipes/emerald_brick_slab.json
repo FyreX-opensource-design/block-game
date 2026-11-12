@@ -1,0 +1,14 @@
+{
+  "id": "emerald_brick_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###"
+  ],
+  "key": {
+    "#": "emerald_bricks"
+  },
+  "result": {
+    "item": "emerald_brick_slab",
+    "count": 6
+  }
+}

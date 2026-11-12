@@ -1,0 +1,12 @@
+{
+  "id": "amber_dye",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "orange_dye",
+    "yellow_dye"
+  ],
+  "result": {
+    "item": "amber_dye",
+    "count": 2
+  }
+}

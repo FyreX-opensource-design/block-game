@@ -1,0 +1,18 @@
+{
+  "id": "cut_sapphire",
+  "lang": "block.cut_sapphire",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 4.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/cut_sapphire",
+  "sound": "stone",
+  "textures": {
+    "top": "cut_sapphire",
+    "side": "cut_sapphire",
+    "bottom": "cut_sapphire"
+  }
+}

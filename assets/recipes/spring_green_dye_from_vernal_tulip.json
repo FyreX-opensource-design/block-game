@@ -1,0 +1,11 @@
+{
+  "id": "spring_green_dye_from_vernal_tulip",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "vernal_tulip"
+  ],
+  "result": {
+    "item": "spring_green_dye",
+    "count": 1
+  }
+}

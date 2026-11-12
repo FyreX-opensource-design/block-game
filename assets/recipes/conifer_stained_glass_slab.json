@@ -1,0 +1,14 @@
+{
+  "id": "conifer_stained_glass_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###"
+  ],
+  "key": {
+    "#": "conifer_stained_glass"
+  },
+  "result": {
+    "item": "conifer_stained_glass_slab",
+    "count": 6
+  }
+}

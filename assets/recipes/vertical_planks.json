@@ -1,0 +1,16 @@
+{
+  "id": "vertical_planks",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "#",
+    "#"
+  ],
+  "key": {
+    "#": "planks"
+  },
+  "result": {
+    "item": "vertical_planks",
+    "count": 3
+  }
+}

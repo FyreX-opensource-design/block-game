@@ -835,6 +835,80 @@ class TestFluidDefinitionsAndInteractions(unittest.TestCase):
         self.assertEqual(self.world.get_block(5, 81, 4), "smooth_sandstone_vertical_slab_west")
         self.assertEqual(self.world.get_block(6, 81, 4), AIR)
 
+    def test_deep_ocean_spreads_into_broken_shore_block(self):
+        # 2-block-deep ocean at x=5, z=4..6 (y=81, 82 are salt_water sources; y=80 is sand)
+        for z in range(4, 7):
+            self.world.set_block(5, 80, z, "sand")
+            self.world.set_block(5, 81, z, "salt_water")
+            self.world.set_block(5, 82, z, "salt_water")
+            self.world.set_block(4, 81, z, STONE)
+            self.world.set_block(4, 82, z, STONE)
+
+        # Shore sand wall at x=6, z=4..6
+        for z in range(4, 7):
+            for y in range(80, 83):
+                self.world.set_block(6, y, z, "sand")
+            self.world.set_block(7, 81, z, STONE)
+            self.world.set_block(7, 82, z, STONE)
+        self.world.set_block(6, 82, 4, STONE)
+        self.world.set_block(6, 82, 6, STONE)
+
+        for _ in range(5):
+            self.world.update_fluids(0.2)
+
+        # Break top shore sand block at (6, 82, 5) adjacent to deep ocean surface
+        self.world.set_block(6, 82, 5, AIR)
+        for _ in range(10):
+            self.world.update_fluids(0.2)
+
+        self.assertEqual(self.world.get_block(6, 82, 5), "salt_water_7")
+
+        # Also break sand directly underneath at (6, 81, 5): water must fall into it
+        self.world.set_block(6, 81, 5, AIR)
+        for _ in range(10):
+            self.world.update_fluids(0.2)
+
+        self.assertEqual(self.world.get_block(6, 81, 5), "salt_water_falling")
+
+    def test_ocean_source_below_does_not_block_horizontal_dropoff_flow(self):
+        # Source at (5, 82, 5) on sand, with an ocean source at (5, 81, 6) below (5, 82, 6)
+        # and newly broken sand at (6, 82, 5) over sand.
+        for x in range(4, 8):
+            for z in range(4, 8):
+                self.world.set_block(x, 80, z, STONE)
+                self.world.set_block(x, 81, z, STONE)
+        self.world.set_block(5, 81, 6, "salt_water")
+        self.world.set_block(4, 82, 5, STONE)
+        self.world.set_block(5, 82, 4, STONE)
+        self.world.set_block(5, 82, 5, "salt_water")
+        self.world.set_block(6, 82, 5, "sand")
+
+        for _ in range(5):
+            self.world.update_fluids(0.2)
+
+        # Break sand at (6, 82, 5): salt_water at (5, 82, 5) must flow into (6, 82, 5)
+        self.world.set_block(6, 82, 5, AIR)
+        for _ in range(10):
+            self.world.update_fluids(0.2)
+
+        self.assertEqual(self.world.get_block(6, 82, 5), "salt_water_7")
+
+    def test_adjacent_falling_columns_settle_queue_to_zero(self):
+        for x in range(1, 10):
+            for z in range(1, 10):
+                self.world.set_block(x, 80, z, STONE)
+
+        # Two adjacent falling columns hitting the floor
+        self.world.set_block(4, 83, 5, "salt_water")
+        self.world.set_block(5, 83, 5, "salt_water")
+
+        for _ in range(25):
+            self.world.update_fluids(0.2)
+
+        self.assertEqual(self.world.get_block(4, 81, 5), "salt_water_falling")
+        self.assertEqual(self.world.get_block(5, 81, 5), "salt_water_falling")
+        self.assertEqual(len(self.world.fluid.queue), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -878,7 +878,7 @@ class Renderer:
         self.ctx.disable(moderngl.CULL_FACE)
         self.ctx.enable(moderngl.BLEND)
         self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
-        self.ctx.screen.depth_mask = True
+        self.ctx.screen.depth_mask = False
         write_matrix(self.translucent["vp"], vp)
         self.translucent["camera"].value = camera
         sky_intensity = self.get_sky_intensity(day_time)
@@ -899,6 +899,7 @@ class Renderer:
                 continue
             self.translucent["origin"].value = item.origin
             item.translucent[0].render()
+        self.ctx.screen.depth_mask = True
         self.ctx.disable(moderngl.BLEND)
         self.ctx.enable(moderngl.CULL_FACE)
 

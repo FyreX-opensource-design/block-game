@@ -1,0 +1,19 @@
+{
+  "id": "diamond_brick_vertical_slab",
+  "lang": "block.diamond_brick_vertical_slab",
+  "tab": [
+    "building"
+  ],
+  "model": "vertical_slab",
+  "hardness": 4.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/diamond_brick_vertical_slab",
+  "sound": "stone",
+  "textures": {
+    "top": "diamond_bricks",
+    "side": "diamond_bricks",
+    "bottom": "diamond_bricks"
+  },
+  "type": "vertical_slab"
+}

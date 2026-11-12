@@ -1,0 +1,11 @@
+{
+  "id": "pink_dye_from_peony",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "peony"
+  ],
+  "result": {
+    "item": "pink_dye",
+    "count": 2
+  }
+}

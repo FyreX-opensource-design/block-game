@@ -1,0 +1,18 @@
+{
+  "id": "magenta_terracotta",
+  "lang": "block.magenta_terracotta",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 1.25,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "loot_table": "blocks/magenta_terracotta",
+  "sound": "stone",
+  "textures": {
+    "top": "terracotta/magenta_terracotta",
+    "side": "terracotta/magenta_terracotta",
+    "bottom": "terracotta/magenta_terracotta"
+  }
+}

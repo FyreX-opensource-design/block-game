@@ -1,0 +1,18 @@
+{
+  "id": "vertical_pine_planks",
+  "lang": "block.vertical_pine_planks",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "axe",
+  "mining_level": 0,
+  "loot_table": "blocks/vertical_pine_planks",
+  "sound": "wood",
+  "textures": {
+    "top": "vertical_pine_planks",
+    "side": "vertical_pine_planks",
+    "bottom": "vertical_pine_planks"
+  }
+}

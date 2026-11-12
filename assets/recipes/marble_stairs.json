@@ -1,0 +1,16 @@
+{
+  "id": "marble_stairs",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#  ",
+    "## ",
+    "###"
+  ],
+  "key": {
+    "#": "marble"
+  },
+  "result": {
+    "item": "marble_stairs",
+    "count": 4
+  }
+}

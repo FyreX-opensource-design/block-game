@@ -1,0 +1,45 @@
+{
+  "id": "limestone_sapphire_ore",
+  "lang": "block.limestone_sapphire_ore",
+  "tab": [
+    "natural"
+  ],
+  "model": "cube",
+  "hardness": 4.2,
+  "tool": "pickaxe",
+  "mining_level": 5,
+  "loot_table": "blocks/limestone_sapphire_ore",
+  "sound": "stone",
+  "textures": {
+    "top": "limestone_sapphire_ore/limestone_sapphire_ore_var_1",
+    "side": "limestone_sapphire_ore/limestone_sapphire_ore_var_1",
+    "bottom": "limestone_sapphire_ore/limestone_sapphire_ore_var_1"
+  },
+  "palettes": [
+    {
+      "top": "limestone_sapphire_ore/limestone_sapphire_ore_var_1",
+      "side": "limestone_sapphire_ore/limestone_sapphire_ore_var_1",
+      "bottom": "limestone_sapphire_ore/limestone_sapphire_ore_var_1"
+    },
+    {
+      "top": "limestone_sapphire_ore/limestone_sapphire_ore_var_2",
+      "side": "limestone_sapphire_ore/limestone_sapphire_ore_var_2",
+      "bottom": "limestone_sapphire_ore/limestone_sapphire_ore_var_2"
+    },
+    {
+      "top": "limestone_sapphire_ore/limestone_sapphire_ore_var_3",
+      "side": "limestone_sapphire_ore/limestone_sapphire_ore_var_3",
+      "bottom": "limestone_sapphire_ore/limestone_sapphire_ore_var_3"
+    },
+    {
+      "top": "limestone_sapphire_ore/limestone_sapphire_ore_var_4",
+      "side": "limestone_sapphire_ore/limestone_sapphire_ore_var_4",
+      "bottom": "limestone_sapphire_ore/limestone_sapphire_ore_var_4"
+    },
+    {
+      "top": "limestone_sapphire_ore/limestone_sapphire_ore_var_5",
+      "side": "limestone_sapphire_ore/limestone_sapphire_ore_var_5",
+      "bottom": "limestone_sapphire_ore/limestone_sapphire_ore_var_5"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "id": "bubblegum_terracotta",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "terracotta",
+    "D": "bubblegum_dye"
+  },
+  "result": {
+    "item": "bubblegum_terracotta",
+    "count": 8
+  }
+}

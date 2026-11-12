@@ -1,0 +1,11 @@
+{
+  "id": "terracotta_from_smelting_clay",
+  "type": "smelting",
+  "ingredient": "clay",
+  "result": {
+    "item": "terracotta",
+    "count": 1
+  },
+  "cookingtime": 10.0,
+  "experience": 0.35
+}

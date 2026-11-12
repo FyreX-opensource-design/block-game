@@ -1,0 +1,17 @@
+{
+  "id": "aquamarine_stained_glass",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "glass",
+    "D": "aquamarine_dye"
+  },
+  "result": {
+    "item": "aquamarine_stained_glass",
+    "count": 8
+  }
+}

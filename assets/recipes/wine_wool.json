@@ -1,0 +1,12 @@
+{
+  "id": "wine_wool",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "#wool",
+    "wine_dye"
+  ],
+  "result": {
+    "item": "wine_wool",
+    "count": 1
+  }
+}

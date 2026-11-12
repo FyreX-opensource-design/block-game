@@ -1,0 +1,12 @@
+{
+  "id": "bubblegum_wool",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "#wool",
+    "bubblegum_dye"
+  ],
+  "result": {
+    "item": "bubblegum_wool",
+    "count": 1
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "id": "rose_terracotta",
+  "lang": "block.rose_terracotta",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 1.25,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "loot_table": "blocks/rose_terracotta",
+  "sound": "stone",
+  "textures": {
+    "top": "terracotta/rose_terracotta",
+    "side": "terracotta/rose_terracotta",
+    "bottom": "terracotta/rose_terracotta"
+  }
+}
