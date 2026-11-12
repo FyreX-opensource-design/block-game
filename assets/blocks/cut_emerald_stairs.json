@@ -1,0 +1,19 @@
+{
+  "id": "cut_emerald_stairs",
+  "lang": "block.cut_emerald_stairs",
+  "tab": [
+    "building"
+  ],
+  "model": "stairs",
+  "hardness": 4.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/cut_emerald_stairs",
+  "sound": "stone",
+  "textures": {
+    "top": "cut_emerald",
+    "side": "cut_emerald",
+    "bottom": "cut_emerald"
+  },
+  "type": "stairs"
+}

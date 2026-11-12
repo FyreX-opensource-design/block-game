@@ -1,0 +1,11 @@
+{
+  "id": "malachite_from_block",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "malachite_block"
+  ],
+  "result": {
+    "item": "malachite",
+    "count": 9
+  }
+}

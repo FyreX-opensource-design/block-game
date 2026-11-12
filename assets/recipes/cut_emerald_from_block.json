@@ -1,0 +1,15 @@
+{
+  "id": "cut_emerald_from_block",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "##"
+  ],
+  "key": {
+    "#": "emerald_block"
+  },
+  "result": {
+    "item": "cut_emerald",
+    "count": 4
+  }
+}

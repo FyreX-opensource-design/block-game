@@ -1,0 +1,17 @@
+{
+  "id": "chiseled_ruby",
+  "lang": "block.chiseled_ruby",
+  "tab": [
+    "building"
+  ],
+  "model": "block",
+  "block": "chiseled_ruby",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 1,
+  "food": 0
+}

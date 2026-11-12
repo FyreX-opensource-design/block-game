@@ -872,40 +872,54 @@ class Game(pyglet.window.Window):
                         self.sound_manager.play_walk_sound("planks")
         return True
 
-    def _upload_block_change(self, x, y, z):
-        cx = x // CHUNK_SIZE
-        cy = y // CHUNK_SIZE
-        cz = z // CHUNK_SIZE
-        lx = x % CHUNK_SIZE
-        ly = y % CHUNK_SIZE
-        lz = z % CHUNK_SIZE
-        affected = {(cx, cy, cz)}
-        if lx == 0:
-            affected.add((cx - 1, cy, cz))
-        elif lx == CHUNK_SIZE - 1:
-            affected.add((cx + 1, cy, cz))
-        if ly == 0 and cy > 0:
-            affected.add((cx, cy - 1, cz))
-        elif ly == CHUNK_SIZE - 1 and cy < SECTION_COUNT - 1:
-            affected.add((cx, cy + 1, cz))
-        if lz == 0:
-            affected.add((cx, cy, cz - 1))
-        elif lz == CHUNK_SIZE - 1:
-            affected.add((cx, cy, cz + 1))
+    def _upload_block_changes(self, coords):
+        if getattr(self._upload_block_change, "__func__", None) is not Game._upload_block_change:
+            for x, y, z in coords:
+                self._upload_block_change(x, y, z)
+            return
+        affected = set()
+        centers = []
+        for x, y, z in coords:
+            cx = x // CHUNK_SIZE
+            cy = y // CHUNK_SIZE
+            cz = z // CHUNK_SIZE
+            lx = x % CHUNK_SIZE
+            ly = y % CHUNK_SIZE
+            lz = z % CHUNK_SIZE
+            centers.append((cx, cy, cz))
+            affected.add((cx, cy, cz))
+            if lx == 0:
+                affected.add((cx - 1, cy, cz))
+            elif lx == CHUNK_SIZE - 1:
+                affected.add((cx + 1, cy, cz))
+            if ly == 0 and cy > 0:
+                affected.add((cx, cy - 1, cz))
+            elif ly == CHUNK_SIZE - 1 and cy < SECTION_COUNT - 1:
+                affected.add((cx, cy + 1, cz))
+            if lz == 0:
+                affected.add((cx, cy, cz - 1))
+            elif lz == CHUNK_SIZE - 1:
+                affected.add((cx, cy, cz + 1))
+        if not centers:
+            return
         for k in affected:
             if k in self.world.chunks:
                 self._upload(k)
                 self.world.dirty.discard(k)
         adjacent_dirty = [
-            k for k in self.world.dirty
-            if abs(k[0] - cx) <= 1 and abs(k[1] - cy) <= 1 and abs(k[2] - cz) <= 1
+            (min(abs(k[0] - cx) + abs(k[1] - cy) + abs(k[2] - cz) for cx, cy, cz in centers), k)
+            for k in self.world.dirty
+            if any(abs(k[0] - cx) <= 1 and abs(k[1] - cy) <= 1 and abs(k[2] - cz) <= 1 for cx, cy, cz in centers)
         ]
         # Upload up to 2 closest adjacent dirty chunks synchronously to keep frame latency smooth;
         # any remaining dirty chunks will be budgeted and uploaded by update() via take_dirty(4).
-        for k in sorted(adjacent_dirty, key=lambda k: abs(k[0] - cx) + abs(k[1] - cy) + abs(k[2] - cz))[:2]:
+        for _, k in sorted(adjacent_dirty)[:2]:
             if k in self.world.chunks:
                 self._upload(k)
                 self.world.dirty.discard(k)
+
+    def _upload_block_change(self, x, y, z):
+        self._upload_block_changes(((x, y, z),))
 
     def _apply_input(self):
         inp = self.player.input
@@ -1384,12 +1398,13 @@ class Game(pyglet.window.Window):
                 if has_partner:
                     self.network_client.send_set_block(x, partner_y, z, AIR)
 
+            changed = [(x, y, z)]
             self.world.set_block(x, y, z, AIR)
-            self._upload_block_change(x, y, z)
             if has_partner:
                 if self.world.get_block(x, partner_y, z) != AIR:
                     self.world.set_block(x, partner_y, z, AIR)
-                self._upload_block_change(x, partner_y, z)
+                changed.append((x, partner_y, z))
+            self._upload_block_changes(changed)
 
             self._reset_breaking()
             return
@@ -1418,11 +1433,12 @@ class Game(pyglet.window.Window):
                 if partner_info is not None and partner_info["base_id"] == base_id:
                     self.network_client.send_set_block(x, partner_y, z, AIR)
 
+            changed = [(x, y, z)]
             self.world.set_block(x, y, z, AIR)
-            self._upload_block_change(x, y, z)
             if partner_info is not None and partner_info["base_id"] == base_id:
                 self.world.set_block(x, partner_y, z, AIR)
-                self._upload_block_change(x, partner_y, z)
+                changed.append((x, partner_y, z))
+            self._upload_block_changes(changed)
 
             self._reset_breaking()
             return
@@ -1944,10 +1960,13 @@ class Game(pyglet.window.Window):
                 self.network_client.send_set_block(px, py, pz, lower_id)
                 self.network_client.send_set_block(px, py + 1, pz, upper_id)
 
+            changed = []
             if self.world.set_block(px, py, pz, lower_id):
-                self._upload_block_change(px, py, pz)
+                changed.append((px, py, pz))
             if self.world.set_block(px, py + 1, pz, upper_id):
-                self._upload_block_change(px, py + 1, pz)
+                changed.append((px, py + 1, pz))
+            if changed:
+                self._upload_block_changes(changed)
 
             if self.gamemode == "survival":
                 cur_slot = self.hotbar[self.selected]
@@ -2159,6 +2178,7 @@ class Game(pyglet.window.Window):
                     if collision:
                         return
 
+                changed = []
                 for cx, cy, cz, new_sub in horiz_res:
                     if self.network_client is not None:
                         if new_sub.is_empty():
@@ -2166,7 +2186,8 @@ class Game(pyglet.window.Window):
                         else:
                             self.network_client.send_set_block(cx, cy, cz, SUB_CELL_BLOCK, sub_cell=new_sub.to_dict())
                     self.world.set_sub_cell(cx, cy, cz, new_sub)
-                    self._upload_block_change(cx, cy, cz)
+                    changed.append((cx, cy, cz))
+                self._upload_block_changes(changed)
 
                 if self.gamemode == "survival":
                     cur_slot = self.hotbar[self.selected]
@@ -3910,17 +3931,18 @@ class Game(pyglet.window.Window):
         new_lower = get_door_block(base_id, "lower", facing, new_open, hinge=hinge)
         new_upper = get_door_block(base_id, "upper", facing, new_open, hinge=hinge)
 
+        changed = []
         if lower_info is not None and lower_info["base_id"] == base_id:
             if self.network_client is not None:
                 self.network_client.send_set_block(x, lower_y, z, new_lower)
             if self.world.set_block(x, lower_y, z, new_lower):
-                self._upload_block_change(x, lower_y, z)
+                changed.append((x, lower_y, z))
 
         if upper_info is not None and upper_info["base_id"] == base_id:
             if self.network_client is not None:
                 self.network_client.send_set_block(x, upper_y, z, new_upper)
             if self.world.set_block(x, upper_y, z, new_upper):
-                self._upload_block_change(x, upper_y, z)
+                changed.append((x, upper_y, z))
 
         # Check for adjacent double door partner
         (left_dx, left_dz), (right_dx, right_dz) = get_door_relative_offsets(facing)
@@ -3941,9 +3963,12 @@ class Game(pyglet.window.Window):
                 self.network_client.send_set_block(px, lower_y, pz, p_new_lower)
                 self.network_client.send_set_block(px, upper_y, pz, p_new_upper)
             if self.world.set_block(px, lower_y, pz, p_new_lower):
-                self._upload_block_change(px, lower_y, pz)
+                changed.append((px, lower_y, pz))
             if self.world.set_block(px, upper_y, pz, p_new_upper):
-                self._upload_block_change(px, upper_y, pz)
+                changed.append((px, upper_y, pz))
+
+        if changed:
+            self._upload_block_changes(changed)
 
         if getattr(self, "sound_manager", None):
             self.sound_manager.play_walk_sound("planks")

@@ -1,0 +1,19 @@
+{
+  "id": "sapphire_block",
+  "lang": "block.sapphire_block",
+  "tab": [
+    "building",
+    "materials"
+  ],
+  "model": "cube",
+  "hardness": 4.5,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/sapphire_block",
+  "sound": "stone",
+  "textures": {
+    "top": "sapphire_block",
+    "side": "sapphire_block",
+    "bottom": "sapphire_block"
+  }
+}

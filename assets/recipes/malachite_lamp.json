@@ -1,0 +1,17 @@
+{
+  "id": "malachite_lamp",
+  "type": "crafting_shaped",
+  "pattern": [
+    " # ",
+    "#T#",
+    " # "
+  ],
+  "key": {
+    "#": "malachite",
+    "T": "torch"
+  },
+  "result": {
+    "item": "malachite_lamp",
+    "count": 2
+  }
+}

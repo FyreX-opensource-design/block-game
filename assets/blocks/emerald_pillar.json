@@ -1,0 +1,21 @@
+{
+  "id": "emerald_pillar",
+  "lang": "block.emerald_pillar",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 4.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/emerald_pillar",
+  "sound": "stone",
+  "textures": {
+    "top": "emerald_pillar_top",
+    "side": "emerald_pillar_side",
+    "bottom": "emerald_pillar_top"
+  },
+  "properties": {
+    "rotation": "axis"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "id": "ruby_brick_wall",
+  "lang": "block.ruby_brick_wall",
+  "tab": [
+    "building"
+  ],
+  "model": "wall_post",
+  "hardness": 4.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/ruby_brick_wall",
+  "sound": "stone",
+  "textures": {
+    "top": "ruby_bricks",
+    "side": "ruby_bricks",
+    "bottom": "ruby_bricks"
+  },
+  "type": "wall"
+}

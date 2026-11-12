@@ -1,0 +1,18 @@
+{
+  "id": "chiseled_ruby",
+  "lang": "block.chiseled_ruby",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 4.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/chiseled_ruby",
+  "sound": "stone",
+  "textures": {
+    "top": "chiseled_ruby",
+    "side": "chiseled_ruby",
+    "bottom": "chiseled_ruby"
+  }
+}

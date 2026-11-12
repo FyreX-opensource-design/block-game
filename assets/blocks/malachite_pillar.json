@@ -1,0 +1,21 @@
+{
+  "id": "malachite_pillar",
+  "lang": "block.malachite_pillar",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 4.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/malachite_pillar",
+  "sound": "stone",
+  "textures": {
+    "top": "malachite_pillar_top",
+    "side": "malachite_pillar_side",
+    "bottom": "malachite_pillar_top"
+  },
+  "properties": {
+    "rotation": "axis"
+  }
+}

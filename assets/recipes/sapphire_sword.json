@@ -1,0 +1,17 @@
+{
+  "id": "sapphire_sword",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "#",
+    "X"
+  ],
+  "key": {
+    "#": "sapphire",
+    "X": "#sticks"
+  },
+  "result": {
+    "item": "sapphire_sword",
+    "count": 1
+  }
+}

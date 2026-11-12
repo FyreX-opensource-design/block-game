@@ -1,0 +1,16 @@
+{
+  "id": "malachite_block_from_gems",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "###",
+    "###"
+  ],
+  "key": {
+    "#": "malachite"
+  },
+  "result": {
+    "item": "malachite_block",
+    "count": 1
+  }
+}

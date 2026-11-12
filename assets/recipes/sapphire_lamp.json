@@ -1,0 +1,17 @@
+{
+  "id": "sapphire_lamp",
+  "type": "crafting_shaped",
+  "pattern": [
+    " # ",
+    "#T#",
+    " # "
+  ],
+  "key": {
+    "#": "sapphire",
+    "T": "torch"
+  },
+  "result": {
+    "item": "sapphire_lamp",
+    "count": 2
+  }
+}

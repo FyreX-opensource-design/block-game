@@ -1,0 +1,11 @@
+{
+  "id": "emerald_from_block",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "emerald_block"
+  ],
+  "result": {
+    "item": "emerald",
+    "count": 9
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "id": "diamond_lamp",
+  "type": "crafting_shaped",
+  "pattern": [
+    " # ",
+    "#T#",
+    " # "
+  ],
+  "key": {
+    "#": "diamond",
+    "T": "torch"
+  },
+  "result": {
+    "item": "diamond_lamp",
+    "count": 2
+  }
+}

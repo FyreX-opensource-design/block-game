@@ -1,0 +1,21 @@
+{
+  "id": "sapphire_pillar",
+  "lang": "block.sapphire_pillar",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 4.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/sapphire_pillar",
+  "sound": "stone",
+  "textures": {
+    "top": "sapphire_pillar_top",
+    "side": "sapphire_pillar_side",
+    "bottom": "sapphire_pillar_top"
+  },
+  "properties": {
+    "rotation": "axis"
+  }
+}

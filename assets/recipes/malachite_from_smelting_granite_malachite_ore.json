@@ -1,0 +1,11 @@
+{
+  "id": "malachite_from_smelting_granite_malachite_ore",
+  "type": "smelting",
+  "ingredient": "granite_malachite_ore",
+  "result": {
+    "item": "malachite",
+    "count": 1
+  },
+  "cookingtime": 10.0,
+  "experience": 1.0
+}

@@ -1,0 +1,25 @@
+{
+  "id": "diamond_lamp",
+  "lang": "block.diamond_lamp",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 3.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/diamond_lamp",
+  "sound": "stone",
+  "textures": {
+    "top": "diamond_lamp",
+    "side": "diamond_lamp",
+    "bottom": "diamond_lamp"
+  },
+  "light": {
+    "r": 9,
+    "g": 15,
+    "b": 15,
+    "uv": 0,
+    "ir": 11
+  }
+}

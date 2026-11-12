@@ -406,3 +406,271 @@ class SlabsStairsWallsTests(unittest.TestCase):
         w_els = get_wall_elements(wall_world, 6, 4, 6, BLOCKS["granite_wall"])
         self.assertGreater(len(w_els), 1)
         self.assertTrue(all("face_uv_specs" in el for el in w_els))
+
+    def test_offsetting_stained_glass_with_vertical_slab_preserves_color_and_uvs(self):
+        from server.blocks import get_double_vertical_slab, is_vertical_slab
+        from server.sub_cell import SUB_CELL_BLOCK, calculate_horizontal_offset_placement, full_block_for
+
+        # Every non-base vertical slab should resolve to a full cube block
+        for b in list(BLOCKS.values()):
+            if not b.is_variant and is_vertical_slab(b):
+                fb = full_block_for(b.id)
+                self.assertIn(fb, BLOCKS)
+                self.assertTrue(BLOCKS[fb].full_cube, f"{b.id} resolved to non-full block {fb}")
+
+        red_tiles = [BLOCKS["red_stained_glass"].palette_ctm_uvs[0][m] for m in range(16)]
+        red_u = [(min(uv[0] for uv in t), max(uv[0] for uv in t)) for t in red_tiles]
+        red_v = [(min(uv[1] for uv in t), max(uv[1] for uv in t)) for t in red_tiles]
+
+        for vid, expected_mat in (("stone_brick_vertical_slab", "stone_bricks"), ("stone_vertical_slab", "stone")):
+            world = _single_chunk_world()
+            world.set_block(4, 4, 4, vid)
+            hit = {"x": 4, "y": 4, "z": 4, "nx": 0, "ny": 0, "nz": -1, "local_x": 0.5, "local_y": 0.5, "local_z": 0.5}
+            res = calculate_horizontal_offset_placement(world, hit, "red_stained_glass", 0.0)
+            self.assertIsNotNone(res)
+            for cx, cy, cz, sub in res:
+                world.set_block(cx, cy, cz, SUB_CELL_BLOCK)
+                world.set_sub_cell(cx, cy, cz, sub)
+
+            mesh = build_chunk_mesh(world, 0, 0, 0)
+            self.assertIsNone(mesh.cutout)
+            self.assertIsNotNone(mesh.translucent)
+
+            tquads = np.asarray(mesh.translucent[0], dtype=np.float32).reshape(-1, 4, 9)
+            for quad in tquads:
+                qu0, qu1 = float(quad[:, 6].min()), float(quad[:, 6].max())
+                qv0, qv1 = float(quad[:, 7].min()), float(quad[:, 7].max())
+                self.assertTrue(
+                    any(qu0 >= u0 - 1e-5 and qu1 <= u1 + 1e-5 and qv0 >= v0 - 1e-5 and qv1 <= v1 + 1e-5 for (u0, u1), (v0, v1) in zip(red_u, red_v)),
+                    f"{vid}: stained glass quad fell outside red_stained_glass CTM atlas tiles",
+                )
+
+            oquads = np.asarray(mesh.vertices, dtype=np.float32).reshape(-1, 4, 9)
+            fb_uv = BLOCKS[expected_mat].face_uvs[2]
+            tw = abs(fb_uv[1][0] - fb_uv[0][0])
+            th = abs(fb_uv[2][1] - fb_uv[0][1])
+            for quad in oquads:
+                du = float(quad[:, 6].max() - quad[:, 6].min())
+                dv = float(quad[:, 7].max() - quad[:, 7].min())
+                self.assertAlmostEqual(du, 0.5 * tw, places=4)
+                self.assertAlmostEqual(dv, 0.5 * th, places=4)
+
+        # Mixed double vertical slab preserves per-element stained glass CTM
+        mix_world = _single_chunk_world()
+        dvs = get_double_vertical_slab("red_stained_glass_vertical_slab", "stone_vertical_slab_north")
+        mix_world.set_block(4, 4, 4, dvs)
+        mix_mesh = build_chunk_mesh(mix_world, 0, 0, 0)
+        self.assertIsNotNone(mix_mesh.translucent)
+        for quad in np.asarray(mix_mesh.translucent[0], dtype=np.float32).reshape(-1, 4, 9):
+            qu0, qu1 = float(quad[:, 6].min()), float(quad[:, 6].max())
+            qv0, qv1 = float(quad[:, 7].min()), float(quad[:, 7].max())
+            self.assertTrue(
+                any(qu0 >= u0 - 1e-5 and qu1 <= u1 + 1e-5 and qv0 >= v0 - 1e-5 and qv1 <= v1 + 1e-5 for (u0, u1), (v0, v1) in zip(red_u, red_v))
+            )
+
+    def test_stained_glass_slab_mixing_culling_and_ctm(self):
+        from server.blocks import get_capped_offset_block, get_double_slab, get_double_vertical_slab, get_offset_block
+        from server.sub_cell import SUB_CELL_BLOCK, SubCell, calculate_horizontal_offset_placement
+
+        tiles = BLOCKS["yellow_stained_glass"].palette_ctm_uvs[0]
+
+        def translucent_quads(world):
+            mesh = build_chunk_mesh(world, 0, 0, 0)
+            self.assertIsNone(mesh.cutout)
+            if mesh.translucent is None:
+                return np.zeros((0, 4, 9), dtype=np.float32)
+            return np.asarray(mesh.translucent[0], dtype=np.float32).reshape(-1, 4, 9)
+
+        def tile_indices(quad):
+            qu0, qu1 = float(quad[:, 6].min()), float(quad[:, 6].max())
+            qv0, qv1 = float(quad[:, 7].min()), float(quad[:, 7].max())
+            out = []
+            for idx, t in enumerate(tiles):
+                tu0, tu1 = min(uv[0] for uv in t), max(uv[0] for uv in t)
+                tv0, tv1 = min(uv[1] for uv in t), max(uv[1] for uv in t)
+                if qu0 >= tu0 - 1e-5 and qu1 <= tu1 + 1e-5 and qv0 >= tv0 - 1e-5 and qv1 <= tv1 + 1e-5:
+                    out.append(idx)
+            return out
+
+        # 1. Full stained glass + mixed double_slab culls internal seam at x=5.0
+        w_ds = _single_chunk_world()
+        w_ds.set_block(4, 4, 4, "yellow_stained_glass")
+        w_ds.set_block(5, 4, 4, get_double_slab("yellow_stained_glass_slab", "stone_brick_slab_top"))
+        q_ds = translucent_quads(w_ds)
+        seam_x5 = [q for q in q_ds if 4.99 <= float(q[:, 0].min()) <= 5.01 and 4.99 <= float(q[:, 0].max()) <= 5.01]
+        self.assertEqual(len(seam_x5), 0)
+
+        # 2. Full stained glass below mixed SubCell (yellow bottom + stone top-north)
+        w_sub_v = _single_chunk_world()
+        w_sub_v.set_block(4, 4, 4, "yellow_stained_glass")
+        sc_b = SubCell()
+        for ox in (0, 1):
+            for oz in (0, 1):
+                sc_b.set_octant(ox, 0, oz, "yellow_stained_glass")
+                if oz == 0:
+                    sc_b.set_octant(ox, 1, oz, "stone_bricks")
+        w_sub_v.set_block(4, 5, 4, SUB_CELL_BLOCK)
+        w_sub_v.set_sub_cell(4, 5, 4, sc_b)
+        q_sub_v = translucent_quads(w_sub_v)
+        seam_y5 = [q for q in q_sub_v if 4.99 <= float(q[:, 1].min()) <= 5.01 and 4.99 <= float(q[:, 1].max()) <= 5.01]
+        self.assertEqual(len(seam_y5), 0)
+        z_pos_masks = [tile_indices(q)[0] for q in q_sub_v if round(float(q[0, 5]), 1) == 1.0]
+        self.assertIn(1, z_pos_masks)
+        self.assertIn(2, z_pos_masks)
+
+        # 3. Full stained glass + horizontally offset SubCell glass on vertical slab
+        w_off = _single_chunk_world()
+        w_off.set_block(4, 4, 4, "yellow_stained_glass")
+        w_off.set_block(5, 4, 4, "stone_brick_vertical_slab")
+        hit = {"x": 5, "y": 4, "z": 4, "nx": 0, "ny": 0, "nz": -1, "local_x": 0.5, "local_y": 0.5, "local_z": 0.5}
+        for cx, cy, cz, sub in calculate_horizontal_offset_placement(w_off, hit, "yellow_stained_glass", 0.0):
+            w_off.set_block(cx, cy, cz, SUB_CELL_BLOCK)
+            w_off.set_sub_cell(cx, cy, cz, sub)
+        q_off = translucent_quads(w_off)
+        x5_quads = [q for q in q_off if 4.99 <= float(q[:, 0].min()) <= 5.01 and 4.99 <= float(q[:, 0].max()) <= 5.01]
+        # Only exposed z in [3.5, 4.0] remains on x=5.0; internal z in [4.0, 5.0] is culled
+        self.assertTrue(len(x5_quads) > 0)
+        for q in x5_quads:
+            self.assertLessEqual(float(q[:, 2].max()), 4.01)
+
+        # 4. Full stained glass abutting single SubCell octant culls only that quadrant
+        w_quad = _single_chunk_world()
+        w_quad.set_block(4, 4, 4, "yellow_stained_glass")
+        sc_q = SubCell()
+        sc_q.set_octant(0, 0, 0, "yellow_stained_glass")
+        w_quad.set_block(5, 4, 4, SUB_CELL_BLOCK)
+        w_quad.set_sub_cell(5, 4, 4, sc_q)
+        x5_pos = [
+            q for q in translucent_quads(w_quad)
+            if 4.99 <= float(q[:, 0].min()) <= 5.01 and 4.99 <= float(q[:, 0].max()) <= 5.01 and float(q[0, 3]) > 0.5
+        ]
+        self.assertEqual(len(x5_pos), 3)
+
+        # 5. Vertically stacked mixed double_vertical_slab culls y=5.0 seam and connects CTM
+        w_dvs = _single_chunk_world()
+        dvs = get_double_vertical_slab("yellow_stained_glass_vertical_slab", "stone_brick_vertical_slab_north")
+        w_dvs.set_block(4, 4, 4, dvs)
+        w_dvs.set_block(4, 5, 4, dvs)
+        q_dvs = translucent_quads(w_dvs)
+        self.assertEqual(
+            [q for q in q_dvs if 4.99 <= float(q[:, 1].min()) <= 5.01 and 4.99 <= float(q[:, 1].max()) <= 5.01],
+            [],
+        )
+        east_masks = {tile_indices(q)[0] for q in q_dvs if round(float(q[0, 3]), 1) == 1.0}
+        self.assertEqual(east_masks, {1, 2})
+
+        # 6. Stacked offset + capped offset glass culls y=4.5 seam and connects CTM
+        w_cap = _single_chunk_world()
+        fb_off = get_offset_block("yellow_stained_glass")
+        capped = get_capped_offset_block(fb_off, "stone_brick_slab_top")
+        self.assertIsNotNone(capped)
+        w_cap.set_block(4, 4, 4, fb_off)
+        w_cap.set_block(4, 5, 4, capped)
+        q_cap = translucent_quads(w_cap)
+        self.assertEqual(
+            [q for q in q_cap if 4.49 <= float(q[:, 1].min()) <= 4.51 and 4.49 <= float(q[:, 1].max()) <= 4.51],
+            [],
+        )
+        cap_z_masks = {tile_indices(q)[0] for q in q_cap if round(float(q[0, 5]), 1) == 1.0}
+        self.assertEqual(cap_z_masks, {1, 2})
+
+        # 7. SubCell L-shape (bottom glass slab + glass vertical slab) uses consistent tile-0 subregions on +Z
+        w_l = _single_chunk_world()
+        sc_l = SubCell()
+        for ox in (0, 1):
+            for oz in (0, 1):
+                sc_l.set_octant(ox, 0, oz, "yellow_stained_glass")
+            sc_l.set_octant(ox, 1, 1, "yellow_stained_glass")
+        w_l.set_block(4, 5, 4, SUB_CELL_BLOCK)
+        w_l.set_sub_cell(4, 5, 4, sc_l)
+        t0 = tiles[0]
+        tu0, tu1 = min(u[0] for u in t0), max(u[0] for u in t0)
+        tv0, tv1 = min(u[1] for u in t0), max(u[1] for u in t0)
+        z_quads = [q for q in translucent_quads(w_l) if round(float(q[0, 5]), 1) == 1.0]
+        self.assertEqual(len(z_quads), 4)
+        for q in z_quads:
+            self.assertEqual(tile_indices(q), [0])
+            self.assertAlmostEqual(float(q[:, 6].max() - q[:, 6].min()), 0.5 * (tu1 - tu0), places=5)
+            self.assertAlmostEqual(float(q[:, 7].max() - q[:, 7].min()), 0.5 * (tv1 - tv0), places=5)
+
+        # 8. Different-color mixed double_slab preserves its shared y=4.5 seam
+        w_diff = _single_chunk_world()
+        w_diff.set_block(4, 4, 4, get_double_slab("yellow_stained_glass_slab", "blue_stained_glass_slab_top"))
+        seam_diff = [
+            q for q in translucent_quads(w_diff)
+            if 4.49 <= float(q[:, 1].min()) <= 4.51 and 4.49 <= float(q[:, 1].max()) <= 4.51
+        ]
+        self.assertEqual(len(seam_diff), 2)
+
+        # 9. Offset glass next to full glass splits and culls overlapping y=[4.0, 4.5] seam on both sides
+        from server.blocks import get_vertical_slab_offset_block
+
+        w_og_full = _single_chunk_world()
+        w_og_full.set_block(4, 4, 4, fb_off)
+        w_og_full.set_block(5, 4, 4, "yellow_stained_glass")
+        x5_og_full = [
+            q for q in translucent_quads(w_og_full)
+            if 4.99 <= float(q[:, 0].min()) <= 5.01 and 4.99 <= float(q[:, 0].max()) <= 5.01
+        ]
+        self.assertEqual(len(x5_og_full), 2)
+        y_ranges = sorted((round(float(q[:, 1].min()), 2), round(float(q[:, 1].max()), 2)) for q in x5_og_full)
+        self.assertEqual(y_ranges, [(3.5, 4.0), (4.5, 5.0)])
+
+        # 10. Offset glass next to bottom glass slab culls y=[4.0, 4.5] overlap and connects CTM
+        w_og_slab = _single_chunk_world()
+        w_og_slab.set_block(4, 4, 4, fb_off)
+        w_og_slab.set_block(5, 4, 4, "yellow_stained_glass_slab")
+        q_og_slab = translucent_quads(w_og_slab)
+        x5_og_slab = [
+            q for q in q_og_slab
+            if 4.99 <= float(q[:, 0].min()) <= 5.01 and 4.99 <= float(q[:, 0].max()) <= 5.01
+        ]
+        self.assertEqual(len(x5_og_slab), 1)
+        self.assertAlmostEqual(float(x5_og_slab[0][:, 1].min()), 3.5, places=4)
+        self.assertAlmostEqual(float(x5_og_slab[0][:, 1].max()), 4.0, places=4)
+        z_masks_og_slab = sorted(tile_indices(q)[0] for q in q_og_slab if round(float(q[0, 5]), 1) == 1.0)
+        self.assertEqual(z_masks_og_slab, [1, 4, 10])
+
+        # 11. Offset glass next to offset vertical slab culls covered z=[4.0, 4.5] half
+        vs_off_n = get_vertical_slab_offset_block("yellow_stained_glass_vertical_slab_north")
+        w_og_vso = _single_chunk_world()
+        w_og_vso.set_block(4, 4, 4, fb_off)
+        w_og_vso.set_block(5, 4, 4, vs_off_n)
+        x5_og_vso = [
+            q for q in translucent_quads(w_og_vso)
+            if 4.99 <= float(q[:, 0].min()) <= 5.01 and 4.99 <= float(q[:, 0].max()) <= 5.01
+        ]
+        self.assertEqual(len(x5_og_vso), 1)
+        self.assertAlmostEqual(float(x5_og_vso[0][:, 2].min()), 4.5, places=4)
+        self.assertAlmostEqual(float(x5_og_vso[0][:, 2].max()), 5.0, places=4)
+
+    def test_mesh_element_cache_isolation_and_door_batch_upload(self):
+        from unittest.mock import MagicMock
+        from client.app import Game
+
+        # Chunk element cache must not leak across world mutations between rebuilds
+        w = _single_chunk_world()
+        w.set_block(4, 4, 4, "yellow_stained_glass")
+        m1 = build_chunk_mesh(w, 0, 0, 0)
+        q1 = np.asarray(m1.translucent[0], dtype=np.float32).reshape(-1, 4, 9)
+        self.assertEqual(len(q1), 6)
+        w.set_block(5, 4, 4, "yellow_stained_glass")
+        m2 = build_chunk_mesh(w, 0, 0, 0)
+        q2 = np.asarray(m2.translucent[0], dtype=np.float32).reshape(-1, 4, 9)
+        self.assertEqual(len(q2), 10)
+
+        # Toggling a double door inside one chunk triggers a single chunk upload instead of 4
+        game = Game.__new__(Game)
+        game.world = _single_chunk_world()
+        game.world.dirty = set()
+        game.network_client = None
+        game.sound_manager = None
+        game.world.set_block(5, 3, 5, "stone")
+        game.world.set_block(6, 3, 5, "stone")
+        game.world.set_block(5, 4, 5, "wooden_door_lower_south_right")
+        game.world.set_block(5, 5, 5, "wooden_door_upper_south_right")
+        game.world.set_block(6, 4, 5, "wooden_door_lower_south")
+        game.world.set_block(6, 5, 5, "wooden_door_upper_south")
+        game._upload = MagicMock()
+        game._toggle_door(5, 4, 5)
+        self.assertEqual(game._upload.call_count, 1)

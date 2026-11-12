@@ -1,0 +1,17 @@
+{
+  "id": "emerald_pickaxe",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    " X ",
+    " X "
+  ],
+  "key": {
+    "#": "emerald",
+    "X": "#sticks"
+  },
+  "result": {
+    "item": "emerald_pickaxe",
+    "count": 1
+  }
+}

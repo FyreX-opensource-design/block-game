@@ -1,0 +1,25 @@
+{
+  "id": "emerald_lamp",
+  "lang": "block.emerald_lamp",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 3.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/emerald_lamp",
+  "sound": "stone",
+  "textures": {
+    "top": "emerald_lamp",
+    "side": "emerald_lamp",
+    "bottom": "emerald_lamp"
+  },
+  "light": {
+    "r": 4,
+    "g": 15,
+    "b": 6,
+    "uv": 0,
+    "ir": 10
+  }
+}

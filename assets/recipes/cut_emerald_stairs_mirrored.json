@@ -1,0 +1,16 @@
+{
+  "id": "cut_emerald_stairs_mirrored",
+  "type": "crafting_shaped",
+  "pattern": [
+    "  #",
+    " ##",
+    "###"
+  ],
+  "key": {
+    "#": "cut_emerald"
+  },
+  "result": {
+    "item": "cut_emerald_stairs",
+    "count": 4
+  }
+}

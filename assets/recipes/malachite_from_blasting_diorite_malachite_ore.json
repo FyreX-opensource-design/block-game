@@ -1,0 +1,11 @@
+{
+  "id": "malachite_from_blasting_diorite_malachite_ore",
+  "type": "blasting",
+  "ingredient": "diorite_malachite_ore",
+  "result": {
+    "item": "malachite",
+    "count": 1
+  },
+  "cookingtime": 5.0,
+  "experience": 1.0
+}

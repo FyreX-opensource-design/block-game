@@ -1,0 +1,15 @@
+{
+  "id": "sapphire_bricks",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "##"
+  ],
+  "key": {
+    "#": "cut_sapphire"
+  },
+  "result": {
+    "item": "sapphire_bricks",
+    "count": 4
+  }
+}

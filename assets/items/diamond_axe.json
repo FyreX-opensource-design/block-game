@@ -1,0 +1,17 @@
+{
+  "id": "diamond_axe",
+  "lang": "item.diamond_axe",
+  "tab": "tools",
+  "model": "flat",
+  "texture": "diamond_axe",
+  "tool": "axe",
+  "max_stack": 1,
+  "left": "mine",
+  "right": "none",
+  "durability": 1561,
+  "mining_level": 7,
+  "mining_speed": 12.5,
+  "attack": 10.5,
+  "food": 0,
+  "repair": "diamond"
+}

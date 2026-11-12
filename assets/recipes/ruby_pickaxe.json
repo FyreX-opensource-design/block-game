@@ -1,0 +1,17 @@
+{
+  "id": "ruby_pickaxe",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    " X ",
+    " X "
+  ],
+  "key": {
+    "#": "ruby",
+    "X": "#sticks"
+  },
+  "result": {
+    "item": "ruby_pickaxe",
+    "count": 1
+  }
+}

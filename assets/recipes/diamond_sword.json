@@ -1,0 +1,17 @@
+{
+  "id": "diamond_sword",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "#",
+    "X"
+  ],
+  "key": {
+    "#": "diamond",
+    "X": "#sticks"
+  },
+  "result": {
+    "item": "diamond_sword",
+    "count": 1
+  }
+}

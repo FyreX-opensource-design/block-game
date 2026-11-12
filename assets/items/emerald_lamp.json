@@ -1,0 +1,17 @@
+{
+  "id": "emerald_lamp",
+  "lang": "block.emerald_lamp",
+  "tab": [
+    "building"
+  ],
+  "model": "block",
+  "block": "emerald_lamp",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 1,
+  "food": 0
+}

@@ -1,0 +1,19 @@
+{
+  "id": "cut_diamond_stairs",
+  "lang": "block.cut_diamond_stairs",
+  "tab": [
+    "building"
+  ],
+  "model": "stairs",
+  "hardness": 4.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/cut_diamond_stairs",
+  "sound": "stone",
+  "textures": {
+    "top": "cut_diamond",
+    "side": "cut_diamond",
+    "bottom": "cut_diamond"
+  },
+  "type": "stairs"
+}

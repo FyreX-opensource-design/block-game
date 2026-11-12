@@ -41,6 +41,11 @@ def full_block_for(block_or_id: str) -> str:
     from server.blocks import BLOCKS
 
     b_id = block_or_id if isinstance(block_or_id, str) else getattr(block_or_id, "id", "")
+    blk = BLOCKS.get(b_id)
+    if blk is not None:
+        explicit_full = getattr(blk, "full_block", None) or blk.properties.get("full_block")
+        if explicit_full and explicit_full in BLOCKS:
+            return explicit_full
     if "_slab" in b_id or "_vertical" in b_id:
         candidate = (
             b_id.replace("_vertical_slab", "")
@@ -53,7 +58,13 @@ def full_block_for(block_or_id: str) -> str:
         for facing in ("_north", "_south", "_east", "_west"):
             if candidate.endswith(facing):
                 candidate = candidate[: -len(facing)]
-        return candidate if candidate in BLOCKS else b_id
+        if candidate in BLOCKS:
+            return candidate
+        if candidate.endswith("_brick") and f"{candidate}s" in BLOCKS:
+            return f"{candidate}s"
+        if b_id == "vertical_slab" and "stone" in BLOCKS:
+            return "stone"
+        return b_id
     return b_id
 
 

@@ -4600,6 +4600,19 @@ def _load_registry():
             index_of[alias_id] = idx
         return b_obj
 
+    def _glass_group_id(blk):
+        props = getattr(blk, "properties", {})
+        if props.get("ctm_group"):
+            return props["ctm_group"]
+        if props.get("stained_glass") or getattr(blk, "translucent", False):
+            return getattr(blk, "base_id", None) or blk.id
+        return "glass"
+
+    def _keep_internal_seam(src_glass, src_blk, other_glass, other_blk):
+        if src_glass and other_glass:
+            return _glass_group_id(src_blk) != _glass_group_id(other_blk)
+        return bool(not src_glass and other_glass)
+
     def _ensure_double_slab(slab_a, slab_b):
         double_id = f"double_slab_{slab_a.id}_{slab_b.id}"
         if super(_LazyBlockDict, blocks).__contains__(double_id):
@@ -4607,9 +4620,11 @@ def _load_registry():
         slab_b_top = blocks[f"{slab_b.id}_top"]
         a_glass = bool(slab_a.properties.get("glass") or getattr(slab_a, "glass", False) or "glass" in slab_a.id)
         b_glass = bool(slab_b.properties.get("glass") or getattr(slab_b, "glass", False) or "glass" in slab_b.id)
+        keep_a_top = _keep_internal_seam(a_glass, slab_a, b_glass, slab_b)
+        keep_b_bot = _keep_internal_seam(b_glass, slab_b, a_glass, slab_a)
         bottom_elements = []
         for el in slab_a.elements:
-            faces = {k: v for k, v in el["faces"].items() if k != 2 or (not a_glass and b_glass)}
+            faces = {k: v for k, v in el["faces"].items() if k != 2 or keep_a_top}
             el_dict = dict(el)
             el_dict["from"] = list(el["from"])
             el_dict["to"] = list(el["to"])
@@ -4617,12 +4632,13 @@ def _load_registry():
             el_dict["glass"] = a_glass
             el_dict["cutout"] = bool(slab_a.cutout)
             el_dict["translucent"] = bool(slab_a.translucent)
+            el_dict["source_block"] = slab_a.id
             if "face_uv_specs" in el:
                 el_dict["face_uv_specs"] = {k: v for k, v in el["face_uv_specs"].items() if k in faces}
             bottom_elements.append(el_dict)
         top_elements = []
         for el in slab_b_top.elements:
-            faces = {k: v for k, v in el["faces"].items() if k != 3 or (not b_glass and a_glass)}
+            faces = {k: v for k, v in el["faces"].items() if k != 3 or keep_b_bot}
             el_dict = dict(el)
             el_dict["from"] = list(el["from"])
             el_dict["to"] = list(el["to"])
@@ -4630,6 +4646,7 @@ def _load_registry():
             el_dict["glass"] = b_glass
             el_dict["cutout"] = bool(slab_b.cutout)
             el_dict["translucent"] = bool(slab_b.translucent)
+            el_dict["source_block"] = slab_b.id
             if "face_uv_specs" in el:
                 el_dict["face_uv_specs"] = {k: v for k, v in el["face_uv_specs"].items() if k in faces}
             top_elements.append(el_dict)
@@ -4753,7 +4770,9 @@ def _load_registry():
         fb_glass = bool(fb.properties.get("glass") or getattr(fb, "glass", False) or "glass" in fb.id)
         slab_b_top = blocks[f"{slab_b.id}_top"]
         slab_b_glass = bool(slab_b.properties.get("glass") or getattr(slab_b, "glass", False) or "glass" in slab_b.id)
-        bot_faces = {i: fb.face_uvs[i] for i in range(6) if (i != 2 or (not fb_glass and slab_b_glass)) and fb.face_uvs[i] is not None}
+        keep_fb_top = _keep_internal_seam(fb_glass, fb, slab_b_glass, slab_b)
+        keep_slab_bot = _keep_internal_seam(slab_b_glass, slab_b, fb_glass, fb)
+        bot_faces = {i: fb.face_uvs[i] for i in range(6) if (i != 2 or keep_fb_top) and fb.face_uvs[i] is not None}
         bot_el = {
             "from": [0.0, -8.0, 0.0],
             "to": [16.0, 8.0, 16.0],
@@ -4762,11 +4781,12 @@ def _load_registry():
             "glass": fb_glass,
             "cutout": fb.cutout,
             "translucent": fb.translucent,
+            "source_block": fb.id,
             "face_uv_specs": {i: [0, 0, 16, 16] for i in bot_faces},
         }
         top_els = []
         for el in slab_b_top.elements:
-            t_faces = {k: v for k, v in el["faces"].items() if k != 3 or (not slab_b_glass and fb_glass)}
+            t_faces = {k: v for k, v in el["faces"].items() if k != 3 or keep_slab_bot}
             if "face_uv_specs" in el:
                 t_specs = {k: v for k, v in el["face_uv_specs"].items() if k in t_faces}
             else:
@@ -4779,6 +4799,7 @@ def _load_registry():
                 "glass": slab_b_glass,
                 "cutout": slab_b.cutout,
                 "translucent": slab_b.translucent,
+                "source_block": slab_b.id,
                 "face_uv_specs": t_specs,
             })
         capped_elements = [bot_el] + top_els
@@ -4887,11 +4908,12 @@ def _load_registry():
         pos_glass = bool(positive_block.properties.get("glass") or getattr(positive_block, "glass", False) or "glass" in positive_block.base_id)
         neg_glass = bool(negative_block.properties.get("glass") or getattr(negative_block, "glass", False) or "glass" in negative_block.base_id)
         double_elements = []
-        for source, other_glass, hidden_face in (
-            (positive_block, neg_glass, positive_face),
-            (negative_block, pos_glass, negative_face),
+        for source, other_block, other_glass, hidden_face in (
+            (positive_block, negative_block, neg_glass, positive_face),
+            (negative_block, positive_block, pos_glass, negative_face),
         ):
             src_glass = bool(source.properties.get("glass") or getattr(source, "glass", False) or "glass" in source.base_id)
+            keep_mid = _keep_internal_seam(src_glass, source, other_glass, other_block)
             for element in source.elements:
                 element_copy = dict(element)
                 element_copy["from"] = list(element["from"])
@@ -4899,11 +4921,12 @@ def _load_registry():
                 element_copy["faces"] = {
                     face: uv
                     for face, uv in element.get("faces", {}).items()
-                    if face != hidden_face or (not src_glass and other_glass)
+                    if face != hidden_face or keep_mid
                 }
                 element_copy["glass"] = src_glass
                 element_copy["cutout"] = bool(source.cutout)
                 element_copy["translucent"] = bool(source.translucent)
+                element_copy["source_block"] = source.id
                 if "face_uv_specs" in element:
                     element_copy["face_uv_specs"] = {
                         k: v for k, v in element["face_uv_specs"].items() if k in element_copy["faces"]
@@ -4996,6 +5019,12 @@ def _load_registry():
             gravity=False,
             fluid_breakable=False,
             tint=base_dvs.tint,
+            ctm=base_dvs.ctm,
+            palettes=base_dvs.palettes,
+            palette_face_uvs=base_dvs.palette_face_uvs,
+            palette_ctm_uvs=base_dvs.palette_ctm_uvs,
+            palette_ctm_rects=base_dvs.palette_ctm_rects,
+            palette_texture_rects=base_dvs.palette_texture_rects,
             translucent=base_dvs.translucent,
         )
         alias = f"double_vertical_slab_{axis}_{pos_base.id}_offset" if pos_base.id == neg_base.id else None
@@ -5012,14 +5041,22 @@ def _load_registry():
         for element in off_dvs.elements:
             b_el = dict(element)
             b_glass = b_el.get("glass", False)
-            b_el["faces"] = {k: v for k, v in element["faces"].items() if k != 2 or (not b_glass and h_is_glass)}
+            b_src = blocks.get(b_el.get("source_block", "")) if "source_block" in b_el else off_dvs
+            b_el["faces"] = {
+                k: v
+                for k, v in element["faces"].items()
+                if k != 2 or _keep_internal_seam(b_glass, b_src, h_is_glass, h_slab)
+            }
             if "face_uv_specs" in element:
                 b_el["face_uv_specs"] = {k: v for k, v in element["face_uv_specs"].items() if k in b_el["faces"]}
             bot_els.append(b_el)
         top_els = []
-        any_bot_glass = any(e.get("glass") for e in off_dvs.elements)
         for element in h_top_block.elements:
-            t_faces = {k: v for k, v in element["faces"].items() if k != 3 or (not h_is_glass and any_bot_glass)}
+            keep_t_bot = all(
+                _keep_internal_seam(h_is_glass, h_slab, e.get("glass", False), blocks.get(e.get("source_block", "")) or off_dvs)
+                for e in off_dvs.elements
+            ) if any(e.get("glass") for e in off_dvs.elements) else False
+            t_faces = {k: v for k, v in element["faces"].items() if k != 3 or keep_t_bot}
             if "face_uv_specs" in element:
                 t_specs = {k: v for k, v in element["face_uv_specs"].items() if k in t_faces}
             else:
@@ -5032,6 +5069,7 @@ def _load_registry():
                 "glass": h_is_glass,
                 "cutout": bool(h_slab.cutout),
                 "translucent": bool(h_slab.translucent),
+                "source_block": h_slab.id,
                 "face_uv_specs": t_specs,
             })
         capped_double_elements = bot_els + top_els
@@ -5085,6 +5123,7 @@ def _load_registry():
             el_copy["glass"] = vs_glass
             el_copy["cutout"] = vs.cutout
             el_copy["translucent"] = vs.translucent
+            el_copy["source_block"] = v_block.id
             if "face_uv_specs" in element:
                 el_copy["face_uv_specs"] = dict(element["face_uv_specs"])
             off_elements.append(el_copy)
@@ -5125,6 +5164,12 @@ def _load_registry():
             station=vs.station,
             recipe_types=vs.recipe_types,
             cook_speed=vs.cook_speed,
+            ctm=v_block.ctm,
+            palettes=v_block.palettes,
+            palette_face_uvs=v_block.palette_face_uvs,
+            palette_ctm_uvs=v_block.palette_ctm_uvs,
+            palette_ctm_rects=v_block.palette_ctm_rects,
+            palette_texture_rects=v_block.palette_texture_rects,
             translucent=vs.translucent,
         )
         alias = f"{vs.id}_south_offset" if v_facing == "south" else None
@@ -5139,10 +5184,12 @@ def _load_registry():
         h_top_block = blocks[f"{h_slab.id}_top"]
         vs_is_glass = bool(vs.properties.get("glass") or getattr(vs, "glass", False) or "glass" in vs.id)
         h_is_glass = bool(h_slab.properties.get("glass") or getattr(h_slab, "glass", False) or "glass" in h_slab.id)
+        keep_vs_top = _keep_internal_seam(vs_is_glass, vs, h_is_glass, h_slab)
+        keep_h_bot = _keep_internal_seam(h_is_glass, h_slab, vs_is_glass, vs)
         bot_elements = []
         for el in off_v.elements:
             bot_el = dict(el)
-            bot_el["faces"] = {k: v for k, v in el["faces"].items() if k != 2 or (not vs_is_glass and h_is_glass)}
+            bot_el["faces"] = {k: v for k, v in el["faces"].items() if k != 2 or keep_vs_top}
             bot_el["glass"] = vs_is_glass
             bot_el["cutout"] = bool(vs.cutout)
             bot_el["translucent"] = bool(vs.translucent)
@@ -5151,7 +5198,7 @@ def _load_registry():
             bot_elements.append(bot_el)
         top_els = []
         for el in h_top_block.elements:
-            t_faces = {k: v for k, v in el["faces"].items() if k != 3 or (not h_is_glass and vs_is_glass)}
+            t_faces = {k: v for k, v in el["faces"].items() if k != 3 or keep_h_bot}
             if "face_uv_specs" in el:
                 t_specs = {k: v for k, v in el["face_uv_specs"].items() if k in t_faces}
             else:
@@ -5164,6 +5211,7 @@ def _load_registry():
                 "glass": h_is_glass,
                 "cutout": bool(h_slab.cutout),
                 "translucent": bool(h_slab.translucent),
+                "source_block": h_slab.id,
                 "face_uv_specs": t_specs,
             })
         capped_elements = bot_elements + top_els

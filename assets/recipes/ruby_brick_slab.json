@@ -1,0 +1,14 @@
+{
+  "id": "ruby_brick_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###"
+  ],
+  "key": {
+    "#": "ruby_bricks"
+  },
+  "result": {
+    "item": "ruby_brick_slab",
+    "count": 6
+  }
+}

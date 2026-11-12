@@ -1,0 +1,17 @@
+{
+  "id": "diamond_pickaxe",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    " X ",
+    " X "
+  ],
+  "key": {
+    "#": "diamond",
+    "X": "#sticks"
+  },
+  "result": {
+    "item": "diamond_pickaxe",
+    "count": 1
+  }
+}

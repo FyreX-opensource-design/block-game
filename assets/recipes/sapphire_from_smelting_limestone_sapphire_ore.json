@@ -1,0 +1,11 @@
+{
+  "id": "sapphire_from_smelting_limestone_sapphire_ore",
+  "type": "smelting",
+  "ingredient": "limestone_sapphire_ore",
+  "result": {
+    "item": "sapphire",
+    "count": 1
+  },
+  "cookingtime": 10.0,
+  "experience": 1.0
+}

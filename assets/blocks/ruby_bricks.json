@@ -1,0 +1,18 @@
+{
+  "id": "ruby_bricks",
+  "lang": "block.ruby_bricks",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 4.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/ruby_bricks",
+  "sound": "stone",
+  "textures": {
+    "top": "ruby_bricks",
+    "side": "ruby_bricks",
+    "bottom": "ruby_bricks"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "id": "chiseled_malachite",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "#"
+  ],
+  "key": {
+    "#": "cut_malachite_slab"
+  },
+  "result": {
+    "item": "chiseled_malachite",
+    "count": 1
+  }
+}

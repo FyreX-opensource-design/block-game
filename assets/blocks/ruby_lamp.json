@@ -1,0 +1,25 @@
+{
+  "id": "ruby_lamp",
+  "lang": "block.ruby_lamp",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 3.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/ruby_lamp",
+  "sound": "stone",
+  "textures": {
+    "top": "ruby_lamp",
+    "side": "ruby_lamp",
+    "bottom": "ruby_lamp"
+  },
+  "light": {
+    "r": 15,
+    "g": 3,
+    "b": 5,
+    "uv": 0,
+    "ir": 10
+  }
+}

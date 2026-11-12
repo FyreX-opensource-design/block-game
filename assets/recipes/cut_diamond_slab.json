@@ -1,0 +1,14 @@
+{
+  "id": "cut_diamond_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###"
+  ],
+  "key": {
+    "#": "cut_diamond"
+  },
+  "result": {
+    "item": "cut_diamond_slab",
+    "count": 6
+  }
+}

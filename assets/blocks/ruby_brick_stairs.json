@@ -1,0 +1,19 @@
+{
+  "id": "ruby_brick_stairs",
+  "lang": "block.ruby_brick_stairs",
+  "tab": [
+    "building"
+  ],
+  "model": "stairs",
+  "hardness": 4.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/ruby_brick_stairs",
+  "sound": "stone",
+  "textures": {
+    "top": "ruby_bricks",
+    "side": "ruby_bricks",
+    "bottom": "ruby_bricks"
+  },
+  "type": "stairs"
+}

@@ -1,0 +1,25 @@
+{
+  "id": "sapphire_lamp",
+  "lang": "block.sapphire_lamp",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 3.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/sapphire_lamp",
+  "sound": "stone",
+  "textures": {
+    "top": "sapphire_lamp",
+    "side": "sapphire_lamp",
+    "bottom": "sapphire_lamp"
+  },
+  "light": {
+    "r": 4,
+    "g": 7,
+    "b": 15,
+    "uv": 0,
+    "ir": 10
+  }
+}

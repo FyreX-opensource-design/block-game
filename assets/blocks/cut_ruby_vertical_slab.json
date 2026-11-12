@@ -1,0 +1,19 @@
+{
+  "id": "cut_ruby_vertical_slab",
+  "lang": "block.cut_ruby_vertical_slab",
+  "tab": [
+    "building"
+  ],
+  "model": "vertical_slab",
+  "hardness": 4.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/cut_ruby_vertical_slab",
+  "sound": "stone",
+  "textures": {
+    "top": "cut_ruby",
+    "side": "cut_ruby",
+    "bottom": "cut_ruby"
+  },
+  "type": "vertical_slab"
+}

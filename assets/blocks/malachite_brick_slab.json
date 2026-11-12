@@ -1,0 +1,19 @@
+{
+  "id": "malachite_brick_slab",
+  "lang": "block.malachite_brick_slab",
+  "tab": [
+    "building"
+  ],
+  "model": "slab",
+  "hardness": 4.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/malachite_brick_slab",
+  "sound": "stone",
+  "textures": {
+    "top": "malachite_bricks",
+    "side": "malachite_bricks",
+    "bottom": "malachite_bricks"
+  },
+  "type": "slab"
+}

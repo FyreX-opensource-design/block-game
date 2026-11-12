@@ -1,0 +1,15 @@
+{
+  "id": "diamond_bricks",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "##"
+  ],
+  "key": {
+    "#": "cut_diamond"
+  },
+  "result": {
+    "item": "diamond_bricks",
+    "count": 4
+  }
+}

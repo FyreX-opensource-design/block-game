@@ -1,0 +1,15 @@
+{
+  "id": "malachite_bricks",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "##"
+  ],
+  "key": {
+    "#": "cut_malachite"
+  },
+  "result": {
+    "item": "malachite_bricks",
+    "count": 4
+  }
+}

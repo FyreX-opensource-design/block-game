@@ -1,0 +1,45 @@
+{
+  "id": "limestone_emerald_ore",
+  "lang": "block.limestone_emerald_ore",
+  "tab": [
+    "natural"
+  ],
+  "model": "cube",
+  "hardness": 4.0,
+  "tool": "pickaxe",
+  "mining_level": 5,
+  "loot_table": "blocks/limestone_emerald_ore",
+  "sound": "stone",
+  "textures": {
+    "top": "limestone_emerald_ore/limestone_emerald_ore_var_1",
+    "side": "limestone_emerald_ore/limestone_emerald_ore_var_1",
+    "bottom": "limestone_emerald_ore/limestone_emerald_ore_var_1"
+  },
+  "palettes": [
+    {
+      "top": "limestone_emerald_ore/limestone_emerald_ore_var_1",
+      "side": "limestone_emerald_ore/limestone_emerald_ore_var_1",
+      "bottom": "limestone_emerald_ore/limestone_emerald_ore_var_1"
+    },
+    {
+      "top": "limestone_emerald_ore/limestone_emerald_ore_var_2",
+      "side": "limestone_emerald_ore/limestone_emerald_ore_var_2",
+      "bottom": "limestone_emerald_ore/limestone_emerald_ore_var_2"
+    },
+    {
+      "top": "limestone_emerald_ore/limestone_emerald_ore_var_3",
+      "side": "limestone_emerald_ore/limestone_emerald_ore_var_3",
+      "bottom": "limestone_emerald_ore/limestone_emerald_ore_var_3"
+    },
+    {
+      "top": "limestone_emerald_ore/limestone_emerald_ore_var_4",
+      "side": "limestone_emerald_ore/limestone_emerald_ore_var_4",
+      "bottom": "limestone_emerald_ore/limestone_emerald_ore_var_4"
+    },
+    {
+      "top": "limestone_emerald_ore/limestone_emerald_ore_var_5",
+      "side": "limestone_emerald_ore/limestone_emerald_ore_var_5",
+      "bottom": "limestone_emerald_ore/limestone_emerald_ore_var_5"
+    }
+  ]
+}

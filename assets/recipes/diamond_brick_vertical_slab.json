@@ -1,0 +1,16 @@
+{
+  "id": "diamond_brick_vertical_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "#",
+    "#"
+  ],
+  "key": {
+    "#": "diamond_brick_slab"
+  },
+  "result": {
+    "item": "diamond_brick_vertical_slab",
+    "count": 3
+  }
+}
