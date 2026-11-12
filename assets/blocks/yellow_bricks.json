@@ -1,0 +1,18 @@
+{
+  "id": "yellow_bricks",
+  "lang": "block.yellow_bricks",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "loot_table": "blocks/yellow_bricks",
+  "sound": "stone",
+  "textures": {
+    "top": "bricks/yellow_bricks",
+    "side": "bricks/yellow_bricks",
+    "bottom": "bricks/yellow_bricks"
+  }
+}

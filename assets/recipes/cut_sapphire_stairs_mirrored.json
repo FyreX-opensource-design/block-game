@@ -1,0 +1,16 @@
+{
+  "id": "cut_sapphire_stairs_mirrored",
+  "type": "crafting_shaped",
+  "pattern": [
+    "  #",
+    " ##",
+    "###"
+  ],
+  "key": {
+    "#": "cut_sapphire"
+  },
+  "result": {
+    "item": "cut_sapphire_stairs",
+    "count": 4
+  }
+}

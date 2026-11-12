@@ -1,0 +1,15 @@
+{
+  "id": "maroon_bricks",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "##"
+  ],
+  "key": {
+    "#": "maroon_brick"
+  },
+  "result": {
+    "item": "maroon_bricks",
+    "count": 1
+  }
+}

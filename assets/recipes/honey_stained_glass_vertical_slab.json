@@ -1,0 +1,16 @@
+{
+  "id": "honey_stained_glass_vertical_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "#",
+    "#"
+  ],
+  "key": {
+    "#": "honey_stained_glass_slab"
+  },
+  "result": {
+    "item": "honey_stained_glass_vertical_slab",
+    "count": 3
+  }
+}

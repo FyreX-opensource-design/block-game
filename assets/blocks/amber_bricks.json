@@ -1,0 +1,18 @@
+{
+  "id": "amber_bricks",
+  "lang": "block.amber_bricks",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "loot_table": "blocks/amber_bricks",
+  "sound": "stone",
+  "textures": {
+    "top": "bricks/amber_bricks",
+    "side": "bricks/amber_bricks",
+    "bottom": "bricks/amber_bricks"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "id": "red_terracotta",
+  "lang": "block.red_terracotta",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 1.25,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "loot_table": "blocks/red_terracotta",
+  "sound": "stone",
+  "textures": {
+    "top": "terracotta/red_terracotta",
+    "side": "terracotta/red_terracotta",
+    "bottom": "terracotta/red_terracotta"
+  }
+}

@@ -1878,6 +1878,70 @@ class TestSlabs(unittest.TestCase):
         game5._place_block()
         self.assertEqual(self.world.get_block(9, 81, 5), "smooth_stone_vertical_slab_north_waterlogged_5")
 
+    def test_offset_vertical_slab_placement_against_adjacent_block_to_horizontal_slab(self):
+        """Clicking on a block face adjacent to a bottom horizontal slab (above slab level)
+        places an offset vertical slab on top of the slab rather than corrupting into a mixed sub-cell."""
+        from client.app import Game
+        from server.stacks import make_stack
+        from server.player import Player
+
+        class MockGame:
+            def __init__(self, world, held_item):
+                self.world = world
+                self.player = Player(self.world)
+                self.player.pos = [0.5, 90.0, 0.5]
+                self.player.yaw = math.pi  # Facing South
+                self.gamemode = "survival"
+                self.network_client = None
+                self.hotbar = [make_stack(held_item, 10)]
+                self.selected = 0
+                self.target = None
+
+            def _upload_block_change(self, x, y, z):
+                pass
+
+        MockGame._place_block = Game._place_block
+        MockGame._aim = lambda self: None
+
+        # 1. Place a bottom slab at (4, 80, 4) and a solid block at (5, 80, 4)
+        self.world.set_block(4, 80, 4, "stone_slab")
+        self.world.set_block(5, 80, 4, "stone")
+
+        # Aim at the exposed West face (nx=-1) of the block at (5, 80, 4) above the slab (local_y=0.75)
+        hit = {
+            "x": 5, "y": 80, "z": 4,
+            "nx": -1, "ny": 0, "nz": 0,
+            "hit_x": 5.0, "hit_y": 80.75, "hit_z": 4.5,
+            "local_y": 0.75,
+        }
+
+        game = MockGame(self.world, "stone_vertical_slab")
+        game.target = hit
+        game._place_block()
+
+        # The bottom slab at (4, 80, 4) must remain intact (not turned into a sub_cell)
+        self.assertEqual(self.world.get_block(4, 80, 4), "stone_slab")
+        self.assertIsNone(self.world.get_sub_cell(4, 80, 4))
+
+        # An offset vertical slab should be placed at (4, 81, 4) resting on the slab
+        self.assertEqual(self.world.get_block(4, 81, 4), "stone_vertical_slab_offset")
+
+        # 2. Clicking below local_y=0.5 (where the bottom slab occupies space) does nothing
+        self.world.set_block(6, 80, 4, "stone_slab")
+        self.world.set_block(7, 80, 4, "stone")
+        hit_low = {
+            "x": 7, "y": 80, "z": 4,
+            "nx": -1, "ny": 0, "nz": 0,
+            "hit_x": 7.0, "hit_y": 80.25, "hit_z": 4.5,
+            "local_y": 0.25,
+        }
+        game_low = MockGame(self.world, "stone_vertical_slab")
+        game_low.target = hit_low
+        game_low._place_block()
+        self.assertEqual(self.world.get_block(6, 80, 4), "stone_slab")
+        self.assertIsNone(self.world.get_sub_cell(6, 80, 4))
+        self.assertEqual(self.world.get_block(6, 81, 4), AIR)
+
 
 if __name__ == "__main__":
     unittest.main()

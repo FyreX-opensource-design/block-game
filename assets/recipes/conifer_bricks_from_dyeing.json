@@ -1,0 +1,17 @@
+{
+  "id": "conifer_bricks_from_dyeing",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "bricks",
+    "D": "conifer_dye"
+  },
+  "result": {
+    "item": "conifer_bricks",
+    "count": 8
+  }
+}

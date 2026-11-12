@@ -130,6 +130,8 @@ class MultiplayerServer:
         self.host = host
         self.requested_port = port
         self.actual_port = port
+        if saves_dir is None and Path("saves").is_dir():
+            saves_dir = "saves"
         self.saves_dir = saves_dir
         self.world_name = world_name
         self.seed = seed
@@ -1289,7 +1291,18 @@ def main(argv=None):
         saves_dir=args.saves_dir,
     )
     server.start()
-    print(f"Starting Block Game server on {args.host}:{server.actual_port} (World: {server.world_name}, Seed: {server.seed})...")
+    print(f"Block Game server running on port {server.actual_port} (World: {server.world_name}, Seed: {server.seed})")
+    print(f"  • Connect on this device: 127.0.0.1:{server.actual_port}")
+    try:
+        from client.settings import get_local_ips
+        local_ips = get_local_ips()
+        if local_ips:
+            for ip in local_ips:
+                print(f"  • Connect from other devices: {ip}:{server.actual_port}")
+        elif args.host != "0.0.0.0":
+            print(f"  • Host: {args.host}:{server.actual_port}")
+    except Exception:
+        pass
     try:
         while server.running:
             time.sleep(0.5)

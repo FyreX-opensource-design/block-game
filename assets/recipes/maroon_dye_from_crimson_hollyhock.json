@@ -1,0 +1,11 @@
+{
+  "id": "maroon_dye_from_crimson_hollyhock",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "crimson_hollyhock"
+  ],
+  "result": {
+    "item": "maroon_dye",
+    "count": 2
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "id": "chiseled_diamond",
+  "lang": "block.chiseled_diamond",
+  "tab": [
+    "building"
+  ],
+  "model": "block",
+  "block": "chiseled_diamond",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 1,
+  "food": 0
+}

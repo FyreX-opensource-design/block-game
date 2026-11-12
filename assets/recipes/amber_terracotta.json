@@ -1,0 +1,17 @@
+{
+  "id": "amber_terracotta",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "terracotta",
+    "D": "amber_dye"
+  },
+  "result": {
+    "item": "amber_terracotta",
+    "count": 8
+  }
+}

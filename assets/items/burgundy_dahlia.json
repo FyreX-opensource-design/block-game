@@ -1,0 +1,16 @@
+{
+  "id": "burgundy_dahlia",
+  "lang": "block.burgundy_dahlia",
+  "tab": "natural",
+  "model": "flat",
+  "block": "burgundy_dahlia",
+  "texture": "burgundy_dahlia",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 1,
+  "food": 0
+}

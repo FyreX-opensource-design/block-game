@@ -1,0 +1,17 @@
+{
+  "id": "ruby_axe",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "#X",
+    " X"
+  ],
+  "key": {
+    "#": "ruby",
+    "X": "#sticks"
+  },
+  "result": {
+    "item": "ruby_axe",
+    "count": 1
+  }
+}

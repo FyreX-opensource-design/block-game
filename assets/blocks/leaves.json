@@ -8,7 +8,7 @@
   "tool": "none",
   "mining_level": 0,
   "loot_table": "blocks/leaves",
-  "textures": {"top": "leaves", "side": "leaves", "bottom": "leaves"},
+  "textures": {"top": "oak_leaves", "side": "oak_leaves", "bottom": "oak_leaves"},
   "properties": {
     "leaf": true,
     "decayable": true

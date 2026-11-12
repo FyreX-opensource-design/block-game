@@ -1,0 +1,15 @@
+{
+  "id": "cut_sapphire_from_block",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "##"
+  ],
+  "key": {
+    "#": "sapphire_block"
+  },
+  "result": {
+    "item": "cut_sapphire",
+    "count": 4
+  }
+}

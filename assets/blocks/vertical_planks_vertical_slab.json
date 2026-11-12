@@ -1,0 +1,20 @@
+{
+  "id": "vertical_planks_vertical_slab",
+  "lang": "block.vertical_planks_vertical_slab",
+  "type": "vertical_slab",
+  "tab": [
+    "building"
+  ],
+  "model": "vertical_slab",
+  "hardness": 2.0,
+  "tool": "axe",
+  "mining_level": 0,
+  "loot_table": "blocks/vertical_planks_vertical_slab",
+  "full_block": "vertical_planks",
+  "sound": "wood",
+  "textures": {
+    "top": "vertical_oak_planks",
+    "side": "vertical_oak_planks",
+    "bottom": "vertical_oak_planks"
+  }
+}

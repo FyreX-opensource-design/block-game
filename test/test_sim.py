@@ -124,7 +124,7 @@ class WorldTests(unittest.TestCase):
         self.assertLessEqual(max(below), STONE_BASE - 1)
         low = next((x, z) for x in range(-120, 121, 3) for z in range(-120, 121, 3) if terrain_height(x, z, 1) < STONE_BASE)
         high = next((x, z) for x in range(-120, 121, 3) for z in range(-120, 121, 3) if terrain_height(x, z, 1) > STONE_BASE + 4)
-        world = World(seed=1, caves=[])
+        world = World(seed=1, caves=[], ores=[])
         world.generate_column(low[0] // CHUNK_SIZE, low[1] // CHUNK_SIZE)
         world.generate_column(high[0] // CHUNK_SIZE, high[1] // CHUNK_SIZE)
         low_height = terrain_height(*low, 1)

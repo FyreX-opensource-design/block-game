@@ -1,0 +1,12 @@
+{
+  "id": "navy_wool",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "#wool",
+    "navy_dye"
+  ],
+  "result": {
+    "item": "navy_wool",
+    "count": 1
+  }
+}

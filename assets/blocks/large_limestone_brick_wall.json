@@ -1,0 +1,23 @@
+{
+  "id": "large_limestone_brick_wall",
+  "lang": "block.large_limestone_brick_wall",
+  "tab": [
+    "building"
+  ],
+  "model": "wall_post",
+  "type": "wall",
+  "solid": true,
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "sound": "stone",
+  "loot_table": "blocks/large_limestone_brick_wall",
+  "properties": {
+    "wall": true
+  },
+  "textures": {
+    "top": "large_limestone_bricks",
+    "side": "large_limestone_bricks",
+    "texture": "large_limestone_bricks"
+  }
+}

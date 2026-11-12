@@ -1,0 +1,20 @@
+{
+  "id": "gravelly_limestone",
+  "lang": "block.gravelly_limestone",
+  "tab": [
+    "building",
+    "natural"
+  ],
+  "model": "cube",
+  "hardness": 0.8,
+  "tool": "shovel",
+  "mining_level": 0,
+  "loot_table": "blocks/gravelly_limestone",
+  "sound": "gravel",
+  "gravity": true,
+  "textures": {
+    "top": "gravelly_limestone",
+    "side": "gravelly_limestone",
+    "bottom": "gravelly_limestone"
+  }
+}

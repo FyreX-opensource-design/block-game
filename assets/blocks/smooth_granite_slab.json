@@ -1,0 +1,46 @@
+{
+  "id": "smooth_granite_slab",
+  "lang": "block.smooth_granite_slab",
+  "type": "slab",
+  "tab": [
+    "building"
+  ],
+  "model": "slab",
+  "hardness": 2.0,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/smooth_granite_slab",
+  "sound": "stone",
+  "textures": {
+    "top": "smooth_granite/smooth_granite_var_0_1",
+    "side": "smooth_granite/smooth_granite_var_0_1",
+    "bottom": "smooth_granite/smooth_granite_var_0_1"
+  },
+  "palettes": [
+    {
+      "top": "smooth_granite/smooth_granite_var_0_1",
+      "side": "smooth_granite/smooth_granite_var_0_1",
+      "bottom": "smooth_granite/smooth_granite_var_0_1"
+    },
+    {
+      "top": "smooth_granite/smooth_granite_var_0_2",
+      "side": "smooth_granite/smooth_granite_var_0_2",
+      "bottom": "smooth_granite/smooth_granite_var_0_2"
+    },
+    {
+      "top": "smooth_granite/smooth_granite_var_0_3",
+      "side": "smooth_granite/smooth_granite_var_0_3",
+      "bottom": "smooth_granite/smooth_granite_var_0_3"
+    },
+    {
+      "top": "smooth_granite/smooth_granite_var_0_4",
+      "side": "smooth_granite/smooth_granite_var_0_4",
+      "bottom": "smooth_granite/smooth_granite_var_0_4"
+    },
+    {
+      "top": "smooth_granite/smooth_granite_var_0_5",
+      "side": "smooth_granite/smooth_granite_var_0_5",
+      "bottom": "smooth_granite/smooth_granite_var_0_5"
+    }
+  ]
+}

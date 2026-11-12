@@ -1,0 +1,21 @@
+{
+  "id": "ruby_pillar",
+  "lang": "block.ruby_pillar",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 4.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/ruby_pillar",
+  "sound": "stone",
+  "textures": {
+    "top": "ruby_pillar_top",
+    "side": "ruby_pillar_side",
+    "bottom": "ruby_pillar_top"
+  },
+  "properties": {
+    "rotation": "axis"
+  }
+}

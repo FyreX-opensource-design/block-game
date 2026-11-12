@@ -1,0 +1,11 @@
+{
+  "id": "ruby_from_block",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "ruby_block"
+  ],
+  "result": {
+    "item": "ruby",
+    "count": 9
+  }
+}

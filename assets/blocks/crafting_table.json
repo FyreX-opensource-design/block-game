@@ -6,11 +6,14 @@
   "hardness": 2.5,
   "tool": "axe",
   "mining_level": 0,
+  "sound": "wood",
   "loot_table": "blocks/crafting_table",
   "textures": {
-    "top": "crafting_table_top",
-    "side": "crafting_table_side",
-    "bottom": "planks"
+    "up": "oak_crafting_table_top",
+    "north": "oak_crafting_table_north_south",
+    "east": "oak_crafting_table_east_west",
+    "south": "oak_crafting_table_north_south",
+    "west": "oak_crafting_table_east_west",
+    "down": "oak_log_top"
   }
 }
-

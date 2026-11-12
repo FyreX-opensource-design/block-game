@@ -1,0 +1,17 @@
+{
+  "id": "ruby_sword",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "#",
+    "X"
+  ],
+  "key": {
+    "#": "ruby",
+    "X": "#sticks"
+  },
+  "result": {
+    "item": "ruby_sword",
+    "count": 1
+  }
+}

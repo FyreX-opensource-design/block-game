@@ -1,0 +1,11 @@
+{
+  "id": "navy_dye_from_indigo_spire",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "indigo_spire"
+  ],
+  "result": {
+    "item": "navy_dye",
+    "count": 2
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "id": "maroon_stained_glass_vertical_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "#",
+    "#"
+  ],
+  "key": {
+    "#": "maroon_stained_glass_slab"
+  },
+  "result": {
+    "item": "maroon_stained_glass_vertical_slab",
+    "count": 3
+  }
+}

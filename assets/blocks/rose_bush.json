@@ -1,0 +1,20 @@
+{
+  "id": "rose_bush",
+  "lang": "block.rose_bush",
+  "tab": "natural",
+  "type": "tall_plant",
+  "model": "cross",
+  "render": "cutout",
+  "solid": false,
+  "hardness": 0.0,
+  "tool": "none",
+  "mining_level": 0,
+  "loot_table": "blocks/rose_bush",
+  "fluid_breakable": true,
+  "plant": true,
+  "requires_soil": true,
+  "textures": {
+    "cross": "rose_bush_bottom",
+    "upper": "rose_bush_top"
+  }
+}

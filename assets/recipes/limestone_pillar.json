@@ -1,0 +1,15 @@
+{
+  "id": "limestone_pillar",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "#"
+  ],
+  "key": {
+    "#": "smooth_limestone"
+  },
+  "result": {
+    "item": "limestone_pillar",
+    "count": 2
+  }
+}

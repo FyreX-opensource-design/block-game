@@ -121,7 +121,7 @@ class BiomeTests(unittest.TestCase):
             biome_from_mapping(load_biomes_mapping, "biome", {})
 
     def test_ocean_and_beach_generation(self):
-        world = World(seed=1, caves=[])
+        world = World(seed=1, caves=[], ores=[])
         # Find an ocean coordinate and beach coordinate
         ocean_pt = None
         beach_pt = None
@@ -158,7 +158,7 @@ class BiomeTests(unittest.TestCase):
         self.assertEqual(world.get_block(bx, h_beach, bz), SAND)
 
     def test_beach_generates_sandstone_under_the_sand(self):
-        world = World(seed=1, caves=[])
+        world = World(seed=1, caves=[], ores=[])
         beach = next(biome for biome in BIOMES if biome.id == "beach")
         self.assertEqual(beach.surface, SAND)
         self.assertEqual(beach.soil, "sand")
@@ -217,7 +217,7 @@ class BiomeTests(unittest.TestCase):
         self.assertEqual(cliff_beach.soil, STONE)
         self.assertIn("cliff", beach.coast)
 
-        world = World(seed=1, caves=[])
+        world = World(seed=1, caves=[], ores=[])
         sand_pt = None
         gravel_pt = None
         cliff_pt = None
@@ -285,7 +285,7 @@ class BiomeTests(unittest.TestCase):
         zs = np.arange(-150, 151, 10)
         xx, zz = np.meshgrid(xs, zs)
         grid, catalog = biome_index_grid(xx, zz, 1, BIOMES)
-        world = World(seed=1, caves=[])
+        world = World(seed=1, caves=[], ores=[])
         checked = 0
         for i in range(xx.shape[0]):
             for j in range(xx.shape[1]):
@@ -306,7 +306,7 @@ class BiomeTests(unittest.TestCase):
         self.assertGreater(checked, 0)
 
     def test_seabed_mixes_sand_gravel_clay(self):
-        world = World(seed=1, caves=[])
+        world = World(seed=1, caves=[], ores=[])
         blocks_found = set()
         for cz in range(-4, 4):
             for cx in range(-4, 4):

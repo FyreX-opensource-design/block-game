@@ -1,0 +1,18 @@
+{
+  "id": "chiseled_malachite",
+  "lang": "block.chiseled_malachite",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 4.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/chiseled_malachite",
+  "sound": "stone",
+  "textures": {
+    "top": "chiseled_malachite",
+    "side": "chiseled_malachite",
+    "bottom": "chiseled_malachite"
+  }
+}

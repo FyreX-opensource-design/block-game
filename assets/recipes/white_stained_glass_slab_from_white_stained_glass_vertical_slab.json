@@ -1,0 +1,11 @@
+{
+  "id": "white_stained_glass_slab_from_white_stained_glass_vertical_slab",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "white_stained_glass_vertical_slab"
+  ],
+  "result": {
+    "item": "white_stained_glass_slab",
+    "count": 1
+  }
+}

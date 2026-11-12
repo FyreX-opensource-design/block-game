@@ -1,0 +1,18 @@
+{
+  "id": "aquamarine_bricks",
+  "lang": "block.aquamarine_bricks",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "loot_table": "blocks/aquamarine_bricks",
+  "sound": "stone",
+  "textures": {
+    "top": "bricks/aquamarine_bricks",
+    "side": "bricks/aquamarine_bricks",
+    "bottom": "bricks/aquamarine_bricks"
+  }
+}

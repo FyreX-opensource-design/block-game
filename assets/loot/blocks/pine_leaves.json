@@ -6,7 +6,7 @@
       "entries": [
         {
           "type": "item",
-          "name": "stick",
+          "name": "pine_stick",
           "count": 1,
           "chance": 0.2
         },

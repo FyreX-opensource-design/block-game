@@ -158,7 +158,7 @@ def _block_cube(block_id, matrix):
     is_half_slab = bool(block.properties.get("slab") and not block.properties.get("double_slab"))
     y_center_offset = 0.125 if is_half_slab else 0.0
 
-    elements = block.elements if (hasattr(block, "elements") and block.elements) else None
+    elements = getattr(block, "inventory_elements", None) or (block.elements if (hasattr(block, "elements") and block.elements) else None)
     if not elements:
         elements = [{"from": [0, 0, 0], "to": [16, 16, 16], "faces": {i: block.face_uvs[i] for i in range(6) if block.face_uvs[i] is not None}}]
 

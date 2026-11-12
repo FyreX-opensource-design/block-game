@@ -1,0 +1,17 @@
+{
+  "id": "mint_terracotta",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "terracotta",
+    "D": "mint_dye"
+  },
+  "result": {
+    "item": "mint_terracotta",
+    "count": 8
+  }
+}

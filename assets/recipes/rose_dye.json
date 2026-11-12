@@ -1,0 +1,12 @@
+{
+  "id": "rose_dye",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "red_dye",
+    "pink_dye"
+  ],
+  "result": {
+    "item": "rose_dye",
+    "count": 2
+  }
+}

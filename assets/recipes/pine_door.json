@@ -1,0 +1,17 @@
+{
+  "id": "pine_door",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "##",
+    "##"
+  ],
+  "key": {
+    "#": "pine_planks"
+  },
+  "result": {
+    "item": "pine_door",
+    "count": 3
+  }
+}
+

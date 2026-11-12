@@ -1,0 +1,17 @@
+{
+  "id": "fluorescent_brick",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "brick",
+    "D": "fluorescent_dye"
+  },
+  "result": {
+    "item": "fluorescent_brick",
+    "count": 8
+  }
+}

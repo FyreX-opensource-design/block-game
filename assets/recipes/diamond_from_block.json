@@ -1,0 +1,11 @@
+{
+  "id": "diamond_from_block",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "diamond_block"
+  ],
+  "result": {
+    "item": "diamond",
+    "count": 9
+  }
+}

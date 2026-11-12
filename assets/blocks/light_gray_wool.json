@@ -1,0 +1,21 @@
+{
+  "id": "light_gray_wool",
+  "lang": "block.light_gray_wool",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 0.8,
+  "tool": "shears",
+  "mining_level": 0,
+  "textures": {
+    "top": "light_gray_wool",
+    "side": "light_gray_wool",
+    "bottom": "light_gray_wool"
+  },
+  "properties": {
+    "tags": [
+      "wool"
+    ]
+  }
+}

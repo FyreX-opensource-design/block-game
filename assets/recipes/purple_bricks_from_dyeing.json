@@ -1,0 +1,17 @@
+{
+  "id": "purple_bricks_from_dyeing",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "bricks",
+    "D": "purple_dye"
+  },
+  "result": {
+    "item": "purple_bricks",
+    "count": 8
+  }
+}

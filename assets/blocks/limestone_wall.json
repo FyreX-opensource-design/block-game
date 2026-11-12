@@ -1,0 +1,50 @@
+{
+  "id": "limestone_wall",
+  "lang": "block.limestone_wall",
+  "tab": [
+    "building"
+  ],
+  "model": "wall_post",
+  "type": "wall",
+  "solid": true,
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "sound": "stone",
+  "loot_table": "blocks/limestone_wall",
+  "properties": {
+    "wall": true
+  },
+  "textures": {
+    "top": "limestone/limestone_var_1",
+    "side": "limestone/limestone_var_1",
+    "texture": "limestone/limestone_var_1"
+  },
+  "palettes": [
+    {
+      "top": "limestone/limestone_var_1",
+      "side": "limestone/limestone_var_1",
+      "texture": "limestone/limestone_var_1"
+    },
+    {
+      "top": "limestone/limestone_var_2",
+      "side": "limestone/limestone_var_2",
+      "texture": "limestone/limestone_var_2"
+    },
+    {
+      "top": "limestone/limestone_var_3",
+      "side": "limestone/limestone_var_3",
+      "texture": "limestone/limestone_var_3"
+    },
+    {
+      "top": "limestone/limestone_var_4",
+      "side": "limestone/limestone_var_4",
+      "texture": "limestone/limestone_var_4"
+    },
+    {
+      "top": "limestone/limestone_var_5",
+      "side": "limestone/limestone_var_5",
+      "texture": "limestone/limestone_var_5"
+    }
+  ]
+}

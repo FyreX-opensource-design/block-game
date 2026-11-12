@@ -1,0 +1,17 @@
+{
+  "id": "smooth_sandstone_stairs",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#  ",
+    "## ",
+    "###"
+  ],
+  "key": {
+    "#": "smooth_sandstone"
+  },
+  "result": {
+    "item": "smooth_sandstone_stairs",
+    "count": 4
+  }
+}
+

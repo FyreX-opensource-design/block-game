@@ -1,0 +1,17 @@
+{
+  "id": "black_bricks_from_dyeing",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "bricks",
+    "D": "black_dye"
+  },
+  "result": {
+    "item": "black_bricks",
+    "count": 8
+  }
+}

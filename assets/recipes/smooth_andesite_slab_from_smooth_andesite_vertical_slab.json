@@ -1,0 +1,11 @@
+{
+  "id": "smooth_andesite_slab_from_smooth_andesite_vertical_slab",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "smooth_andesite_vertical_slab"
+  ],
+  "result": {
+    "item": "smooth_andesite_slab",
+    "count": 1
+  }
+}

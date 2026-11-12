@@ -4,7 +4,7 @@ import re
 import numpy as np
 
 from server.blocks import ASSETS, BLOCKS, BY_INDEX, TABS, _block_name, _load_lang
-from server.icons import ICON_SIZE, render_block_icon, render_flat_icon
+from server.icons import ICON_SIZE, render_block_icon, render_flat_icon, render_model_icon
 from server.images import read_png
 
 _ID = re.compile(r"[a-z0-9_]+")
@@ -80,13 +80,19 @@ def stack_limit(item_id):
 
 def creative_items(tab_id):
     ordered = []
+    seen = set()
     for block in BY_INDEX:
-        if block is None:
+        if block is None or block.id in seen:
             continue
         item = ITEMS.get(block.id)
         if item is not None and tab_id in item.tabs:
+            seen.add(block.id)
             ordered.append(block.id)
-    extras = sorted(item.id for item in ITEMS.values() if not item.block and tab_id in item.tabs)
+    extras = sorted(
+        item.id
+        for item in ITEMS.values()
+        if not item.block and tab_id in item.tabs and item.id not in seen
+    )
     return tuple(ordered + extras)
 
 
@@ -207,10 +213,94 @@ def _picture(entry, item):
         block = BLOCKS.get(item.block)
         if block and getattr(block, "base_id", None):
             block_path = ASSETS / "blocks" / f"{block.base_id}.json"
-    block_entry = json.loads(block_path.read_text())
-    textures = block_entry["textures"]
-    top_name = textures.get("top") or textures.get("side") or item.texture
-    side_name = textures.get("side") or top_name
+    block_entry = json.loads(block_path.read_text()) if block_path.is_file() else {}
+    textures = block_entry.get("textures", {})
+
+    # Check for custom model (e.g. fence_inventory, or non-cube block models)
+    model_name = entry.get("item_model")
+    if not model_name:
+        if block_entry.get("type") == "fence" or block_entry.get("model") == "fence_post":
+            model_name = "fence_inventory"
+        elif block_entry.get("type") == "wall" or block_entry.get("model") == "wall_post" or "wall" in entry.get("id", ""):
+            model_name = "wall_inventory"
+        elif block_entry.get("model") and block_entry["model"] not in ("cube", "orientable") and block_entry.get("type") != "slab":
+            model_name = block_entry["model"]
+
+    if model_name:
+        model_path = ASSETS / "models" / f"{model_name}.json"
+        if model_path.is_file():
+            model_doc = json.loads(model_path.read_text())
+            elements = model_doc.get("elements", [])
+            if elements:
+                loaded_textures = {}
+                default_tex = None
+                for k, v in textures.items():
+                    tex_file = ASSETS / "textures" / f"{v}.png"
+                    if tex_file.is_file():
+                        tex_img = read_png(tex_file)
+                        loaded_textures[k] = tex_img
+                        if default_tex is None or k in ("texture", "side", "top"):
+                            default_tex = tex_img
+                if default_tex is None and item.texture:
+                    tex_file = ASSETS / "textures" / f"{item.texture}.png"
+                    if tex_file.is_file():
+                        default_tex = read_png(tex_file)
+                if default_tex is not None:
+                    return render_model_icon(elements, loaded_textures, default_texture=default_tex)
+
+    def _find_tex_name(*candidates):
+        for name in candidates:
+            if name and (ASSETS / "textures" / f"{name}.png").is_file():
+                return name
+        return None
+
+    top_name = _find_tex_name(
+        textures.get("top"),
+        textures.get("up"),
+        textures.get("side"),
+        textures.get("texture"),
+        item.texture,
+        item.id,
+    )
+    if not top_name:
+        for val in textures.values():
+            if _find_tex_name(val):
+                top_name = val
+                break
+
+    south_name = (
+        _find_tex_name(
+            textures.get("south"),
+            textures.get("front"),
+            textures.get("side"),
+            textures.get("texture"),
+            textures.get("north"),
+            textures.get("west"),
+            textures.get("east"),
+            top_name,
+        )
+        or top_name
+    )
+    east_name = (
+        _find_tex_name(
+            textures.get("east"),
+            textures.get("right"),
+            textures.get("side"),
+            textures.get("texture"),
+            textures.get("west"),
+            south_name,
+        )
+        or south_name
+    )
+
+    top_name = top_name or item.texture or item.id
+    south_name = south_name or top_name
+    east_name = east_name or south_name
+
+    top_img = read_png(ASSETS / "textures" / f"{top_name}.png")
+    south_img = read_png(ASSETS / "textures" / f"{south_name}.png")
+    east_img = read_png(ASSETS / "textures" / f"{east_name}.png")
+
     is_slab = (
         block_entry.get("type") == "slab"
         or "slab" in block_entry.get("model", "")
@@ -218,8 +308,9 @@ def _picture(entry, item):
     )
     height_scale = 0.5 if is_slab else 1.0
     return render_block_icon(
-        read_png(ASSETS / "textures" / f"{top_name}.png"),
-        read_png(ASSETS / "textures" / f"{side_name}.png"),
+        top_img,
+        south_img,
+        side_east=east_img,
         height_scale=height_scale,
     )
 

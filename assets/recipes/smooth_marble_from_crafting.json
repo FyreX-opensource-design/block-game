@@ -1,0 +1,15 @@
+{
+  "id": "smooth_marble_from_crafting",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "##"
+  ],
+  "key": {
+    "#": "marble"
+  },
+  "result": {
+    "item": "smooth_marble",
+    "count": 4
+  }
+}

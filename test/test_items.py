@@ -69,9 +69,18 @@ class ItemTests(unittest.TestCase):
     def test_tools_show_up_in_the_creative_inventory(self):
         inventory = CreativeInventory()
         inventory.apply("tab:tools", "left", empty_slots(HOTBAR_SLOTS), 0)
-        frame = inventory.layout(1280, 720, empty_slots(HOTBAR_SLOTS), 0, (0, 0))
-        actions = {hit.action for hit in frame.hits}
+        actions = set()
+        row = 0
+        while True:
+            inventory.scroll = row
+            frame = inventory.layout(1280, 720, empty_slots(HOTBAR_SLOTS), 0, (0, 0))
+            actions.update(hit.action for hit in frame.hits)
+            if row == 0:
+                self.assertEqual(frame.labels[0].text, "Tools")
+            if inventory.scroll < row:
+                break
+            row += 1
         self.assertIn("item:wood_pickaxe", actions)
         self.assertIn("item:stick", actions)
         self.assertIn("item:debug_axes", actions)
-        self.assertEqual(frame.labels[0].text, "Tools")
+        self.assertIn("item:diamond_pickaxe", actions)

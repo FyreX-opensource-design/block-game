@@ -1,0 +1,17 @@
+{
+  "id": "magenta_brick",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "brick",
+    "D": "magenta_dye"
+  },
+  "result": {
+    "item": "magenta_brick",
+    "count": 8
+  }
+}

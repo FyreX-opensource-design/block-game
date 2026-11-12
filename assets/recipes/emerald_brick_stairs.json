@@ -1,0 +1,16 @@
+{
+  "id": "emerald_brick_stairs",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#  ",
+    "## ",
+    "###"
+  ],
+  "key": {
+    "#": "emerald_bricks"
+  },
+  "result": {
+    "item": "emerald_brick_stairs",
+    "count": 4
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "id": "smooth_andesite_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###"
+  ],
+  "key": {
+    "#": "smooth_andesite"
+  },
+  "result": {
+    "item": "smooth_andesite_slab",
+    "count": 6
+  }
+}

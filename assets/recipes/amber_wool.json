@@ -1,0 +1,12 @@
+{
+  "id": "amber_wool",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "#wool",
+    "amber_dye"
+  ],
+  "result": {
+    "item": "amber_wool",
+    "count": 1
+  }
+}

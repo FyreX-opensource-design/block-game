@@ -1,0 +1,45 @@
+{
+  "id": "sapphire_ore",
+  "lang": "block.sapphire_ore",
+  "tab": [
+    "natural"
+  ],
+  "model": "cube",
+  "hardness": 4.2,
+  "tool": "pickaxe",
+  "mining_level": 5,
+  "loot_table": "blocks/sapphire_ore",
+  "sound": "stone",
+  "textures": {
+    "top": "sapphire_ore/sapphire_ore_var_1",
+    "side": "sapphire_ore/sapphire_ore_var_1",
+    "bottom": "sapphire_ore/sapphire_ore_var_1"
+  },
+  "palettes": [
+    {
+      "top": "sapphire_ore/sapphire_ore_var_1",
+      "side": "sapphire_ore/sapphire_ore_var_1",
+      "bottom": "sapphire_ore/sapphire_ore_var_1"
+    },
+    {
+      "top": "sapphire_ore/sapphire_ore_var_2",
+      "side": "sapphire_ore/sapphire_ore_var_2",
+      "bottom": "sapphire_ore/sapphire_ore_var_2"
+    },
+    {
+      "top": "sapphire_ore/sapphire_ore_var_3",
+      "side": "sapphire_ore/sapphire_ore_var_3",
+      "bottom": "sapphire_ore/sapphire_ore_var_3"
+    },
+    {
+      "top": "sapphire_ore/sapphire_ore_var_4",
+      "side": "sapphire_ore/sapphire_ore_var_4",
+      "bottom": "sapphire_ore/sapphire_ore_var_4"
+    },
+    {
+      "top": "sapphire_ore/sapphire_ore_var_5",
+      "side": "sapphire_ore/sapphire_ore_var_5",
+      "bottom": "sapphire_ore/sapphire_ore_var_5"
+    }
+  ]
+}

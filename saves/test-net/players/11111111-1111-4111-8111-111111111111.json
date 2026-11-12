@@ -1,0 +1,19 @@
+{
+  "uuid": "11111111-1111-4111-8111-111111111111",
+  "username": "Tester",
+  "pos": [
+    23.5,
+    70.0,
+    20.5
+  ],
+  "yaw": 0.0,
+  "pitch": 0.0,
+  "held": "",
+  "spawn": null,
+  "health": 20.0,
+  "max_health": 20.0,
+  "hunger": 20.0,
+  "max_hunger": 20.0,
+  "saturation": 5.0,
+  "last_played": 1794073766.9878457
+}

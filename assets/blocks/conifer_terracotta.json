@@ -1,0 +1,18 @@
+{
+  "id": "conifer_terracotta",
+  "lang": "block.conifer_terracotta",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 1.25,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "loot_table": "blocks/conifer_terracotta",
+  "sound": "stone",
+  "textures": {
+    "top": "terracotta/conifer_terracotta",
+    "side": "terracotta/conifer_terracotta",
+    "bottom": "terracotta/conifer_terracotta"
+  }
+}

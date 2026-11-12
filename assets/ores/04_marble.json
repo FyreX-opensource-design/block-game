@@ -1,0 +1,13 @@
+{
+  "id": "04_marble",
+  "block": "marble",
+  "target": "stone",
+  "min_y": 5,
+  "max_y": 126,
+  "scale": 0.028,
+  "threshold": 0.55,
+  "octaves": 2,
+  "seed_offset": 831,
+  "max_vein_size": 0,
+  "enabled": true
+}

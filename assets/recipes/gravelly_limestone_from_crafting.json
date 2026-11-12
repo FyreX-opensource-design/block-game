@@ -1,0 +1,12 @@
+{
+  "id": "gravelly_limestone_from_crafting",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "limestone",
+    "gravel"
+  ],
+  "result": {
+    "item": "gravelly_limestone",
+    "count": 2
+  }
+}

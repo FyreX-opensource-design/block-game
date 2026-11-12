@@ -1,0 +1,15 @@
+{
+  "id": "cut_ruby_from_block",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "##"
+  ],
+  "key": {
+    "#": "ruby_block"
+  },
+  "result": {
+    "item": "cut_ruby",
+    "count": 4
+  }
+}

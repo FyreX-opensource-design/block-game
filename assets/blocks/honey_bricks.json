@@ -1,0 +1,18 @@
+{
+  "id": "honey_bricks",
+  "lang": "block.honey_bricks",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "loot_table": "blocks/honey_bricks",
+  "sound": "stone",
+  "textures": {
+    "top": "bricks/honey_bricks",
+    "side": "bricks/honey_bricks",
+    "bottom": "bricks/honey_bricks"
+  }
+}

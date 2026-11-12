@@ -8,6 +8,6 @@
   "tool": "axe",
   "mining_level": 0,
   "loot_table": "blocks/planks_slab",
-  "textures": {"top": "planks", "side": "planks", "bottom": "planks"}
+  "textures": {"top": "oak_planks", "side": "oak_planks", "bottom": "oak_planks"}
 }
 

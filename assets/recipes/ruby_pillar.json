@@ -1,0 +1,15 @@
+{
+  "id": "ruby_pillar",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "#"
+  ],
+  "key": {
+    "#": "cut_ruby"
+  },
+  "result": {
+    "item": "ruby_pillar",
+    "count": 2
+  }
+}

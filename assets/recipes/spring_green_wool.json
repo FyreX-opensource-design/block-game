@@ -1,0 +1,12 @@
+{
+  "id": "spring_green_wool",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "#wool",
+    "spring_green_dye"
+  ],
+  "result": {
+    "item": "spring_green_wool",
+    "count": 1
+  }
+}

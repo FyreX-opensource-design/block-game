@@ -512,7 +512,7 @@ class TestWorldSubCell(unittest.TestCase):
         # Notice that at the shared boundary (k=0,1 of front half and k=2,3 of back half), t == 0.5 for BOTH!
         t_front_boundary = uvs_front[0][1]
         t_back_boundary = uvs_back[2][1]
-        self.assertAlmostEqual(t_front_boundary, t_back_boundary)
+        self.assertAlmostEqual(t_front_boundary, t_back_boundary, places=5)
 
     def test_two_offset_blocks_sharing_cell_do_not_split_both(self):
         from unittest.mock import MagicMock

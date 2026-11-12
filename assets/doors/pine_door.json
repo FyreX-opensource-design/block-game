@@ -1,0 +1,16 @@
+{
+  "id": "pine_door",
+  "name": "Pine Door",
+  "sound": "wood",
+  "hardness": 3.0,
+  "tool": "axe",
+  "openable_by_hand": true,
+  "item": "pine_door",
+  "loot_table": "blocks/pine_door",
+  "textures": {
+    "lower": "pine_door_bottom",
+    "upper": "pine_door_top",
+    "edge": "pine_doors_side"
+  }
+}
+

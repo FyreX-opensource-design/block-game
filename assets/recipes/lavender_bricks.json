@@ -1,0 +1,15 @@
+{
+  "id": "lavender_bricks",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "##"
+  ],
+  "key": {
+    "#": "lavender_brick"
+  },
+  "result": {
+    "item": "lavender_bricks",
+    "count": 1
+  }
+}

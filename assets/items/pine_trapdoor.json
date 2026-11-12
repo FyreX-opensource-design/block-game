@@ -1,0 +1,13 @@
+{
+  "id": "pine_trapdoor",
+  "lang": "item.pine_trapdoor",
+  "tab": "building",
+  "model": "flat",
+  "texture": "pine_trapdoor",
+  "block": "pine_trapdoor",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}
+

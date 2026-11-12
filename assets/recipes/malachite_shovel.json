@@ -1,0 +1,17 @@
+{
+  "id": "malachite_shovel",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "X",
+    "X"
+  ],
+  "key": {
+    "#": "malachite",
+    "X": "#sticks"
+  },
+  "result": {
+    "item": "malachite_shovel",
+    "count": 1
+  }
+}

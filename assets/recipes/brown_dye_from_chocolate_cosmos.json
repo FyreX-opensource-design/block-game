@@ -1,0 +1,11 @@
+{
+  "id": "brown_dye_from_chocolate_cosmos",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "chocolate_cosmos"
+  ],
+  "result": {
+    "item": "brown_dye",
+    "count": 1
+  }
+}

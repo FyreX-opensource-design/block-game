@@ -1,0 +1,15 @@
+{
+  "id": "emerald_pillar",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "#"
+  ],
+  "key": {
+    "#": "cut_emerald"
+  },
+  "result": {
+    "item": "emerald_pillar",
+    "count": 2
+  }
+}

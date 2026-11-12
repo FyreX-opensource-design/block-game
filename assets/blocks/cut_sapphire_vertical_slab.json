@@ -1,0 +1,19 @@
+{
+  "id": "cut_sapphire_vertical_slab",
+  "lang": "block.cut_sapphire_vertical_slab",
+  "tab": [
+    "building"
+  ],
+  "model": "vertical_slab",
+  "hardness": 4.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/cut_sapphire_vertical_slab",
+  "sound": "stone",
+  "textures": {
+    "top": "cut_sapphire",
+    "side": "cut_sapphire",
+    "bottom": "cut_sapphire"
+  },
+  "type": "vertical_slab"
+}

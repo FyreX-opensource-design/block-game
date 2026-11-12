@@ -1,0 +1,21 @@
+{
+  "id": "spring_green_wool",
+  "lang": "block.spring_green_wool",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 0.8,
+  "tool": "shears",
+  "mining_level": 0,
+  "textures": {
+    "top": "spring_green_wool",
+    "side": "spring_green_wool",
+    "bottom": "spring_green_wool"
+  },
+  "properties": {
+    "tags": [
+      "wool"
+    ]
+  }
+}

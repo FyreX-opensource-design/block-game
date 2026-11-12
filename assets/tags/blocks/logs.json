@@ -5,6 +5,12 @@
     "log_z",
     "pine_log",
     "pine_log_x",
-    "pine_log_z"
+    "pine_log_z",
+    "oak_wood",
+    "oak_wood_x",
+    "oak_wood_z",
+    "pine_wood",
+    "pine_wood_x",
+    "pine_wood_z"
   ]
 }

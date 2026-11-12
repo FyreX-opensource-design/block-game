@@ -1,0 +1,11 @@
+{
+  "id": "large_marble_brick_slab_from_large_marble_brick_vertical_slab",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "large_marble_brick_vertical_slab"
+  ],
+  "result": {
+    "item": "large_marble_brick_slab",
+    "count": 1
+  }
+}

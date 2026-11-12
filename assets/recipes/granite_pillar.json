@@ -1,0 +1,15 @@
+{
+  "id": "granite_pillar",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "#"
+  ],
+  "key": {
+    "#": "smooth_granite"
+  },
+  "result": {
+    "item": "granite_pillar",
+    "count": 2
+  }
+}

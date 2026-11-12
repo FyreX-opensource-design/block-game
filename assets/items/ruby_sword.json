@@ -1,0 +1,17 @@
+{
+  "id": "ruby_sword",
+  "lang": "item.ruby_sword",
+  "tab": "tools",
+  "model": "flat",
+  "texture": "ruby_sword",
+  "tool": "sword",
+  "max_stack": 1,
+  "left": "attack",
+  "right": "none",
+  "durability": 720,
+  "mining_level": 0,
+  "mining_speed": 1.0,
+  "attack": 9.5,
+  "food": 0,
+  "repair": "ruby"
+}

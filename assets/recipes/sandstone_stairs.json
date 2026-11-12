@@ -1,0 +1,17 @@
+{
+  "id": "sandstone_stairs",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#  ",
+    "## ",
+    "###"
+  ],
+  "key": {
+    "#": "sandstone"
+  },
+  "result": {
+    "item": "sandstone_stairs",
+    "count": 4
+  }
+}
+

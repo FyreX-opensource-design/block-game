@@ -1,0 +1,17 @@
+{
+  "id": "lime_terracotta",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "terracotta",
+    "D": "lime_dye"
+  },
+  "result": {
+    "item": "lime_terracotta",
+    "count": 8
+  }
+}

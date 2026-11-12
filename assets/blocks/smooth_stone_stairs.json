@@ -1,0 +1,20 @@
+{
+  "id": "smooth_stone_stairs",
+  "lang": "block.smooth_stone_stairs",
+  "type": "stairs",
+  "tab": [
+    "building"
+  ],
+  "model": "stairs",
+  "hardness": 2.0,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "sound": "stone",
+  "loot_table": "blocks/smooth_stone_stairs",
+  "textures": {
+    "top": "smooth_stone",
+    "side": "smooth_stone",
+    "bottom": "smooth_stone"
+  }
+}
+

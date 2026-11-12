@@ -9,6 +9,23 @@
   "octaves": 2,
   "seed_offset": 202,
   "max_vein_size": 12,
-  "enabled": true
+  "enabled": true,
+  "target_blocks": {
+    "stone": "copper_ore",
+    "granite": "granite_copper_ore",
+    "smooth_granite": "granite_copper_ore",
+    "gravelly_granite": "granite_copper_ore",
+    "diorite": "diorite_copper_ore",
+    "smooth_diorite": "diorite_copper_ore",
+    "gravelly_diorite": "diorite_copper_ore",
+    "andesite": "andesite_copper_ore",
+    "smooth_andesite": "andesite_copper_ore",
+    "gravelly_andesite": "andesite_copper_ore",
+    "marble": "marble_copper_ore",
+    "smooth_marble": "marble_copper_ore",
+    "gravelly_marble": "marble_copper_ore",
+    "limestone": "limestone_copper_ore",
+    "smooth_limestone": "limestone_copper_ore",
+    "gravelly_limestone": "limestone_copper_ore"
+  }
 }
-

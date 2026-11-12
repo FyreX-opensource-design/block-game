@@ -1,0 +1,11 @@
+{
+  "id": "sapphire_from_block",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "sapphire_block"
+  ],
+  "result": {
+    "item": "sapphire",
+    "count": 9
+  }
+}

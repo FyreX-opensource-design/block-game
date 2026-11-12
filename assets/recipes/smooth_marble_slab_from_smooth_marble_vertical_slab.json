@@ -1,0 +1,11 @@
+{
+  "id": "smooth_marble_slab_from_smooth_marble_vertical_slab",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "smooth_marble_vertical_slab"
+  ],
+  "result": {
+    "item": "smooth_marble_slab",
+    "count": 1
+  }
+}

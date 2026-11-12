@@ -1,0 +1,21 @@
+{
+  "id": "lime_wool",
+  "lang": "block.lime_wool",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 0.8,
+  "tool": "shears",
+  "mining_level": 0,
+  "textures": {
+    "top": "lime_wool",
+    "side": "lime_wool",
+    "bottom": "lime_wool"
+  },
+  "properties": {
+    "tags": [
+      "wool"
+    ]
+  }
+}

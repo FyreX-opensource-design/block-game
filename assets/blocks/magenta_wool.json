@@ -1,0 +1,21 @@
+{
+  "id": "magenta_wool",
+  "lang": "block.magenta_wool",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 0.8,
+  "tool": "shears",
+  "mining_level": 0,
+  "textures": {
+    "top": "magenta_wool",
+    "side": "magenta_wool",
+    "bottom": "magenta_wool"
+  },
+  "properties": {
+    "tags": [
+      "wool"
+    ]
+  }
+}

@@ -797,19 +797,25 @@ class Game(pyglet.window.Window):
         self.ready = True
         self.mode = "play"
         self._persist_world()
+        if self.world is not None:
+            self.world.start_background_generator()
         if not self._smoke:
             self.set_exclusive_mouse(True)
 
     def _stream(self):
+        if self.world is None or self.player is None:
+            return
         cx = math.floor(self.player.pos[0] / CHUNK_SIZE)
         cy = min(SECTION_COUNT - 1, max(0, math.floor(self.player.pos[1] / CHUNK_SIZE)))
         cz = math.floor(self.player.pos[2] / CHUNK_SIZE)
-        built, removed = self.world.sync(cx, cy, cz)
+        center = (cx, cy, cz)
+
+        removed = self.world.evict_distant([center])
         for key in removed:
             self.renderer.drop(key)
-        if built is not None:
-            self._upload(built)
-            self.world.dirty.discard(built)
+
+        committed = self.world.poll_generated_chunks(max_count=16, centers=[center])
+        self.world.request_chunks([center], max_in_flight=16)
 
     def _upload(self, key):
         mesh = build_chunk_mesh(self.world, key[0], key[1], key[2])
@@ -855,40 +861,65 @@ class Game(pyglet.window.Window):
                 px, py, pz = self.player.pos
                 if math.hypot(x + 0.5 - px, y + 0.5 - py, z + 0.5 - pz) <= 32:
                     self.sound_manager.play_break_sound(broken_id)
+            else:
+                from server.blocks import get_door_info, is_door, is_fence_gate, is_trapdoor
+                is_door_toggle = is_door(old_block) and is_door(block) and (get_door_info(block) or {}).get("half") == "lower"
+                is_trapdoor_toggle = is_trapdoor(old_block) and is_trapdoor(block)
+                is_fence_gate_toggle = is_fence_gate(old_block) and is_fence_gate(block)
+                if is_door_toggle or is_trapdoor_toggle or is_fence_gate_toggle:
+                    px, py, pz = self.player.pos
+                    if math.hypot(x + 0.5 - px, y + 0.5 - py, z + 0.5 - pz) <= 32:
+                        self.sound_manager.play_walk_sound("planks")
         return True
 
-    def _upload_block_change(self, x, y, z):
-        cx = x // CHUNK_SIZE
-        cy = y // CHUNK_SIZE
-        cz = z // CHUNK_SIZE
-        lx = x % CHUNK_SIZE
-        ly = y % CHUNK_SIZE
-        lz = z % CHUNK_SIZE
-        affected = {(cx, cy, cz)}
-        if lx == 0:
-            affected.add((cx - 1, cy, cz))
-        elif lx == CHUNK_SIZE - 1:
-            affected.add((cx + 1, cy, cz))
-        if ly == 0 and cy > 0:
-            affected.add((cx, cy - 1, cz))
-        elif ly == CHUNK_SIZE - 1 and cy < SECTION_COUNT - 1:
-            affected.add((cx, cy + 1, cz))
-        if lz == 0:
-            affected.add((cx, cy, cz - 1))
-        elif lz == CHUNK_SIZE - 1:
-            affected.add((cx, cy, cz + 1))
+    def _upload_block_changes(self, coords):
+        if getattr(self._upload_block_change, "__func__", None) is not Game._upload_block_change:
+            for x, y, z in coords:
+                self._upload_block_change(x, y, z)
+            return
+        affected = set()
+        centers = []
+        for x, y, z in coords:
+            cx = x // CHUNK_SIZE
+            cy = y // CHUNK_SIZE
+            cz = z // CHUNK_SIZE
+            lx = x % CHUNK_SIZE
+            ly = y % CHUNK_SIZE
+            lz = z % CHUNK_SIZE
+            centers.append((cx, cy, cz))
+            affected.add((cx, cy, cz))
+            if lx == 0:
+                affected.add((cx - 1, cy, cz))
+            elif lx == CHUNK_SIZE - 1:
+                affected.add((cx + 1, cy, cz))
+            if ly == 0 and cy > 0:
+                affected.add((cx, cy - 1, cz))
+            elif ly == CHUNK_SIZE - 1 and cy < SECTION_COUNT - 1:
+                affected.add((cx, cy + 1, cz))
+            if lz == 0:
+                affected.add((cx, cy, cz - 1))
+            elif lz == CHUNK_SIZE - 1:
+                affected.add((cx, cy, cz + 1))
+        if not centers:
+            return
         for k in affected:
             if k in self.world.chunks:
                 self._upload(k)
                 self.world.dirty.discard(k)
         adjacent_dirty = [
-            k for k in self.world.dirty
-            if abs(k[0] - cx) <= 1 and abs(k[1] - cy) <= 1 and abs(k[2] - cz) <= 1
+            (min(abs(k[0] - cx) + abs(k[1] - cy) + abs(k[2] - cz) for cx, cy, cz in centers), k)
+            for k in self.world.dirty
+            if any(abs(k[0] - cx) <= 1 and abs(k[1] - cy) <= 1 and abs(k[2] - cz) <= 1 for cx, cy, cz in centers)
         ]
-        for k in adjacent_dirty:
+        # Upload up to 2 closest adjacent dirty chunks synchronously to keep frame latency smooth;
+        # any remaining dirty chunks will be budgeted and uploaded by update() via take_dirty(4).
+        for _, k in sorted(adjacent_dirty)[:2]:
             if k in self.world.chunks:
                 self._upload(k)
                 self.world.dirty.discard(k)
+
+    def _upload_block_change(self, x, y, z):
+        self._upload_block_changes(((x, y, z),))
 
     def _apply_input(self):
         inp = self.player.input
@@ -1324,18 +1355,115 @@ class Game(pyglet.window.Window):
                 return
 
         from server.blocks import (
+            get_door_info,
             get_double_vertical_slab_info,
             get_offset_info,
             get_offset_torch_info,
             get_slab_info,
+            get_tall_plant_info,
+            get_trapdoor_info,
             get_vertical_slab_info,
             get_vertical_slab_offset_block,
             get_vertical_slab_offset_info,
             get_vertical_slab_torch_info,
+            is_door,
             is_offset_block,
             is_slab,
+            is_trapdoor,
             rotation_variant,
         )
+
+        tp_info = get_tall_plant_info(block_id)
+        if tp_info is not None:
+            base_id = tp_info["base_id"]
+            partner_y = y + 1 if tp_info["half"] == "lower" else y - 1
+            partner_block = self.world.get_block(x, partner_y, z)
+            partner_info = get_tall_plant_info(partner_block)
+            has_partner = partner_info is not None and partner_info["base_id"] == base_id
+
+            if self.gamemode == "survival":
+                held_id = stack_id(self.hotbar[self.selected]) if self.selected < len(self.hotbar) else ""
+                held_item = ITEMS.get(held_id)
+                drops = get_block_drops(BLOCKS.get(base_id), held_item)
+                drop_y = float(min(y, partner_y)) + 0.2
+                self._spawn_break_drops(drops, x, drop_y, z)
+                if hasattr(self, "_use_held_tool"):
+                    self._use_held_tool()
+
+            if getattr(self, "sound_manager", None):
+                self.sound_manager.play_break_sound(base_id)
+
+            if self.network_client is not None:
+                self.network_client.send_set_block(x, y, z, AIR)
+                if has_partner:
+                    self.network_client.send_set_block(x, partner_y, z, AIR)
+
+            changed = [(x, y, z)]
+            self.world.set_block(x, y, z, AIR)
+            if has_partner:
+                if self.world.get_block(x, partner_y, z) != AIR:
+                    self.world.set_block(x, partner_y, z, AIR)
+                changed.append((x, partner_y, z))
+            self._upload_block_changes(changed)
+
+            self._reset_breaking()
+            return
+
+        d_info = get_door_info(block_id)
+        if d_info is not None:
+            base_id = d_info["base_id"]
+            partner_y = y + 1 if d_info["half"] == "lower" else y - 1
+            partner_block = self.world.get_block(x, partner_y, z)
+            partner_info = get_door_info(partner_block)
+
+            if self.gamemode == "survival":
+                held_id = stack_id(self.hotbar[self.selected]) if self.selected < len(self.hotbar) else ""
+                held_item = ITEMS.get(held_id)
+                drops = get_block_drops(BLOCKS.get(base_id), held_item)
+                drop_y = float(min(y, partner_y)) + 0.5
+                self._spawn_break_drops(drops, x, drop_y, z)
+                if hasattr(self, "_use_held_tool"):
+                    self._use_held_tool()
+
+            if getattr(self, "sound_manager", None):
+                self.sound_manager.play_break_sound(base_id)
+
+            if self.network_client is not None:
+                self.network_client.send_set_block(x, y, z, AIR)
+                if partner_info is not None and partner_info["base_id"] == base_id:
+                    self.network_client.send_set_block(x, partner_y, z, AIR)
+
+            changed = [(x, y, z)]
+            self.world.set_block(x, y, z, AIR)
+            if partner_info is not None and partner_info["base_id"] == base_id:
+                self.world.set_block(x, partner_y, z, AIR)
+                changed.append((x, partner_y, z))
+            self._upload_block_changes(changed)
+
+            self._reset_breaking()
+            return
+
+        td_info = get_trapdoor_info(block_id)
+        if td_info is not None:
+            base_id = td_info["base_id"]
+            if self.gamemode == "survival":
+                held_id = stack_id(self.hotbar[self.selected]) if self.selected < len(self.hotbar) else ""
+                held_item = ITEMS.get(held_id)
+                drops = get_block_drops(BLOCKS.get(base_id), held_item)
+                self._spawn_break_drops(drops, x, y + 0.5, z)
+                if hasattr(self, "_use_held_tool"):
+                    self._use_held_tool()
+
+            if getattr(self, "sound_manager", None):
+                self.sound_manager.play_break_sound(base_id)
+
+            if self.network_client is not None:
+                self.network_client.send_set_block(x, y, z, AIR)
+
+            self.world.set_block(x, y, z, AIR)
+            self._upload_block_change(x, y, z)
+            self._reset_breaking()
+            return
 
         o_info = get_offset_info(block_id)
         t_info = get_offset_torch_info(block_id)
@@ -1741,6 +1869,246 @@ class Game(pyglet.window.Window):
 
         held_is_slab = is_slab(held.block)
 
+        from server.blocks import (
+            is_door,
+            get_door_info,
+            get_door_block,
+            door_bounds,
+            get_door_relative_offsets,
+        )
+        if is_door(held.block):
+            target_id = self.world.get_block(hit["x"], hit["y"], hit["z"])
+            from server.fluid import is_water
+            if target_id in ("", AIR, None) or is_water(target_id) or getattr(BLOCKS.get(target_id), "plant", False):
+                px, py, pz = hit["x"], hit["y"], hit["z"]
+            else:
+                px = hit["x"] + hit["nx"]
+                py = hit["y"] + hit["ny"]
+                pz = hit["z"] + hit["nz"]
+
+            if py <= 0 or py + 1 >= WORLD_HEIGHT:
+                return
+
+            if not self.world.is_solid(px, py - 1, pz):
+                return
+
+            low_b = self.world.get_block(px, py, pz)
+            high_b = self.world.get_block(px, py + 1, pz)
+            if not (low_b in ("", AIR, None) or is_water(low_b) or getattr(BLOCKS.get(low_b), "plant", False)):
+                return
+            if not (high_b in ("", AIR, None) or is_water(high_b) or getattr(BLOCKS.get(high_b), "plant", False)):
+                return
+
+            d_info = get_door_info(held.block)
+            base_id = d_info["base_id"] if d_info else held.block
+            facing = player_facing_from_yaw(self.player.yaw if self.player else 0.0)
+
+            (left_dx, left_dz), (right_dx, right_dz) = get_door_relative_offsets(facing)
+            left_block = self.world.get_block(px + left_dx, py, pz + left_dz)
+            right_block = self.world.get_block(px + right_dx, py, pz + right_dz)
+            left_info = get_door_info(left_block)
+            if left_info is None:
+                left_info = get_door_info(self.world.get_block(px + left_dx, py + 1, pz + left_dz))
+            right_info = get_door_info(right_block)
+            if right_info is None:
+                right_info = get_door_info(self.world.get_block(px + right_dx, py + 1, pz + right_dz))
+
+            hinge = "left"
+            if left_info is not None and left_info["facing"] == facing and left_info.get("hinge", "left") == "left":
+                hinge = "right"
+            elif right_info is not None and right_info["facing"] == facing:
+                hinge = "left"
+                if right_info.get("hinge", "left") == "left":
+                    # Mirror adjacent right door to right hinge so they form a double door pair
+                    r_base = right_info["base_id"]
+                    r_open = right_info["open"]
+                    r_lower = get_door_block(r_base, "lower", facing, open=r_open, hinge="right")
+                    r_upper = get_door_block(r_base, "upper", facing, open=r_open, hinge="right")
+                    rx, rz = px + right_dx, pz + right_dz
+                    if self.network_client is not None:
+                        self.network_client.send_set_block(rx, py, rz, r_lower)
+                        self.network_client.send_set_block(rx, py + 1, rz, r_upper)
+                    if self.world.set_block(rx, py, rz, r_lower):
+                        self._upload_block_change(rx, py, rz)
+                    if self.world.set_block(rx, py + 1, rz, r_upper):
+                        self._upload_block_change(rx, py + 1, rz)
+            else:
+                left_solid = self.world.is_solid(px + left_dx, py, pz + left_dz)
+                right_solid = self.world.is_solid(px + right_dx, py, pz + right_dz)
+                if right_solid and not left_solid:
+                    hinge = "right"
+                else:
+                    hinge = "left"
+
+            low_box = door_bounds(px, py, pz, facing, is_open=False, hinge=hinge)
+            high_box = door_bounds(px, py + 1, pz, facing, is_open=False, hinge=hinge)
+
+            if self.player is not None:
+                pl_x, pl_y, pl_z = self.player.pos
+                rad, hgt = self.player.radius, self.player.height
+                p_min_x, p_max_x = pl_x - rad, pl_x + rad
+                p_min_y, p_max_y = pl_y, pl_y + hgt
+                p_min_z, p_max_z = pl_z - rad, pl_z + rad
+                for bx0, by0, bz0, bx1, by1, bz1 in (low_box, high_box):
+                    if p_max_x > bx0 and p_min_x < bx1 and p_max_y > by0 and p_min_y < by1 and p_max_z > bz0 and p_min_z < bz1:
+                        return
+
+            lower_id = get_door_block(base_id, "lower", facing, open=False, hinge=hinge)
+            upper_id = get_door_block(base_id, "upper", facing, open=False, hinge=hinge)
+
+            if self.network_client is not None:
+                self.network_client.send_set_block(px, py, pz, lower_id)
+                self.network_client.send_set_block(px, py + 1, pz, upper_id)
+
+            changed = []
+            if self.world.set_block(px, py, pz, lower_id):
+                changed.append((px, py, pz))
+            if self.world.set_block(px, py + 1, pz, upper_id):
+                changed.append((px, py + 1, pz))
+            if changed:
+                self._upload_block_changes(changed)
+
+            if self.gamemode == "survival":
+                cur_slot = self.hotbar[self.selected]
+                c = stack_count(cur_slot)
+                if c > 1:
+                    self.hotbar[self.selected] = make_stack(stack_id(cur_slot), c - 1)
+                else:
+                    self.hotbar[self.selected] = empty_stack()
+
+            if getattr(self, "sound_manager", None):
+                self.sound_manager.play_walk_sound("planks")
+            return
+
+        from server.blocks import is_trapdoor, get_trapdoor_info, get_trapdoor_block, trapdoor_bounds
+        if is_trapdoor(held.block):
+            target_id = self.world.get_block(hit["x"], hit["y"], hit["z"])
+            from server.fluid import is_water
+            if target_id in ("", AIR, None) or is_water(target_id) or getattr(BLOCKS.get(target_id), "plant", False):
+                px, py, pz = hit["x"], hit["y"], hit["z"]
+            else:
+                px = hit["x"] + hit["nx"]
+                py = hit["y"] + hit["ny"]
+                pz = hit["z"] + hit["nz"]
+
+            if py < 0 or py >= WORLD_HEIGHT:
+                return
+
+            dest_b = self.world.get_block(px, py, pz)
+            if not (dest_b in ("", AIR, None) or is_water(dest_b) or getattr(BLOCKS.get(dest_b), "plant", False)):
+                return
+
+            td_info = get_trapdoor_info(held.block)
+            base_id = td_info["base_id"] if td_info else held.block
+
+            ny = hit.get("ny", 0)
+            nx = hit.get("nx", 0)
+            nz = hit.get("nz", 0)
+            local_y = hit.get("local_y", 0.5)
+
+            if ny == 1:
+                half = "bottom"
+                facing = player_facing_from_yaw(self.player.yaw if self.player else 0.0)
+            elif ny == -1:
+                half = "top"
+                facing = player_facing_from_yaw(self.player.yaw if self.player else 0.0)
+            else:
+                half = "top" if local_y >= 0.5 else "bottom"
+                if nx == 1:
+                    facing = "west"
+                elif nx == -1:
+                    facing = "east"
+                elif nz == 1:
+                    facing = "north"
+                elif nz == -1:
+                    facing = "south"
+                else:
+                    facing = player_facing_from_yaw(self.player.yaw if self.player else 0.0)
+
+            td_box = trapdoor_bounds(px, py, pz, half, facing, is_open=False)
+            if self.player is not None:
+                pl_x, pl_y, pl_z = self.player.pos
+                rad, hgt = self.player.radius, self.player.height
+                p_min_x, p_max_x = pl_x - rad, pl_x + rad
+                p_min_y, p_max_y = pl_y, pl_y + hgt
+                p_min_z, p_max_z = pl_z - rad, pl_z + rad
+                bx0, by0, bz0, bx1, by1, bz1 = td_box
+                if p_max_x > bx0 and p_min_x < bx1 and p_max_y > by0 and p_min_y < by1 and p_max_z > bz0 and p_min_z < bz1:
+                    return
+
+            placed_id = get_trapdoor_block(base_id, half, facing, open=False)
+            if self.network_client is not None:
+                self.network_client.send_set_block(px, py, pz, placed_id)
+
+            if self.world.set_block(px, py, pz, placed_id):
+                self._upload_block_change(px, py, pz)
+
+            if self.gamemode == "survival":
+                cur_slot = self.hotbar[self.selected]
+                c = stack_count(cur_slot)
+                if c > 1:
+                    self.hotbar[self.selected] = make_stack(stack_id(cur_slot), c - 1)
+                else:
+                    self.hotbar[self.selected] = empty_stack()
+
+            if getattr(self, "sound_manager", None):
+                self.sound_manager.play_walk_sound("planks")
+            return
+
+        from server.blocks import is_fence_gate, get_fence_gate_info, get_fence_gate_block, fence_gate_bounds
+        if is_fence_gate(held.block):
+            target_id = self.world.get_block(hit["x"], hit["y"], hit["z"])
+            from server.fluid import is_water
+            if target_id in ("", AIR, None) or is_water(target_id) or getattr(BLOCKS.get(target_id), "plant", False):
+                px, py, pz = hit["x"], hit["y"], hit["z"]
+            else:
+                px = hit["x"] + hit["nx"]
+                py = hit["y"] + hit["ny"]
+                pz = hit["z"] + hit["nz"]
+
+            if py < 0 or py >= WORLD_HEIGHT:
+                return
+
+            dest_b = self.world.get_block(px, py, pz)
+            if not (dest_b in ("", AIR, None) or is_water(dest_b) or getattr(BLOCKS.get(dest_b), "plant", False)):
+                return
+
+            fg_info = get_fence_gate_info(held.block)
+            base_id = fg_info["base_id"] if fg_info else held.block
+
+            player_yaw = self.player.yaw if self.player is not None else 0.0
+            facing = player_facing_from_yaw(player_yaw)
+
+            fg_box = fence_gate_bounds(px, py, pz, facing, is_open=False)
+            if self.player is not None and fg_box is not None:
+                pl_x, pl_y, pl_z = self.player.pos
+                rad, hgt = self.player.radius, self.player.height
+                p_min_x, p_max_x = pl_x - rad, pl_x + rad
+                p_min_y, p_max_y = pl_y, pl_y + hgt
+                p_min_z, p_max_z = pl_z - rad, pl_z + rad
+                bx0, by0, bz0, bx1, by1, bz1 = fg_box
+                if p_max_x > bx0 and p_min_x < bx1 and p_max_y > by0 and p_min_y < by1 and p_max_z > bz0 and p_min_z < bz1:
+                    return
+
+            placed_id = get_fence_gate_block(base_id, facing, open=False)
+            if self.network_client is not None:
+                self.network_client.send_set_block(px, py, pz, placed_id)
+
+            if self.world.set_block(px, py, pz, placed_id):
+                self._upload_block_change(px, py, pz)
+
+            if self.gamemode == "survival":
+                cur_slot = self.hotbar[self.selected]
+                c = stack_count(cur_slot)
+                if c > 1:
+                    self.hotbar[self.selected] = make_stack(stack_id(cur_slot), c - 1)
+                else:
+                    self.hotbar[self.selected] = empty_stack()
+
+            if getattr(self, "sound_manager", None):
+                self.sound_manager.play_walk_sound("planks")
+            return
+
         # 1. Try combining with targeted block if it's a single slab or an uncapped offset block
         target_pos = (hit["x"], hit["y"], hit["z"])
         target_block = self.world.get_block(*target_pos)
@@ -1810,6 +2178,7 @@ class Game(pyglet.window.Window):
                     if collision:
                         return
 
+                changed = []
                 for cx, cy, cz, new_sub in horiz_res:
                     if self.network_client is not None:
                         if new_sub.is_empty():
@@ -1817,7 +2186,8 @@ class Game(pyglet.window.Window):
                         else:
                             self.network_client.send_set_block(cx, cy, cz, SUB_CELL_BLOCK, sub_cell=new_sub.to_dict())
                     self.world.set_sub_cell(cx, cy, cz, new_sub)
-                    self._upload_block_change(cx, cy, cz)
+                    changed.append((cx, cy, cz))
+                self._upload_block_changes(changed)
 
                 if self.gamemode == "survival":
                     cur_slot = self.hotbar[self.selected]
@@ -2238,6 +2608,62 @@ class Game(pyglet.window.Window):
                                     self.hotbar[self.selected] = empty_stack()
                             return
 
+        # Placing a vertical slab above an adjacent bottom slab to make an offset vertical slab
+        if (
+            held_v_info is not None
+            and adj_slab_info is not None
+            and not adj_slab_info["double"]
+            and adj_slab_info["half"] == "bottom"
+            and hit["ny"] == 0
+        ):
+            if place_local_y is None or place_local_y >= 0.5:
+                player_yaw = self.player.yaw if self.player is not None else None
+                new_facing = player_facing_from_yaw(player_yaw)
+                off_id = get_vertical_slab_offset_block(rotation_variant(held.block, new_facing))
+                if off_id is not None:
+                    above_block = self.world.get_block(x, y + 1, z)
+                    above_slab_info = get_slab_info(above_block)
+                    block_to_place = off_id
+                    if (
+                        above_slab_info is not None
+                        and not above_slab_info["double"]
+                        and above_slab_info["half"] == "top"
+                    ):
+                        capped_id = get_capped_vertical_slab_offset(off_id, above_block)
+                        if capped_id is not None:
+                            block_to_place = capped_id
+                    elif above_block not in ("", AIR, None) and self.world.is_solid(x, y + 1, z):
+                        return
+
+                    new_box = vertical_slab_offset_bounds(x, y + 1, z, new_facing)
+                    if self.player is not None:
+                        px, py, pz = self.player.pos
+                        rad, hgt = self.player.radius, self.player.height
+                        bx0, by0, bz0, bx1, by1, bz1 = new_box
+                        if (
+                            px + rad > bx0
+                            and px - rad < bx1
+                            and py + hgt > by0
+                            and py < by1
+                            and pz + rad > bz0
+                            and pz - rad < bz1
+                        ):
+                            return
+                    if self.network_client is not None:
+                        self.network_client.send_set_block(x, y + 1, z, block_to_place)
+                    if self.world.set_block(x, y + 1, z, block_to_place):
+                        self._upload_block_change(x, y + 1, z)
+                        if self.gamemode == "survival":
+                            cur_slot = self.hotbar[self.selected]
+                            c = stack_count(cur_slot)
+                            if c > 1:
+                                self.hotbar[self.selected] = make_stack(stack_id(cur_slot), c - 1)
+                            else:
+                                self.hotbar[self.selected] = empty_stack()
+                        return
+            else:
+                return
+
         # Placing a full block into an adjacent top slab to make a capped offset block
         if (
             not held_is_slab
@@ -2514,7 +2940,14 @@ class Game(pyglet.window.Window):
                 offset_info = get_offset_info(block_to_place)
                 torch_info = get_offset_torch_info(block_to_place)
                 v_info = get_vertical_slab_info(block_to_place)
-                if torch_info is not None and torch_info["capped"]:
+                from server.blocks import fence_collision_boxes, is_fence, is_stairs, is_wall, stair_collision_boxes, wall_collision_boxes
+                if is_fence(block_to_place):
+                    b_boxes = fence_collision_boxes(self.world, x, y, z)
+                elif is_wall(block_to_place):
+                    b_boxes = wall_collision_boxes(self.world, x, y, z)
+                elif is_stairs(block_to_place):
+                    b_boxes = stair_collision_boxes(self.world, x, y, z, block_to_place)
+                elif torch_info is not None and torch_info["capped"]:
                     b_boxes = [(float(x), float(y) + 0.5, float(z), float(x + 1), float(y) + 1.0, float(z + 1))]
                 elif v_off_info is not None:
                     v_box = vertical_slab_offset_bounds(x, y, z, v_off_info["facing"])
@@ -2547,14 +2980,19 @@ class Game(pyglet.window.Window):
         if not placing_capped_torch and (self.world.is_solid(x, y, z) or is_torch(self.world.get_block(x, y, z))):
             return
 
-        from server.blocks import can_place_block
+        from server.blocks import can_place_block, get_tall_plant_info
 
         if not can_place_block(self.world, x, y, z, block_to_place, hit=hit):
             return
+        tp_info = get_tall_plant_info(block_to_place)
         if self.network_client is not None:
             self.network_client.send_set_block(x, y, z, block_to_place)
+            if tp_info is not None and tp_info["half"] == "lower":
+                self.network_client.send_set_block(x, y + 1, z, tp_info["upper"])
         if self.world.set_block(x, y, z, block_to_place):
             self._upload_block_change(x, y, z)
+            if tp_info is not None and tp_info["half"] == "lower":
+                self._upload_block_change(x, y + 1, z)
             if self.gamemode == "survival":
                 cur_slot = self.hotbar[self.selected]
                 c = stack_count(cur_slot)
@@ -2693,8 +3131,10 @@ class Game(pyglet.window.Window):
     def _drop_view(self):
         for key in list(self.renderer.chunks):
             self.renderer.drop(key)
-        if self.world is not None and self.player is not None and self.player.uuid:
-            self.world.unregister_player(self.player.uuid)
+        if self.world is not None:
+            self.world.stop_background_generator()
+            if self.player is not None and self.player.uuid:
+                self.world.unregister_player(self.player.uuid)
         self.world = None
         self.player = None
         self.ready = False
@@ -2809,10 +3249,11 @@ class Game(pyglet.window.Window):
             self.mode = "servers"
             self.menu.screen = "servers"
             self.menu.servers = load_servers()
-            self.menu.selected = -1
+            self.menu.selected = 0 if self.menu.servers else -1
             self.menu._row_click = 0.0
             self.menu.scroll = 0
             self.menu.message = ""
+            self.menu.local_ips = get_local_ips()
         elif action == "add-server":
             self.mode = "add_server"
             self.menu.screen = "add_server"
@@ -2845,6 +3286,7 @@ class Game(pyglet.window.Window):
             self.menu.server_address = "127.0.0.1:25565"
             self.menu.focus = "server_address"
             self.menu.message = ""
+            self.menu.local_ips = get_local_ips()
         elif action == "cancel-direct":
             self.mode = "servers"
             self.menu.screen = "servers"
@@ -3464,6 +3906,119 @@ class Game(pyglet.window.Window):
         if not self._smoke:
             self.set_exclusive_mouse(True)
 
+    def _toggle_door(self, x, y, z):
+        from server.blocks import get_door_block, get_door_info, get_door_relative_offsets
+        block_id = self.world.get_block(x, y, z)
+        info = get_door_info(block_id)
+        if info is None:
+            return
+        base_id = info["base_id"]
+        facing = info["facing"]
+        hinge = info.get("hinge", "left")
+        new_open = not info["open"]
+        if info["half"] == "lower":
+            lower_y = y
+            upper_y = y + 1
+        else:
+            lower_y = y - 1
+            upper_y = y
+
+        lower_block = self.world.get_block(x, lower_y, z)
+        upper_block = self.world.get_block(x, upper_y, z)
+        lower_info = get_door_info(lower_block)
+        upper_info = get_door_info(upper_block)
+
+        new_lower = get_door_block(base_id, "lower", facing, new_open, hinge=hinge)
+        new_upper = get_door_block(base_id, "upper", facing, new_open, hinge=hinge)
+
+        changed = []
+        if lower_info is not None and lower_info["base_id"] == base_id:
+            if self.network_client is not None:
+                self.network_client.send_set_block(x, lower_y, z, new_lower)
+            if self.world.set_block(x, lower_y, z, new_lower):
+                changed.append((x, lower_y, z))
+
+        if upper_info is not None and upper_info["base_id"] == base_id:
+            if self.network_client is not None:
+                self.network_client.send_set_block(x, upper_y, z, new_upper)
+            if self.world.set_block(x, upper_y, z, new_upper):
+                changed.append((x, upper_y, z))
+
+        # Check for adjacent double door partner
+        (left_dx, left_dz), (right_dx, right_dz) = get_door_relative_offsets(facing)
+        partner_dx, partner_dz = (right_dx, right_dz) if hinge == "left" else (left_dx, left_dz)
+        px, pz = x + partner_dx, z + partner_dz
+        p_lower_block = self.world.get_block(px, lower_y, pz)
+        p_info = get_door_info(p_lower_block)
+        if (
+            p_info is not None
+            and p_info["base_id"] == base_id
+            and p_info["facing"] == facing
+            and p_info.get("hinge", "left") != hinge
+        ):
+            p_hinge = p_info.get("hinge", "left")
+            p_new_lower = get_door_block(base_id, "lower", facing, new_open, hinge=p_hinge)
+            p_new_upper = get_door_block(base_id, "upper", facing, new_open, hinge=p_hinge)
+            if self.network_client is not None:
+                self.network_client.send_set_block(px, lower_y, pz, p_new_lower)
+                self.network_client.send_set_block(px, upper_y, pz, p_new_upper)
+            if self.world.set_block(px, lower_y, pz, p_new_lower):
+                changed.append((px, lower_y, pz))
+            if self.world.set_block(px, upper_y, pz, p_new_upper):
+                changed.append((px, upper_y, pz))
+
+        if changed:
+            self._upload_block_changes(changed)
+
+        if getattr(self, "sound_manager", None):
+            self.sound_manager.play_walk_sound("planks")
+
+    def _toggle_trapdoor(self, x, y, z):
+        from server.blocks import get_trapdoor_block, get_trapdoor_info
+        block_id = self.world.get_block(x, y, z)
+        info = get_trapdoor_info(block_id)
+        if info is None:
+            return
+        base_id = info["base_id"]
+        half = info["half"]
+        facing = info["facing"]
+        new_open = not info["open"]
+        new_block = get_trapdoor_block(base_id, half, facing, new_open)
+        if self.network_client is not None:
+            self.network_client.send_set_block(x, y, z, new_block)
+        if self.world.set_block(x, y, z, new_block):
+            self._upload_block_change(x, y, z)
+        if getattr(self, "sound_manager", None):
+            self.sound_manager.play_walk_sound("planks")
+
+    def _toggle_fence_gate(self, x, y, z):
+        from server.blocks import get_fence_gate_block, get_fence_gate_info
+        block_id = self.world.get_block(x, y, z)
+        info = get_fence_gate_info(block_id)
+        if info is None:
+            return
+        base_id = info["base_id"]
+        new_open = not info["open"]
+        if new_open:
+            if self.player is not None:
+                pl_x, _, pl_z = self.player.pos
+                if info["facing"] in ("north", "south"):
+                    new_facing = "north" if pl_z > z + 0.5 else "south"
+                else:
+                    new_facing = "west" if pl_x > x + 0.5 else "east"
+            else:
+                new_facing = info["facing"]
+        else:
+            new_facing = info["facing"]
+
+        new_block = get_fence_gate_block(base_id, new_facing, new_open)
+        if self.network_client is not None:
+            self.network_client.send_set_block(x, y, z, new_block)
+        if self.world.set_block(x, y, z, new_block):
+            self._upload_block_change(x, y, z)
+        if getattr(self, "sound_manager", None):
+            self.sound_manager.play_walk_sound("planks")
+
     def _on_right_click(self, modifiers=0):
         if self._handle_mob_interaction():
             return
@@ -3471,6 +4026,29 @@ class Game(pyglet.window.Window):
         hit = self.target
         if hit is not None:
             is_shift = bool(modifiers & key.MOD_SHIFT) if hasattr(key, "MOD_SHIFT") else False
+            target_block = self.world.get_block(hit["x"], hit["y"], hit["z"])
+            from server.blocks import is_door, is_fence_gate, is_trapdoor
+            if is_door(target_block):
+                held_slot = self.hotbar[self.selected] if self.selected < len(self.hotbar) else empty_stack()
+                held_id = stack_id(held_slot)
+                if not is_shift or not held_id:
+                    self._toggle_door(hit["x"], hit["y"], hit["z"])
+                    return
+
+            if is_trapdoor(target_block):
+                held_slot = self.hotbar[self.selected] if self.selected < len(self.hotbar) else empty_stack()
+                held_id = stack_id(held_slot)
+                if not is_shift or not held_id:
+                    self._toggle_trapdoor(hit["x"], hit["y"], hit["z"])
+                    return
+
+            if is_fence_gate(target_block):
+                held_slot = self.hotbar[self.selected] if self.selected < len(self.hotbar) else empty_stack()
+                held_id = stack_id(held_slot)
+                if not is_shift or not held_id:
+                    self._toggle_fence_gate(hit["x"], hit["y"], hit["z"])
+                    return
+
             if not is_shift and self.world is not None:
                 from server.sub_cell import is_sub_cell
                 target_block = self.world.get_block(hit["x"], hit["y"], hit["z"])
@@ -3525,7 +4103,7 @@ class Game(pyglet.window.Window):
         self._place_block()
 
     def _handle_mob_interaction(self):
-        if self.player is None or self.world is None:
+        if getattr(self, "player", None) is None or getattr(self, "world", None) is None:
             return False
         ex, ey, ez = self.player.pos
         ey += self.player.eye
@@ -3635,7 +4213,7 @@ class Game(pyglet.window.Window):
         that arrives through the ``health`` packet. Item consumption is local,
         mirroring how block break/place consumption is handled.
         """
-        if self.player is None or self.world is None:
+        if getattr(self, "player", None) is None or getattr(self, "world", None) is None:
             return False
         if self.gamemode != "survival":
             return False
@@ -3666,7 +4244,7 @@ class Game(pyglet.window.Window):
         return True
 
     def _handle_bucket_interaction(self):
-        if self.player is None or self.world is None:
+        if getattr(self, "player", None) is None or getattr(self, "world", None) is None:
             return False
         if self.selected >= len(self.hotbar):
             return False
@@ -4115,6 +4693,8 @@ class Game(pyglet.window.Window):
         if self._closing:
             return
         self._closing = True
+        if self.world is not None:
+            self.world.stop_background_generator()
         self._stop_web_companion()
         if self.network_client is not None:
             self.network_client.disconnect()
@@ -4244,7 +4824,22 @@ def main(argv=None):
     parser.add_argument("--username", default=None, help="Player username")
     parser.add_argument("--uuid", default=None, help="Player UUID")
     parser.add_argument("--title", default=None, help="Custom window title")
-    parser.add_argument("--connect", default=None, help="Auto-connect to server address (e.g. 127.0.0.1:25565)")
+    parser.add_argument(
+        "--connect",
+        nargs="?",
+        const="127.0.0.1:25565",
+        default=None,
+        help="Auto-connect to server address (default: 127.0.0.1:25565)",
+    )
+    parser.add_argument(
+        "-m",
+        "--multiplayer",
+        nargs="?",
+        const="127.0.0.1:25565",
+        default=None,
+        dest="multiplayer",
+        help="Auto-connect to multiplayer server (default: 127.0.0.1:25565)",
+    )
     parser.add_argument("--width", type=int, default=1280, help="Window width")
     parser.add_argument("--height", type=int, default=720, help="Window height")
     parser.add_argument("--pos", default=None, help="Window position X,Y (e.g. 50,50)")
@@ -4261,6 +4856,7 @@ def main(argv=None):
             pass
 
     saves_dir = tempfile.mkdtemp(prefix="blockgame-") if parsed.smoke else parsed.saves_dir
+    connect_addr = parsed.connect or parsed.multiplayer
     game = Game(
         smoke=parsed.smoke,
         saves_dir=saves_dir,
@@ -4271,7 +4867,7 @@ def main(argv=None):
         width=parsed.width,
         height=parsed.height,
         window_pos=window_pos,
-        connect=parsed.connect,
+        connect=connect_addr,
     )
     if parsed.smoke:
         return game.run_smoke()

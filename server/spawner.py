@@ -59,49 +59,174 @@ class MobSpawner:
         if current_mobs >= self.max_mobs:
             return
 
+        is_night = False
+        if hasattr(self.world, "is_night"):
+            is_night = self.world.is_night()
+        elif hasattr(self.world, "day_time"):
+            t = self.world.day_time % 24000.0
+            is_night = 12000.0 <= t <= 24000.0
+
         for p in players:
             if not getattr(p, "pos", None):
                 continue
-            for _ in range(4):
+            p_y = p.pos[1]
+            for _ in range(8):
+                if current_mobs >= self.max_mobs:
+                    return
+
                 dist = random.uniform(self.min_spawn_dist, self.max_spawn_dist)
                 angle = random.uniform(0, 2 * math.pi)
                 x = math.floor(p.pos[0] + dist * math.cos(angle))
                 z = math.floor(p.pos[2] + dist * math.sin(angle))
 
-                # Find ground height
-                y = self._find_ground_y(x, z)
-                if y is None:
+                ground_ys = self._find_ground_y_candidates(x, z, player_y=p_y)
+                if not ground_ys:
                     continue
 
-                is_night = False
-                if hasattr(self.world, "is_night"):
-                    is_night = self.world.is_night()
-                elif hasattr(self.world, "day_time"):
-                    t = self.world.day_time % 24000.0
-                    is_night = 12000.0 <= t <= 24000.0
+                spawned = False
+                for y in ground_ys:
+                    # 1. Zombie spawn: valid in dark caves (day or night) or surface at night
+                    if self.can_spawn_zombie_at(x, y, z):
+                        group_size = random.randint(1, 2)
+                        for _ in range(group_size):
+                            if current_mobs >= self.max_mobs:
+                                break
+                            hx = x + random.randint(-2, 2)
+                            hz = z + random.randint(-2, 2)
+                            hy = self._find_ground_near(hx, hz, near_y=y)
+                            if hy is not None and self.can_spawn_zombie_at(hx, hy, hz):
+                                self.world.spawn_mob("zombie", pos=[hx + 0.5, hy + 1.0, hz + 0.5])
+                                current_mobs += 1
+                                spawned = True
+                        if spawned:
+                            break
 
-                if is_night and self.can_spawn_zombie_at(x, y, z):
-                    group_size = random.randint(1, 2)
-                    for _ in range(group_size):
-                        hx = x + random.randint(-2, 2)
-                        hz = z + random.randint(-2, 2)
-                        hy = self._find_ground_y(hx, hz)
-                        if hy is not None and self.can_spawn_zombie_at(hx, hy, hz):
-                            self.world.spawn_mob("zombie", pos=[hx + 0.5, hy + 1.0, hz + 0.5])
+                    # 2. Passive mob spawn: valid on grassy surface in daylight
+                    elif not is_night and self._can_spawn_at(x, y, z):
+                        herd_size = random.randint(1, 3)
+                        mob_type = random.choice(("pig", "sheep"))
+                        for _ in range(herd_size):
+                            if current_mobs >= self.max_mobs:
+                                break
+                            hx = x + random.randint(-2, 2)
+                            hz = z + random.randint(-2, 2)
+                            hy = self._find_ground_near(hx, hz, near_y=y)
+                            if hy is not None and self._can_spawn_at(hx, hy, hz):
+                                self.world.spawn_mob(mob_type, pos=[hx + 0.5, hy + 1.0, hz + 0.5])
+                                current_mobs += 1
+                                spawned = True
+                        if spawned:
+                            break
+
+                if spawned:
                     return
 
-                if not is_night and self._can_spawn_at(x, y, z):
-                    herd_size = random.randint(1, 3)
-                    mob_type = random.choice(("pig", "sheep"))
-                    for _ in range(herd_size):
-                        hx = x + random.randint(-2, 2)
-                        hz = z + random.randint(-2, 2)
-                        hy = self._find_ground_y(hx, hz)
-                        if hy is not None and self._can_spawn_at(hx, hy, hz):
-                            self.world.spawn_mob(mob_type, pos=[hx + 0.5, hy + 1.0, hz + 0.5])
-                    return
+    def _find_ground_near(self, x, z, near_y, max_dy=4):
+        """Find a valid ground y near near_y with 2 headroom blocks."""
+        from server.fluid import is_fluid
 
-    def _find_ground_y(self, x, z):
+        for y in range(near_y + max_dy, near_y - max_dy - 1, -1):
+            block = self.world.get_block(x, y, z)
+            if not block or block == "air" or is_fluid(block):
+                continue
+            b_obj = BLOCKS.get(block)
+            if not b_obj or not getattr(b_obj, "solid", False):
+                continue
+
+            b1 = self.world.get_block(x, y + 1, z)
+            b2 = self.world.get_block(x, y + 2, z)
+            if is_fluid(b1) or is_fluid(b2):
+                continue
+            b1_obj = BLOCKS.get(b1)
+            b2_obj = BLOCKS.get(b2)
+            if b1_obj and getattr(b1_obj, "solid", False):
+                continue
+            if b2_obj and getattr(b2_obj, "solid", False):
+                continue
+            return y
+        return None
+
+    def _find_ground_y_candidates(self, x, z, player_y=None):
+        """Find candidate ground Y levels in column (x, z) with 2 blocks headroom.
+        Includes cave floors and surface levels, prioritizing proximity to player_y.
+        """
+        cx = x // CHUNK_SIZE
+        cz = z // CHUNK_SIZE
+
+        loaded_sections = [
+            cy for (scx, cy, scz) in self.world.chunks.keys() if scx == cx and scz == cz
+        ]
+        if not loaded_sections:
+            return []
+
+        max_sec_y = max(loaded_sections)
+        min_sec_y = min(loaded_sections)
+        top_y = (max_sec_y + 1) * CHUNK_SIZE - 1
+        bottom_y = min_sec_y * CHUNK_SIZE
+
+        from server.fluid import is_fluid
+
+        if player_y is not None:
+            scan_min = max(bottom_y, int(player_y - 36))
+            scan_max = min(top_y, int(player_y + 36))
+        else:
+            scan_min = bottom_y
+            scan_max = top_y
+
+        candidates = []
+        for y in range(scan_max, scan_min - 1, -1):
+            block = self.world.get_block(x, y, z)
+            if not block or block == "air" or is_fluid(block):
+                continue
+            b_obj = BLOCKS.get(block)
+            if not b_obj or not getattr(b_obj, "solid", False):
+                continue
+
+            b1 = self.world.get_block(x, y + 1, z)
+            b2 = self.world.get_block(x, y + 2, z)
+            if is_fluid(b1) or is_fluid(b2):
+                continue
+            b1_obj = BLOCKS.get(b1)
+            b2_obj = BLOCKS.get(b2)
+            if b1_obj and getattr(b1_obj, "solid", False):
+                continue
+            if b2_obj and getattr(b2_obj, "solid", False):
+                continue
+
+            candidates.append(y)
+
+        # Fall back to full column if none found in focused player vertical range
+        if player_y is not None and not candidates:
+            for y in range(top_y, bottom_y, -1):
+                block = self.world.get_block(x, y, z)
+                if not block or block == "air" or is_fluid(block):
+                    continue
+                b_obj = BLOCKS.get(block)
+                if not b_obj or not getattr(b_obj, "solid", False):
+                    continue
+                b1 = self.world.get_block(x, y + 1, z)
+                b2 = self.world.get_block(x, y + 2, z)
+                if is_fluid(b1) or is_fluid(b2):
+                    continue
+                b1_obj = BLOCKS.get(b1)
+                b2_obj = BLOCKS.get(b2)
+                if b1_obj and getattr(b1_obj, "solid", False):
+                    continue
+                if b2_obj and getattr(b2_obj, "solid", False):
+                    continue
+                candidates.append(y)
+
+        if player_y is not None and candidates:
+            candidates.sort(key=lambda y: abs(y - player_y))
+
+        return candidates
+
+    def _find_ground_y(self, x, z, near_y=None):
+        if near_y is not None:
+            gy = self._find_ground_near(x, z, near_y)
+            if gy is not None:
+                return gy
+
         # Look for top solid block in loaded chunks
         cx = x // CHUNK_SIZE
         cz = z // CHUNK_SIZE
@@ -172,9 +297,9 @@ class MobSpawner:
         if not ground or ground == "air":
             return False
 
-        from server.fluid import is_water
+        from server.fluid import is_fluid
 
-        if is_water(ground):
+        if is_fluid(ground):
             return False
 
         b_obj = BLOCKS.get(ground)
@@ -185,7 +310,7 @@ class MobSpawner:
         b1 = self.world.get_block(x, y + 1, z)
         b2 = self.world.get_block(x, y + 2, z)
 
-        if is_water(b1) or is_water(b2):
+        if is_fluid(b1) or is_fluid(b2):
             return False
 
         b1_obj = BLOCKS.get(b1)

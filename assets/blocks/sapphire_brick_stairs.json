@@ -1,0 +1,19 @@
+{
+  "id": "sapphire_brick_stairs",
+  "lang": "block.sapphire_brick_stairs",
+  "tab": [
+    "building"
+  ],
+  "model": "stairs",
+  "hardness": 4.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/sapphire_brick_stairs",
+  "sound": "stone",
+  "textures": {
+    "top": "sapphire_bricks",
+    "side": "sapphire_bricks",
+    "bottom": "sapphire_bricks"
+  },
+  "type": "stairs"
+}

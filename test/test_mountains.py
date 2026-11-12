@@ -186,7 +186,7 @@ class MountainBiomeTests(unittest.TestCase):
         self.assertTrue(found_cliff, f"Should produce sheer cliffs (max step found: {max_cliff_step})")
 
     def test_world_generation_in_cliffs_and_peaks(self):
-        world = World(seed=1, caves=[])
+        world = World(seed=1, caves=[], ores=[])
         # Find coordinates in mountain_cliffs and generate column
         found = False
         for z in range(-250, 251, 16):

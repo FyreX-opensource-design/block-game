@@ -1,0 +1,16 @@
+{
+  "id": "marble_vertical_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "#",
+    "#"
+  ],
+  "key": {
+    "#": "marble_slab"
+  },
+  "result": {
+    "item": "marble_vertical_slab",
+    "count": 3
+  }
+}

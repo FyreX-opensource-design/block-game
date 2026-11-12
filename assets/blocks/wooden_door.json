@@ -1,0 +1,27 @@
+{
+  "id": "wooden_door",
+  "lang": "block.wooden_door",
+  "tab": [
+    "building"
+  ],
+  "model": "door_lower",
+  "type": "door",
+  "render": "cutout",
+  "solid": true,
+  "hardness": 3.0,
+  "tool": "axe",
+  "mining_level": 0,
+  "sound": "wood",
+  "loot_table": "blocks/wooden_door",
+  "properties": {
+    "door": true,
+    "half": "lower",
+    "facing": "south",
+    "open": false
+  },
+  "textures": {
+    "lower": "oak_door_bottom",
+    "upper": "oak_door_top",
+    "edge": "oak_doors_side"
+  }
+}

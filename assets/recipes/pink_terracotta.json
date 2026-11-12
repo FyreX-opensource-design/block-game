@@ -1,0 +1,17 @@
+{
+  "id": "pink_terracotta",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "terracotta",
+    "D": "pink_dye"
+  },
+  "result": {
+    "item": "pink_terracotta",
+    "count": 8
+  }
+}

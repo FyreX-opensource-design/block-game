@@ -1,0 +1,19 @@
+{
+  "id": "cut_ruby_wall",
+  "lang": "block.cut_ruby_wall",
+  "tab": [
+    "building"
+  ],
+  "model": "wall_post",
+  "hardness": 4.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/cut_ruby_wall",
+  "sound": "stone",
+  "textures": {
+    "top": "cut_ruby",
+    "side": "cut_ruby",
+    "bottom": "cut_ruby"
+  },
+  "type": "wall"
+}

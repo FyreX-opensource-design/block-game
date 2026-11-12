@@ -1,0 +1,14 @@
+{
+  "id": "peach_stained_glass_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###"
+  ],
+  "key": {
+    "#": "peach_stained_glass"
+  },
+  "result": {
+    "item": "peach_stained_glass_slab",
+    "count": 6
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "id": "navy_dye",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "blue_dye",
+    "black_dye"
+  ],
+  "result": {
+    "item": "navy_dye",
+    "count": 2
+  }
+}

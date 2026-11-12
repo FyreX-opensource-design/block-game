@@ -30,6 +30,14 @@ ARROW_CAMERA_SETTINGS = (
 )
 
 
+def _is_valid_local_ip(ip):
+    if not ip or ":" in ip or ip.startswith("127.") or ip.startswith("169.254."):
+        return False
+    if ip.endswith(".255") or ip.endswith(".0"):
+        return False
+    return True
+
+
 def get_local_ips():
     """Detect non-loopback IPv4 addresses on local network interfaces."""
     ips = []
@@ -41,7 +49,7 @@ def get_local_ips():
             s.connect((test_target, 80))
             ip = s.getsockname()[0]
             s.close()
-            if ip and ip not in ips and not ip.startswith("127.") and not ip.startswith("169.254."):
+            if _is_valid_local_ip(ip) and ip not in ips:
                 ips.append(ip)
         except Exception:
             pass
@@ -51,7 +59,7 @@ def get_local_ips():
         hostname = socket.gethostname()
         for info in socket.getaddrinfo(hostname, None, socket.AF_INET):
             ip = info[4][0]
-            if ip and ip not in ips and not ip.startswith("127.") and not ip.startswith("169.254."):
+            if _is_valid_local_ip(ip) and ip not in ips:
                 ips.append(ip)
     except Exception:
         pass
@@ -60,7 +68,7 @@ def get_local_ips():
     try:
         res = subprocess.run(["hostname", "-I"], capture_output=True, text=True, timeout=0.5)
         for part in res.stdout.strip().split():
-            if part and part not in ips and not part.startswith("127.") and not part.startswith("169.254.") and ":" not in part:
+            if _is_valid_local_ip(part) and part not in ips:
                 ips.append(part)
     except Exception:
         pass
@@ -71,7 +79,7 @@ def get_local_ips():
         words = res.stdout.split()
         if "src" in words:
             src_ip = words[words.index("src") + 1]
-            if src_ip not in ips and not src_ip.startswith("127.") and not src_ip.startswith("169.254."):
+            if _is_valid_local_ip(src_ip) and src_ip not in ips:
                 ips.append(src_ip)
     except Exception:
         pass

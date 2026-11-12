@@ -1,0 +1,11 @@
+{
+  "id": "raw_tin_from_block",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "raw_tin_block"
+  ],
+  "result": {
+    "item": "raw_tin",
+    "count": 9
+  }
+}

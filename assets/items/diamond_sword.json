@@ -1,0 +1,17 @@
+{
+  "id": "diamond_sword",
+  "lang": "item.diamond_sword",
+  "tab": "tools",
+  "model": "flat",
+  "texture": "diamond_sword",
+  "tool": "sword",
+  "max_stack": 1,
+  "left": "attack",
+  "right": "none",
+  "durability": 1561,
+  "mining_level": 0,
+  "mining_speed": 1.0,
+  "attack": 10.5,
+  "food": 0,
+  "repair": "diamond"
+}

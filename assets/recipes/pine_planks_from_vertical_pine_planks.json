@@ -1,0 +1,11 @@
+{
+  "id": "pine_planks_from_vertical_pine_planks",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "vertical_pine_planks"
+  ],
+  "result": {
+    "item": "pine_planks",
+    "count": 1
+  }
+}

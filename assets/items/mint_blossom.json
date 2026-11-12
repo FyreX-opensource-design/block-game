@@ -1,0 +1,16 @@
+{
+  "id": "mint_blossom",
+  "lang": "block.mint_blossom",
+  "tab": "natural",
+  "model": "flat",
+  "block": "mint_blossom",
+  "texture": "mint_blossom",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 1,
+  "food": 0
+}

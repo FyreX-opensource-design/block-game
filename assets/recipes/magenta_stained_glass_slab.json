@@ -1,0 +1,14 @@
+{
+  "id": "magenta_stained_glass_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###"
+  ],
+  "key": {
+    "#": "magenta_stained_glass"
+  },
+  "result": {
+    "item": "magenta_stained_glass_slab",
+    "count": 6
+  }
+}

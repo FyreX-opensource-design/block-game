@@ -1,0 +1,12 @@
+{
+  "id": "conifer_dye",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "green_dye",
+    "brown_dye"
+  ],
+  "result": {
+    "item": "conifer_dye",
+    "count": 2
+  }
+}

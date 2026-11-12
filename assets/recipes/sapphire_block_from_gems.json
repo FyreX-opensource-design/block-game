@@ -1,0 +1,16 @@
+{
+  "id": "sapphire_block_from_gems",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "###",
+    "###"
+  ],
+  "key": {
+    "#": "sapphire"
+  },
+  "result": {
+    "item": "sapphire_block",
+    "count": 1
+  }
+}

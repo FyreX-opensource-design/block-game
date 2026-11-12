@@ -1,0 +1,19 @@
+{
+  "id": "copper_block",
+  "lang": "block.copper_block",
+  "tab": [
+    "building",
+    "materials"
+  ],
+  "model": "cube",
+  "hardness": 5.0,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/copper_block",
+  "sound": "stone",
+  "textures": {
+    "top": "copper_block",
+    "side": "copper_block",
+    "bottom": "copper_block"
+  }
+}

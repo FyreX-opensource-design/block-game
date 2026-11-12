@@ -1,0 +1,17 @@
+{
+  "id": "lavender_brick",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "brick",
+    "D": "lavender_dye"
+  },
+  "result": {
+    "item": "lavender_brick",
+    "count": 8
+  }
+}

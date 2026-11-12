@@ -1,0 +1,17 @@
+{
+  "id": "diamond_shovel",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "X",
+    "X"
+  ],
+  "key": {
+    "#": "diamond",
+    "X": "#sticks"
+  },
+  "result": {
+    "item": "diamond_shovel",
+    "count": 1
+  }
+}

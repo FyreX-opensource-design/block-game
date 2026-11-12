@@ -1,0 +1,17 @@
+{
+  "id": "navy_stained_glass",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "glass",
+    "D": "navy_dye"
+  },
+  "result": {
+    "item": "navy_stained_glass",
+    "count": 8
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "id": "brown_stained_glass_vertical_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "#",
+    "#"
+  ],
+  "key": {
+    "#": "brown_stained_glass_slab"
+  },
+  "result": {
+    "item": "brown_stained_glass_vertical_slab",
+    "count": 3
+  }
+}

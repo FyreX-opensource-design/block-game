@@ -1,0 +1,20 @@
+{
+  "id": "sunburst_lupine",
+  "lang": "block.sunburst_lupine",
+  "tab": "natural",
+  "type": "tall_plant",
+  "model": "cross",
+  "render": "cutout",
+  "solid": false,
+  "hardness": 0.0,
+  "tool": "none",
+  "mining_level": 0,
+  "loot_table": "blocks/sunburst_lupine",
+  "fluid_breakable": true,
+  "plant": true,
+  "requires_soil": true,
+  "textures": {
+    "cross": "sunburst_lupine_bottom",
+    "upper": "sunburst_lupine_top"
+  }
+}

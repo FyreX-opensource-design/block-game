@@ -1,0 +1,15 @@
+{
+  "id": "large_diorite_bricks",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "##"
+  ],
+  "key": {
+    "#": "smooth_diorite"
+  },
+  "result": {
+    "item": "large_diorite_bricks",
+    "count": 4
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "id": "gray_bricks",
+  "lang": "block.gray_bricks",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "loot_table": "blocks/gray_bricks",
+  "sound": "stone",
+  "textures": {
+    "top": "bricks/gray_bricks",
+    "side": "bricks/gray_bricks",
+    "bottom": "bricks/gray_bricks"
+  }
+}

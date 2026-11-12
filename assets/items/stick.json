@@ -1,9 +1,9 @@
 {
   "id": "stick",
   "lang": "item.stick",
-  "tab": "tools",
+  "tab": ["materials", "tools"],
   "model": "flat",
-  "texture": "stick",
+  "texture": "oak_stick",
   "max_stack": 64,
   "left": "none",
   "right": "none",

@@ -1,0 +1,14 @@
+{
+  "id": "large_sandstone_brick_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###"
+  ],
+  "key": {
+    "#": "large_sandstone_bricks"
+  },
+  "result": {
+    "item": "large_sandstone_brick_slab",
+    "count": 6
+  }
+}

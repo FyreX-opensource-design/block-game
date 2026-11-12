@@ -1,0 +1,14 @@
+{
+  "id": "limestone_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###"
+  ],
+  "key": {
+    "#": "limestone"
+  },
+  "result": {
+    "item": "limestone_slab",
+    "count": 6
+  }
+}

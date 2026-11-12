@@ -1,0 +1,15 @@
+{
+  "id": "honey_bricks",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "##"
+  ],
+  "key": {
+    "#": "honey_brick"
+  },
+  "result": {
+    "item": "honey_bricks",
+    "count": 1
+  }
+}

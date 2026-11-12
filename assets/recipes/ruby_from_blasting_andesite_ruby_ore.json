@@ -1,0 +1,11 @@
+{
+  "id": "ruby_from_blasting_andesite_ruby_ore",
+  "type": "blasting",
+  "ingredient": "andesite_ruby_ore",
+  "result": {
+    "item": "ruby",
+    "count": 1
+  },
+  "cookingtime": 5.0,
+  "experience": 1.0
+}

@@ -1,0 +1,16 @@
+{
+  "id": "cut_malachite_stairs_mirrored",
+  "type": "crafting_shaped",
+  "pattern": [
+    "  #",
+    " ##",
+    "###"
+  ],
+  "key": {
+    "#": "cut_malachite"
+  },
+  "result": {
+    "item": "cut_malachite_stairs",
+    "count": 4
+  }
+}

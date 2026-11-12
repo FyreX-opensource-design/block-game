@@ -1,0 +1,11 @@
+{
+  "id": "large_limestone_brick_slab_from_large_limestone_brick_vertical_slab",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "large_limestone_brick_vertical_slab"
+  ],
+  "result": {
+    "item": "large_limestone_brick_slab",
+    "count": 1
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "id": "iron_pickaxe",
+  "lang": "item.iron_pickaxe",
+  "tab": "tools",
+  "model": "flat",
+  "texture": "iron_pickaxe",
+  "tool": "pickaxe",
+  "max_stack": 1,
+  "left": "mine",
+  "right": "none",
+  "durability": 250,
+  "mining_level": 4,
+  "mining_speed": 7.0,
+  "attack": 5.0,
+  "food": 0,
+  "repair": "iron_ingot"
+}

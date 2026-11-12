@@ -1,0 +1,15 @@
+{
+  "id": "large_stone_bricks",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "##"
+  ],
+  "key": {
+    "#": "smooth_stone"
+  },
+  "result": {
+    "item": "large_stone_bricks",
+    "count": 4
+  }
+}

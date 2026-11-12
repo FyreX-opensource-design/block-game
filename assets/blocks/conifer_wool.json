@@ -1,0 +1,21 @@
+{
+  "id": "conifer_wool",
+  "lang": "block.conifer_wool",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 0.8,
+  "tool": "shears",
+  "mining_level": 0,
+  "textures": {
+    "top": "conifer_wool",
+    "side": "conifer_wool",
+    "bottom": "conifer_wool"
+  },
+  "properties": {
+    "tags": [
+      "wool"
+    ]
+  }
+}

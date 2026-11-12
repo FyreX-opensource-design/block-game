@@ -1,0 +1,43 @@
+{
+  "id": "rose_thicket",
+  "name": "Rose Thicket",
+  "variant_of": "plains",
+  "variant_noise": {
+    "scale": 0.042,
+    "octaves": 2,
+    "seed_offset": 8303,
+    "offset": [
+      52.1,
+      14.9
+    ],
+    "threshold": 0.63,
+    "above": true
+  },
+  "surface": "grass",
+  "soil": "dirt",
+  "soil_depth": 3,
+  "scale": 0.006,
+  "octaves": 2,
+  "seed_offset": 90,
+  "ceiling": 0.49,
+  "tree_chance": 0.001,
+  "height_offset": -4.0,
+  "height_scale": 0.85,
+  "cliff": false,
+  "transition": {
+    "blend": 0.08,
+    "curve": "smoothstep"
+  },
+  "trees": [
+    "oak",
+    "shrub"
+  ],
+  "decorations": [
+    "rose_thicket_flowers",
+    {
+      "feature": "tall_grass",
+      "chance": 0.12
+    }
+  ],
+  "grass_color": "#61b83d"
+}

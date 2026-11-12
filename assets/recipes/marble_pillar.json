@@ -1,0 +1,15 @@
+{
+  "id": "marble_pillar",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "#"
+  ],
+  "key": {
+    "#": "smooth_marble"
+  },
+  "result": {
+    "item": "marble_pillar",
+    "count": 2
+  }
+}

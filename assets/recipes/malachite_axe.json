@@ -1,0 +1,17 @@
+{
+  "id": "malachite_axe",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "#X",
+    " X"
+  ],
+  "key": {
+    "#": "malachite",
+    "X": "#sticks"
+  },
+  "result": {
+    "item": "malachite_axe",
+    "count": 1
+  }
+}

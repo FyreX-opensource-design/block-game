@@ -1,0 +1,18 @@
+{
+  "id": "peach_bricks",
+  "lang": "block.peach_bricks",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "loot_table": "blocks/peach_bricks",
+  "sound": "stone",
+  "textures": {
+    "top": "bricks/peach_bricks",
+    "side": "bricks/peach_bricks",
+    "bottom": "bricks/peach_bricks"
+  }
+}

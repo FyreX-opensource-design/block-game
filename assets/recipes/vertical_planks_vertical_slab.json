@@ -1,0 +1,16 @@
+{
+  "id": "vertical_planks_vertical_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "#",
+    "#"
+  ],
+  "key": {
+    "#": "vertical_planks_slab"
+  },
+  "result": {
+    "item": "vertical_planks_vertical_slab",
+    "count": 3
+  }
+}

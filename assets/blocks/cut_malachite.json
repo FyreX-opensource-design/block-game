@@ -1,0 +1,18 @@
+{
+  "id": "cut_malachite",
+  "lang": "block.cut_malachite",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 4.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/cut_malachite",
+  "sound": "stone",
+  "textures": {
+    "top": "cut_malachite",
+    "side": "cut_malachite",
+    "bottom": "cut_malachite"
+  }
+}

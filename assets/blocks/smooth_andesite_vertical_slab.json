@@ -1,0 +1,47 @@
+{
+  "id": "smooth_andesite_vertical_slab",
+  "lang": "block.smooth_andesite_vertical_slab",
+  "type": "vertical_slab",
+  "tab": [
+    "building"
+  ],
+  "model": "vertical_slab",
+  "hardness": 2.0,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/smooth_andesite_vertical_slab",
+  "full_block": "smooth_andesite",
+  "sound": "stone",
+  "textures": {
+    "top": "smooth_andesite/smooth_andesite_var_0_1",
+    "side": "smooth_andesite/smooth_andesite_var_0_1",
+    "bottom": "smooth_andesite/smooth_andesite_var_0_1"
+  },
+  "palettes": [
+    {
+      "top": "smooth_andesite/smooth_andesite_var_0_1",
+      "side": "smooth_andesite/smooth_andesite_var_0_1",
+      "bottom": "smooth_andesite/smooth_andesite_var_0_1"
+    },
+    {
+      "top": "smooth_andesite/smooth_andesite_var_0_2",
+      "side": "smooth_andesite/smooth_andesite_var_0_2",
+      "bottom": "smooth_andesite/smooth_andesite_var_0_2"
+    },
+    {
+      "top": "smooth_andesite/smooth_andesite_var_0_3",
+      "side": "smooth_andesite/smooth_andesite_var_0_3",
+      "bottom": "smooth_andesite/smooth_andesite_var_0_3"
+    },
+    {
+      "top": "smooth_andesite/smooth_andesite_var_0_4",
+      "side": "smooth_andesite/smooth_andesite_var_0_4",
+      "bottom": "smooth_andesite/smooth_andesite_var_0_4"
+    },
+    {
+      "top": "smooth_andesite/smooth_andesite_var_0_5",
+      "side": "smooth_andesite/smooth_andesite_var_0_5",
+      "bottom": "smooth_andesite/smooth_andesite_var_0_5"
+    }
+  ]
+}

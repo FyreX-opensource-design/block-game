@@ -1,0 +1,15 @@
+{
+  "id": "stone_pillar",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "#"
+  ],
+  "key": {
+    "#": "smooth_stone"
+  },
+  "result": {
+    "item": "stone_pillar",
+    "count": 2
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "id": "honey_wool",
+  "lang": "block.honey_wool",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 0.8,
+  "tool": "shears",
+  "mining_level": 0,
+  "textures": {
+    "top": "honey_wool",
+    "side": "honey_wool",
+    "bottom": "honey_wool"
+  },
+  "properties": {
+    "tags": [
+      "wool"
+    ]
+  }
+}

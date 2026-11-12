@@ -1,0 +1,17 @@
+{
+  "id": "fluorescent_stained_glass",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "glass",
+    "D": "fluorescent_dye"
+  },
+  "result": {
+    "item": "fluorescent_stained_glass",
+    "count": 8
+  }
+}

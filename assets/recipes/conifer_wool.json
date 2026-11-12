@@ -1,0 +1,12 @@
+{
+  "id": "conifer_wool",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "#wool",
+    "conifer_dye"
+  ],
+  "result": {
+    "item": "conifer_wool",
+    "count": 1
+  }
+}

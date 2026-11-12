@@ -1,0 +1,19 @@
+{
+  "id": "emerald_brick_slab",
+  "lang": "block.emerald_brick_slab",
+  "tab": [
+    "building"
+  ],
+  "model": "slab",
+  "hardness": 4.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/emerald_brick_slab",
+  "sound": "stone",
+  "textures": {
+    "top": "emerald_bricks",
+    "side": "emerald_bricks",
+    "bottom": "emerald_bricks"
+  },
+  "type": "slab"
+}

@@ -1,0 +1,16 @@
+{
+  "id": "diamond_block_from_gems",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "###",
+    "###"
+  ],
+  "key": {
+    "#": "diamond"
+  },
+  "result": {
+    "item": "diamond_block",
+    "count": 1
+  }
+}

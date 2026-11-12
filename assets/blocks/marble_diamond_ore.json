@@ -1,0 +1,45 @@
+{
+  "id": "marble_diamond_ore",
+  "lang": "block.marble_diamond_ore",
+  "tab": [
+    "natural"
+  ],
+  "model": "cube",
+  "hardness": 5.0,
+  "tool": "pickaxe",
+  "mining_level": 6,
+  "loot_table": "blocks/marble_diamond_ore",
+  "sound": "stone",
+  "textures": {
+    "top": "marble_diamond_ore/marble_diamond_ore_var_1",
+    "side": "marble_diamond_ore/marble_diamond_ore_var_1",
+    "bottom": "marble_diamond_ore/marble_diamond_ore_var_1"
+  },
+  "palettes": [
+    {
+      "top": "marble_diamond_ore/marble_diamond_ore_var_1",
+      "side": "marble_diamond_ore/marble_diamond_ore_var_1",
+      "bottom": "marble_diamond_ore/marble_diamond_ore_var_1"
+    },
+    {
+      "top": "marble_diamond_ore/marble_diamond_ore_var_2",
+      "side": "marble_diamond_ore/marble_diamond_ore_var_2",
+      "bottom": "marble_diamond_ore/marble_diamond_ore_var_2"
+    },
+    {
+      "top": "marble_diamond_ore/marble_diamond_ore_var_3",
+      "side": "marble_diamond_ore/marble_diamond_ore_var_3",
+      "bottom": "marble_diamond_ore/marble_diamond_ore_var_3"
+    },
+    {
+      "top": "marble_diamond_ore/marble_diamond_ore_var_4",
+      "side": "marble_diamond_ore/marble_diamond_ore_var_4",
+      "bottom": "marble_diamond_ore/marble_diamond_ore_var_4"
+    },
+    {
+      "top": "marble_diamond_ore/marble_diamond_ore_var_5",
+      "side": "marble_diamond_ore/marble_diamond_ore_var_5",
+      "bottom": "marble_diamond_ore/marble_diamond_ore_var_5"
+    }
+  ]
+}

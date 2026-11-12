@@ -1,0 +1,17 @@
+{
+  "id": "navy_terracotta",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "terracotta",
+    "D": "navy_dye"
+  },
+  "result": {
+    "item": "navy_terracotta",
+    "count": 8
+  }
+}

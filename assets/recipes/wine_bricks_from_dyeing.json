@@ -1,0 +1,17 @@
+{
+  "id": "wine_bricks_from_dyeing",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "bricks",
+    "D": "wine_dye"
+  },
+  "result": {
+    "item": "wine_bricks",
+    "count": 8
+  }
+}

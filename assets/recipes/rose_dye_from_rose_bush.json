@@ -1,0 +1,11 @@
+{
+  "id": "rose_dye_from_rose_bush",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "rose_bush"
+  ],
+  "result": {
+    "item": "rose_dye",
+    "count": 2
+  }
+}

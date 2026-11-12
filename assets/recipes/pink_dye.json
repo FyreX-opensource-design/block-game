@@ -1,0 +1,12 @@
+{
+  "id": "pink_dye",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "red_dye",
+    "white_dye"
+  ],
+  "result": {
+    "item": "pink_dye",
+    "count": 2
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "id": "ultramarine_stained_glass_slab_from_ultramarine_stained_glass_vertical_slab",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "ultramarine_stained_glass_vertical_slab"
+  ],
+  "result": {
+    "item": "ultramarine_stained_glass_slab",
+    "count": 1
+  }
+}

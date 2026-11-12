@@ -470,6 +470,47 @@ class TestSheepAndWool(unittest.TestCase):
         v_sheared, _ = sheep_meshes.posed_vertices([0.0, 0.0, 0.0], 0.0, poses, sheared=True)
         self.assertGreater(len(v_full), len(v_sheared))
 
+    def test_all_32_dyes_and_wool_colors(self):
+        from server.blocks import BLOCKS
+        from server.entity import DYE_TO_SHEEP_COLOR, SHEEP_WOOL_BLOCKS
+        from server.items import ITEMS
+        from server.tags import get_block_tag, get_item_tag
+
+        self.assertEqual(len(SHEEP_WOOL_BLOCKS), 32)
+        self.assertEqual(len(DYE_TO_SHEEP_COLOR), 32)
+        self.assertEqual(len(get_item_tag("dyes")), 32)
+        self.assertTrue(set(SHEEP_WOOL_BLOCKS.values()).issubset(get_block_tag("wool")))
+        self.assertEqual(len(get_item_tag("wool")), 32)
+
+        sheep = Sheep(pos=[0.0, 81.0, 0.0], color="red")
+        for color, wool_id in SHEEP_WOOL_BLOCKS.items():
+            dye_id = f"{color}_dye"
+            self.assertIn(dye_id, ITEMS)
+            self.assertIn(wool_id, BLOCKS)
+            self.assertIn(wool_id, ITEMS)
+            self.assertIn(dye_id, get_item_tag("dyes"))
+            self.assertIn(wool_id, get_block_tag("wool"))
+            self.assertIn(wool_id, get_item_tag("wool"))
+
+            res = craft_match(["wool", dye_id, "", ""])
+            self.assertIsNotNone(res, f"Missing wool dyeing recipe for {wool_id}")
+            self.assertEqual(res[0], wool_id)
+
+            if color == sheep.color:
+                self.assertFalse(sheep.dye(dye_id))
+            else:
+                self.assertTrue(sheep.dye(dye_id))
+            self.assertEqual(sheep.color, color)
+            self.assertEqual(sheep.wool_block, wool_id)
+
+        # Spot-check typical and Dyenamics dye mixing recipes
+        self.assertEqual(craft_match(["black_dye", "white_dye", "", ""])[:2], ("gray_dye", 2))
+        self.assertEqual(craft_match(["gray_dye", "white_dye", "", ""])[:2], ("light_gray_dye", 2))
+        self.assertEqual(craft_match(["red_dye", "blue_dye", "", ""])[:2], ("purple_dye", 2))
+        self.assertEqual(craft_match(["purple_dye", "white_dye", "", ""])[:2], ("lavender_dye", 2))
+        self.assertEqual(craft_match(["lime_dye", "yellow_dye", "", ""])[:2], ("fluorescent_dye", 2))
+        self.assertEqual(craft_match(["purple_dye", "maroon_dye", "", ""])[:2], ("wine_dye", 2))
+
 
 class TestPathfindingHazardAvoidance(unittest.TestCase):
     def setUp(self):

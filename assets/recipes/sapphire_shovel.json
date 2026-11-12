@@ -1,0 +1,17 @@
+{
+  "id": "sapphire_shovel",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "X",
+    "X"
+  ],
+  "key": {
+    "#": "sapphire",
+    "X": "#sticks"
+  },
+  "result": {
+    "item": "sapphire_shovel",
+    "count": 1
+  }
+}

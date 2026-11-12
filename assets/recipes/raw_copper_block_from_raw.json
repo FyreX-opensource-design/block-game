@@ -1,0 +1,16 @@
+{
+  "id": "raw_copper_block_from_raw",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "###",
+    "###"
+  ],
+  "key": {
+    "#": "raw_copper"
+  },
+  "result": {
+    "item": "raw_copper_block",
+    "count": 1
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "id": "light_gray_terracotta",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "terracotta",
+    "D": "light_gray_dye"
+  },
+  "result": {
+    "item": "light_gray_terracotta",
+    "count": 8
+  }
+}

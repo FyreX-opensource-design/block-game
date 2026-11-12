@@ -1,0 +1,21 @@
+{
+  "id": "wine_wool",
+  "lang": "block.wine_wool",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 0.8,
+  "tool": "shears",
+  "mining_level": 0,
+  "textures": {
+    "top": "wine_wool",
+    "side": "wine_wool",
+    "bottom": "wine_wool"
+  },
+  "properties": {
+    "tags": [
+      "wool"
+    ]
+  }
+}

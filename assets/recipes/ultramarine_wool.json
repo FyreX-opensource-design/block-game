@@ -1,0 +1,12 @@
+{
+  "id": "ultramarine_wool",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "#wool",
+    "ultramarine_dye"
+  ],
+  "result": {
+    "item": "ultramarine_wool",
+    "count": 1
+  }
+}

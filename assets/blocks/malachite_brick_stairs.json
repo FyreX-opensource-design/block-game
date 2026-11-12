@@ -1,0 +1,19 @@
+{
+  "id": "malachite_brick_stairs",
+  "lang": "block.malachite_brick_stairs",
+  "tab": [
+    "building"
+  ],
+  "model": "stairs",
+  "hardness": 4.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/malachite_brick_stairs",
+  "sound": "stone",
+  "textures": {
+    "top": "malachite_bricks",
+    "side": "malachite_bricks",
+    "bottom": "malachite_bricks"
+  },
+  "type": "stairs"
+}

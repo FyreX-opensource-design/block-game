@@ -126,7 +126,7 @@ void main() {
         base_rgb = mix(texel.rgb, tinted_grass, is_grass);
     }
 
-    vec3 norm = normalize(v_normal);
+    vec3 norm = normalize(gl_FrontFacing ? v_normal : -v_normal);
     float lambert = max(dot(norm, normalize(sun_dir)), 0.0);
 
     // Light and shadow: direct sunlight is shadowed when skylight is low
@@ -221,7 +221,7 @@ void main() {
         base_rgb = mix(texel.rgb, tinted_grass, is_grass);
     }
 
-    vec3 norm = normalize(v_normal);
+    vec3 norm = normalize(gl_FrontFacing ? v_normal : -v_normal);
     float lambert = max(dot(norm, normalize(sun_dir)), 0.0);
 
     float effective_skylight = v_skylight * sky_intensity;
@@ -328,7 +328,7 @@ void main() {
     vec4 texel = texture(atlas, v_uv);
     if (texel.a < 0.5) discard;
 
-    vec3 norm = normalize(v_normal);
+    vec3 norm = normalize(gl_FrontFacing ? v_normal : -v_normal);
     float lambert = max(dot(norm, normalize(sun_dir)), 0.0);
     float effective_skylight = entity_skylight * sky_intensity;
     float sun_factor = smoothstep(0.4, 0.95, entity_skylight) * sky_intensity;
@@ -878,7 +878,7 @@ class Renderer:
         self.ctx.disable(moderngl.CULL_FACE)
         self.ctx.enable(moderngl.BLEND)
         self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
-        self.ctx.screen.depth_mask = True
+        self.ctx.screen.depth_mask = False
         write_matrix(self.translucent["vp"], vp)
         self.translucent["camera"].value = camera
         sky_intensity = self.get_sky_intensity(day_time)
@@ -899,6 +899,7 @@ class Renderer:
                 continue
             self.translucent["origin"].value = item.origin
             item.translucent[0].render()
+        self.ctx.screen.depth_mask = True
         self.ctx.disable(moderngl.BLEND)
         self.ctx.enable(moderngl.CULL_FACE)
 
@@ -1044,12 +1045,12 @@ class Renderer:
             return
         (vertices, indices), kind = packed
         texture = self.atlas if kind == "block" else self.items
-        if first_person:
+        if first_person and kind != "block":
             # Depth already cleared for this pass; disable test so overlapping
             # extrusion pads don't moiré and near terrain can't poke through.
             self.ctx.disable(moderngl.DEPTH_TEST)
         self._draw_entity(vp, camera, vertices, indices, texture, fog=fog, day_time=day_time)
-        if first_person:
+        if first_person and kind != "block":
             self.ctx.enable(moderngl.DEPTH_TEST)
 
     def _init_mob_textures(self):

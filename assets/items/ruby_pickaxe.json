@@ -1,0 +1,17 @@
+{
+  "id": "ruby_pickaxe",
+  "lang": "item.ruby_pickaxe",
+  "tab": "tools",
+  "model": "flat",
+  "texture": "ruby_pickaxe",
+  "tool": "pickaxe",
+  "max_stack": 1,
+  "left": "mine",
+  "right": "none",
+  "durability": 720,
+  "mining_level": 6,
+  "mining_speed": 10.0,
+  "attack": 7.5,
+  "food": 0,
+  "repair": "ruby"
+}

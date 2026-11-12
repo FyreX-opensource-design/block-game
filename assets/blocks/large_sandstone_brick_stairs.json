@@ -1,0 +1,19 @@
+{
+  "id": "large_sandstone_brick_stairs",
+  "lang": "block.large_sandstone_brick_stairs",
+  "type": "stairs",
+  "tab": [
+    "building"
+  ],
+  "model": "stairs",
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "sound": "stone",
+  "loot_table": "blocks/large_sandstone_brick_stairs",
+  "textures": {
+    "top": "large_sandstone_bricks",
+    "side": "large_sandstone_bricks",
+    "bottom": "large_sandstone_bricks"
+  }
+}

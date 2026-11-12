@@ -1,0 +1,14 @@
+{
+  "id": "light_blue_stained_glass_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###"
+  ],
+  "key": {
+    "#": "light_blue_stained_glass"
+  },
+  "result": {
+    "item": "light_blue_stained_glass_slab",
+    "count": 6
+  }
+}

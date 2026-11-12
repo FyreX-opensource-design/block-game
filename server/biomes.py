@@ -310,16 +310,16 @@ def biome_from_mapping(fields, source, trees, decorations=None):
                 if "feature" in item or ("id" in item and item["id"] in decorations):
                     fid = item.get("feature") or item.get("id")
                     base_dec = decorations[fid]
-                    chance = _number(item.get("chance", base_dec.chance), "chance", source)
-                    surfaces = item.get("surfaces", base_dec.surfaces)
-                    seed_offset = _whole(item.get("seed_offset", base_dec.seed_offset), "seed_offset", source)
+                    dec_chance = _number(item.get("chance", base_dec.chance), "chance", source)
+                    dec_surfaces = item.get("surfaces", base_dec.surfaces)
+                    dec_seed_offset = _whole(item.get("seed_offset", base_dec.seed_offset), "seed_offset", source)
                     resolved_decs.append(
                         DecorationFeature(
                             base_dec.id,
                             base_dec.blocks,
-                            chance=chance,
-                            surfaces=surfaces,
-                            seed_offset=seed_offset,
+                            chance=dec_chance,
+                            surfaces=dec_surfaces,
+                            seed_offset=dec_seed_offset,
                             source=f"{source}:{base_dec.id}",
                         )
                     )

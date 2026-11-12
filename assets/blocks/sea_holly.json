@@ -1,0 +1,18 @@
+{
+  "id": "sea_holly",
+  "lang": "block.sea_holly",
+  "tab": "natural",
+  "model": "cross",
+  "render": "cutout",
+  "solid": false,
+  "hardness": 0.0,
+  "tool": "none",
+  "mining_level": 0,
+  "loot_table": "blocks/sea_holly",
+  "fluid_breakable": true,
+  "plant": true,
+  "requires_soil": true,
+  "textures": {
+    "cross": "sea_holly"
+  }
+}

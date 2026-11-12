@@ -1,0 +1,22 @@
+{
+  "id": "oak_wood",
+  "lang": "block.oak_wood",
+  "tab": [
+    "building",
+    "natural"
+  ],
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "axe",
+  "mining_level": 0,
+  "loot_table": "blocks/oak_wood",
+  "sound": "wood",
+  "properties": {
+    "rotation": "axis"
+  },
+  "textures": {
+    "top": "oak_log_side",
+    "side": "oak_log_side",
+    "bottom": "oak_log_side"
+  }
+}

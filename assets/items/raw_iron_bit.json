@@ -1,7 +1,7 @@
 {
   "id": "raw_iron_bit",
   "lang": "item.raw_iron_bit",
-  "tab": "natural",
+  "tab": "materials",
   "model": "flat",
   "texture": "raw_iron_bit",
   "max_stack": 64,

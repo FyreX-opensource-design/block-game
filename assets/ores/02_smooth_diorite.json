@@ -1,0 +1,13 @@
+{
+  "id": "02_smooth_diorite",
+  "block": "smooth_diorite",
+  "target": "diorite",
+  "min_y": 10,
+  "max_y": 120,
+  "scale": 0.06,
+  "threshold": 0.67,
+  "octaves": 2,
+  "seed_offset": 812,
+  "max_vein_size": 32,
+  "enabled": true
+}

@@ -1,0 +1,17 @@
+{
+  "id": "ruby_lamp",
+  "type": "crafting_shaped",
+  "pattern": [
+    " # ",
+    "#T#",
+    " # "
+  ],
+  "key": {
+    "#": "ruby",
+    "T": "torch"
+  },
+  "result": {
+    "item": "ruby_lamp",
+    "count": 2
+  }
+}

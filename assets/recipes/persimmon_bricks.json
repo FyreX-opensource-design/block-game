@@ -1,0 +1,15 @@
+{
+  "id": "persimmon_bricks",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "##"
+  ],
+  "key": {
+    "#": "persimmon_brick"
+  },
+  "result": {
+    "item": "persimmon_bricks",
+    "count": 1
+  }
+}

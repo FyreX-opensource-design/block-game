@@ -1,0 +1,17 @@
+{
+  "id": "peach_stained_glass",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "glass",
+    "D": "peach_dye"
+  },
+  "result": {
+    "item": "peach_stained_glass",
+    "count": 8
+  }
+}

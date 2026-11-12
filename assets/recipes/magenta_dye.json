@@ -1,0 +1,12 @@
+{
+  "id": "magenta_dye",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "purple_dye",
+    "pink_dye"
+  ],
+  "result": {
+    "item": "magenta_dye",
+    "count": 2
+  }
+}

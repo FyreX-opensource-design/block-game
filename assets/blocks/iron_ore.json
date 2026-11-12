@@ -1,16 +1,45 @@
 {
   "id": "iron_ore",
   "lang": "block.iron_ore",
-  "tab": ["natural"],
+  "tab": [
+    "natural"
+  ],
   "model": "cube",
   "hardness": 3.0,
   "tool": "pickaxe",
-  "mining_level": 2,
+  "mining_level": 3,
   "loot_table": "blocks/iron_ore",
+  "sound": "stone",
   "textures": {
-    "top": "iron_ore",
-    "side": "iron_ore",
-    "bottom": "iron_ore"
-  }
+    "top": "iron_ore/iron_ore_var_1",
+    "side": "iron_ore/iron_ore_var_1",
+    "bottom": "iron_ore/iron_ore_var_1"
+  },
+  "palettes": [
+    {
+      "top": "iron_ore/iron_ore_var_1",
+      "side": "iron_ore/iron_ore_var_1",
+      "bottom": "iron_ore/iron_ore_var_1"
+    },
+    {
+      "top": "iron_ore/iron_ore_var_2",
+      "side": "iron_ore/iron_ore_var_2",
+      "bottom": "iron_ore/iron_ore_var_2"
+    },
+    {
+      "top": "iron_ore/iron_ore_var_3",
+      "side": "iron_ore/iron_ore_var_3",
+      "bottom": "iron_ore/iron_ore_var_3"
+    },
+    {
+      "top": "iron_ore/iron_ore_var_4",
+      "side": "iron_ore/iron_ore_var_4",
+      "bottom": "iron_ore/iron_ore_var_4"
+    },
+    {
+      "top": "iron_ore/iron_ore_var_5",
+      "side": "iron_ore/iron_ore_var_5",
+      "bottom": "iron_ore/iron_ore_var_5"
+    }
+  ]
 }
-

@@ -1,0 +1,17 @@
+{
+  "id": "lavender_stained_glass",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "glass",
+    "D": "lavender_dye"
+  },
+  "result": {
+    "item": "lavender_stained_glass",
+    "count": 8
+  }
+}

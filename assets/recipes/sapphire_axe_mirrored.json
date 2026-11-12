@@ -1,0 +1,17 @@
+{
+  "id": "sapphire_axe_mirrored",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "X#",
+    "X "
+  ],
+  "key": {
+    "#": "sapphire",
+    "X": "#sticks"
+  },
+  "result": {
+    "item": "sapphire_axe",
+    "count": 1
+  }
+}

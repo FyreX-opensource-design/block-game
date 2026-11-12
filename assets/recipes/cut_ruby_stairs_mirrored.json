@@ -1,0 +1,16 @@
+{
+  "id": "cut_ruby_stairs_mirrored",
+  "type": "crafting_shaped",
+  "pattern": [
+    "  #",
+    " ##",
+    "###"
+  ],
+  "key": {
+    "#": "cut_ruby"
+  },
+  "result": {
+    "item": "cut_ruby_stairs",
+    "count": 4
+  }
+}

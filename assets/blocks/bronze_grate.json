@@ -1,0 +1,22 @@
+{
+  "id": "bronze_grate",
+  "lang": "block.bronze_grate",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 3.0,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/bronze_grate",
+  "sound": "stone",
+  "textures": {
+    "top": "bronze_grate",
+    "side": "bronze_grate",
+    "bottom": "bronze_grate"
+  },
+  "properties": {
+    "grate": true
+  },
+  "render": "cutout"
+}

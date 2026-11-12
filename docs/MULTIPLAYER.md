@@ -19,15 +19,20 @@ Block Game uses an authoritative client-server architecture built on standard TC
 
 ## 2. Launching a Dedicated Server
 
-You can run the server in headless dedicated mode from the command line:
+The preferred way to host a dedicated server is directly through `play.py`:
 
 ```bash
-# Basic start (binds to 0.0.0.0:25565, world name "multiplayer", survival mode)
-python3 -m server.network
+# Basic start (binds to 0.0.0.0:25565, world "multiplayer", survival mode)
+./.venv/bin/python3 play.py --server
 
 # With custom parameters
-python3 -m server.network --host 0.0.0.0 --port 25565 --world survival_world --seed 42 --gamemode survival
+./.venv/bin/python3 play.py --server --port 25565 --world survival_world --seed 42 --gamemode survival
+
+# Alternatively via the server module:
+./.venv/bin/python3 -m server.network --port 25565
 ```
+
+When started, the server automatically detects your local network interface IPs and displays them in the console so other devices know what address to connect to.
 
 ### Server CLI Flags
 | Flag | Default | Description |
@@ -46,15 +51,28 @@ Press `Ctrl+C` in the server terminal to cleanly flush all modified chunks, save
 
 ## 3. Joining a Server from the Client
 
+### Quick Connect from Command Line (Preferred)
+```bash
+# Connect to a server on the same machine:
+./.venv/bin/python3 play.py -m
+# or
+./.venv/bin/python3 play.py --connect
+
+# Connect to a server on another device (replace with the host's actual IP):
+./.venv/bin/python3 play.py --connect 192.168.1.50:25565
+```
+
+### Joining Through the Main Menu GUI
 1. Launch the game client:
    ```bash
-   python3 play.py
+   ./.venv/bin/python3 play.py
    ```
 2. In the Main Menu, select **Multiplayer**.
 3. Choose one of the connection methods:
+   - **Local Server**: By default, "Local Server" (`127.0.0.1:25565`) is selected. Click **Join Server** to join a server running on your own machine.
    - **Direct Connect**:
-     - Type the server address: e.g. `127.0.0.1:25565` (local machine) or `192.168.1.50:25565` (LAN).
-     - Click **Connect** to immediately join.
+     - Type the server address: e.g. `127.0.0.1:25565` (local machine) or the host's LAN IP (e.g. `192.168.1.50:25565`).
+     - Click **Join** to immediately connect.
    - **Server List / Add Server**:
      - Click **Add Server**.
      - Enter a **Server Name** and **Address**.
@@ -117,4 +135,29 @@ To allow external players over the internet to connect:
    - Access your router's admin panel (typically `192.168.1.1` or `192.168.0.1`).
    - Forward external port `25565` (TCP) to your host machine's internal local IP address.
    - Share your public IP address with players (`curl ifconfig.me`).
+
+---
+
+## 7. LAN & Mobile Hotspot Troubleshooting
+
+### Error 101 (`Network is unreachable`)
+- **Broadcast Address**: In IPv4, addresses ending in `.255` (e.g. `10.46.100.255`) are subnet broadcast addresses, not host IPs. Connecting to a `.255` address will fail with Error 101. Run `hostname -I` or `ip route get 1.1.1.1` to find your host's actual IP address.
+- **Local Machine**: Always use `127.0.0.1:25565` (or `./.venv/bin/python3 play.py -m`) when connecting to a server running on the same machine.
+
+### Error 113 (`No route to host`) / Mobile Hotspot AP Isolation
+Many mobile phones (Android / iOS) enforce **AP Isolation** on their Wi-Fi hotspots, blocking tethered devices from talking directly to each other. Furthermore, school or public Wi-Fi networks block client-to-client traffic.
+
+**Recommended Solution — Host directly from your Linux laptop**:
+1. On the host laptop, broadcast your own Wi-Fi hotspot:
+   ```bash
+   nmcli device wifi hotspot ssid BlockGame password 12345678
+   ```
+2. Have the second device connect to the `BlockGame` Wi-Fi with password `12345678`.
+3. Start the server on the laptop (`./.venv/bin/python3 play.py --server`).
+4. On the second device, connect to the laptop's hotspot IP (usually `10.42.0.1:25565`):
+   ```bash
+   ./.venv/bin/python3 play.py --connect 10.42.0.1:25565
+   ```
+*(When finished, stop the hotspot with `nmcli connection down Hotspot`)*.
+
 

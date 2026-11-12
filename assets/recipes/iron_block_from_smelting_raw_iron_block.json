@@ -1,0 +1,11 @@
+{
+  "id": "iron_block_from_smelting_raw_iron_block",
+  "type": "smelting",
+  "ingredient": "raw_iron_block",
+  "result": {
+    "item": "iron_block",
+    "count": 1
+  },
+  "cookingtime": 80.0,
+  "experience": 6.3
+}

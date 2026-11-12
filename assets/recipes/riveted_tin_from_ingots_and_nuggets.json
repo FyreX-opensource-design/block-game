@@ -1,0 +1,16 @@
+{
+  "id": "riveted_tin_from_ingots_and_nuggets",
+  "type": "crafting_shaped",
+  "pattern": [
+    "IN",
+    "NI"
+  ],
+  "key": {
+    "I": "tin_ingot",
+    "N": "tin_nugget"
+  },
+  "result": {
+    "item": "riveted_tin",
+    "count": 2
+  }
+}

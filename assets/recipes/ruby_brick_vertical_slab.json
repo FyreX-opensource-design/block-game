@@ -1,0 +1,16 @@
+{
+  "id": "ruby_brick_vertical_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "#",
+    "#"
+  ],
+  "key": {
+    "#": "ruby_brick_slab"
+  },
+  "result": {
+    "item": "ruby_brick_vertical_slab",
+    "count": 3
+  }
+}

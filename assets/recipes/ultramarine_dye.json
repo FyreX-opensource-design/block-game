@@ -1,0 +1,12 @@
+{
+  "id": "ultramarine_dye",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "blue_dye",
+    "purple_dye"
+  ],
+  "result": {
+    "item": "ultramarine_dye",
+    "count": 2
+  }
+}

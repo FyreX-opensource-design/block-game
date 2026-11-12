@@ -1,0 +1,24 @@
+{
+  "id": "pine_fence",
+  "lang": "block.pine_fence",
+  "tab": [
+    "building"
+  ],
+  "model": "fence_post",
+  "type": "fence",
+  "solid": true,
+  "hardness": 2.0,
+  "tool": "axe",
+  "mining_level": 0,
+  "sound": "wood",
+  "loot_table": "blocks/pine_fence",
+  "properties": {
+    "fence": true
+  },
+  "textures": {
+    "top": "pine_planks",
+    "side": "pine_planks",
+    "texture": "pine_planks"
+  }
+}
+

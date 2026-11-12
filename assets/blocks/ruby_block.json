@@ -1,0 +1,19 @@
+{
+  "id": "ruby_block",
+  "lang": "block.ruby_block",
+  "tab": [
+    "building",
+    "materials"
+  ],
+  "model": "cube",
+  "hardness": 4.5,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/ruby_block",
+  "sound": "stone",
+  "textures": {
+    "top": "ruby_block",
+    "side": "ruby_block",
+    "bottom": "ruby_block"
+  }
+}

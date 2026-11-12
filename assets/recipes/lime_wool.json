@@ -1,0 +1,12 @@
+{
+  "id": "lime_wool",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "#wool",
+    "lime_dye"
+  ],
+  "result": {
+    "item": "lime_wool",
+    "count": 1
+  }
+}

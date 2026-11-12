@@ -1,0 +1,15 @@
+{
+  "id": "cut_emerald_wall",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "###"
+  ],
+  "key": {
+    "#": "cut_emerald"
+  },
+  "result": {
+    "item": "cut_emerald_wall",
+    "count": 6
+  }
+}

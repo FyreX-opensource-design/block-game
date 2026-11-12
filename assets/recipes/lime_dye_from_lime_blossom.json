@@ -1,0 +1,11 @@
+{
+  "id": "lime_dye_from_lime_blossom",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "lime_blossom"
+  ],
+  "result": {
+    "item": "lime_dye",
+    "count": 1
+  }
+}

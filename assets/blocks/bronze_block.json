@@ -1,0 +1,19 @@
+{
+  "id": "bronze_block",
+  "lang": "block.bronze_block",
+  "tab": [
+    "building",
+    "materials"
+  ],
+  "model": "cube",
+  "hardness": 5.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/bronze_block",
+  "sound": "stone",
+  "textures": {
+    "top": "bronze_block",
+    "side": "bronze_block",
+    "bottom": "bronze_block"
+  }
+}

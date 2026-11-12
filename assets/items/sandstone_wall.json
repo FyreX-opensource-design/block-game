@@ -1,0 +1,14 @@
+{
+  "id": "sandstone_wall",
+  "lang": "item.sandstone_wall",
+  "tab": [
+    "building"
+  ],
+  "model": "block",
+  "item_model": "wall_inventory",
+  "block": "sandstone_wall",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}

@@ -1,0 +1,15 @@
+{
+  "id": "brown_bricks",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "##"
+  ],
+  "key": {
+    "#": "brown_brick"
+  },
+  "result": {
+    "item": "brown_bricks",
+    "count": 1
+  }
+}

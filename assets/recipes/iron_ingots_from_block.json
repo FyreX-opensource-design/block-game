@@ -1,0 +1,11 @@
+{
+  "id": "iron_ingots_from_block",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "iron_block"
+  ],
+  "result": {
+    "item": "iron_ingot",
+    "count": 9
+  }
+}

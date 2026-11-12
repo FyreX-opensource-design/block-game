@@ -1,0 +1,20 @@
+{
+  "id": "sweet_pea",
+  "lang": "block.sweet_pea",
+  "tab": "natural",
+  "type": "tall_plant",
+  "model": "cross",
+  "render": "cutout",
+  "solid": false,
+  "hardness": 0.0,
+  "tool": "none",
+  "mining_level": 0,
+  "loot_table": "blocks/sweet_pea",
+  "fluid_breakable": true,
+  "plant": true,
+  "requires_soil": true,
+  "textures": {
+    "cross": "sweet_pea_bottom",
+    "upper": "sweet_pea_top"
+  }
+}

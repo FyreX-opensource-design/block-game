@@ -1,0 +1,19 @@
+{
+  "id": "cut_sapphire_stairs",
+  "lang": "block.cut_sapphire_stairs",
+  "tab": [
+    "building"
+  ],
+  "model": "stairs",
+  "hardness": 4.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/cut_sapphire_stairs",
+  "sound": "stone",
+  "textures": {
+    "top": "cut_sapphire",
+    "side": "cut_sapphire",
+    "bottom": "cut_sapphire"
+  },
+  "type": "stairs"
+}

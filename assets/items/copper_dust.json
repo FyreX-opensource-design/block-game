@@ -1,7 +1,7 @@
 {
   "id": "copper_dust",
   "lang": "item.copper_dust",
-  "tab": "natural",
+  "tab": "materials",
   "model": "flat",
   "texture": "copper_dust",
   "max_stack": 64,

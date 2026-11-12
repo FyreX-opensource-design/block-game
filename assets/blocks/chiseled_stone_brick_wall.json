@@ -1,0 +1,23 @@
+{
+  "id": "chiseled_stone_brick_wall",
+  "lang": "block.chiseled_stone_brick_wall",
+  "tab": [
+    "building"
+  ],
+  "model": "wall_post",
+  "type": "wall",
+  "solid": true,
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "sound": "stone",
+  "loot_table": "blocks/chiseled_stone_brick_wall",
+  "properties": {
+    "wall": true
+  },
+  "textures": {
+    "top": "chiseled_stone_bricks",
+    "side": "chiseled_stone_bricks",
+    "texture": "chiseled_stone_bricks"
+  }
+}

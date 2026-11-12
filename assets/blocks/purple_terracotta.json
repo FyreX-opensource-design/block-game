@@ -1,0 +1,18 @@
+{
+  "id": "purple_terracotta",
+  "lang": "block.purple_terracotta",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 1.25,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "loot_table": "blocks/purple_terracotta",
+  "sound": "stone",
+  "textures": {
+    "top": "terracotta/purple_terracotta",
+    "side": "terracotta/purple_terracotta",
+    "bottom": "terracotta/purple_terracotta"
+  }
+}

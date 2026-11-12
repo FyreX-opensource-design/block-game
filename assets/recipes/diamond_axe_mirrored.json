@@ -1,0 +1,17 @@
+{
+  "id": "diamond_axe_mirrored",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "X#",
+    "X "
+  ],
+  "key": {
+    "#": "diamond",
+    "X": "#sticks"
+  },
+  "result": {
+    "item": "diamond_axe",
+    "count": 1
+  }
+}

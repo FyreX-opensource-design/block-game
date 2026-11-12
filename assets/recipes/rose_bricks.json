@@ -1,0 +1,15 @@
+{
+  "id": "rose_bricks",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "##"
+  ],
+  "key": {
+    "#": "rose_brick"
+  },
+  "result": {
+    "item": "rose_bricks",
+    "count": 1
+  }
+}

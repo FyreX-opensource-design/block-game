@@ -1,0 +1,18 @@
+{
+  "id": "cut_ruby",
+  "lang": "block.cut_ruby",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 4.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/cut_ruby",
+  "sound": "stone",
+  "textures": {
+    "top": "cut_ruby",
+    "side": "cut_ruby",
+    "bottom": "cut_ruby"
+  }
+}

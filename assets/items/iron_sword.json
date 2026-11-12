@@ -1,0 +1,17 @@
+{
+  "id": "iron_sword",
+  "lang": "item.iron_sword",
+  "tab": "tools",
+  "model": "flat",
+  "texture": "iron_sword",
+  "tool": "sword",
+  "max_stack": 1,
+  "left": "attack",
+  "right": "none",
+  "durability": 250,
+  "mining_level": 0,
+  "mining_speed": 1.0,
+  "attack": 7.0,
+  "food": 0,
+  "repair": "iron_ingot"
+}

@@ -1,0 +1,17 @@
+{
+  "id": "emerald_axe",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "#X",
+    " X"
+  ],
+  "key": {
+    "#": "emerald",
+    "X": "#sticks"
+  },
+  "result": {
+    "item": "emerald_axe",
+    "count": 1
+  }
+}

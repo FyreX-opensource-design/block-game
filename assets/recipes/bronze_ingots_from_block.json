@@ -1,0 +1,11 @@
+{
+  "id": "bronze_ingots_from_block",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "bronze_block"
+  ],
+  "result": {
+    "item": "bronze_ingot",
+    "count": 9
+  }
+}

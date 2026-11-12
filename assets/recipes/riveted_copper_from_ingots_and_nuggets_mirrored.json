@@ -1,0 +1,16 @@
+{
+  "id": "riveted_copper_from_ingots_and_nuggets_mirrored",
+  "type": "crafting_shaped",
+  "pattern": [
+    "NI",
+    "IN"
+  ],
+  "key": {
+    "I": "copper_ingot",
+    "N": "copper_nugget"
+  },
+  "result": {
+    "item": "riveted_copper",
+    "count": 2
+  }
+}

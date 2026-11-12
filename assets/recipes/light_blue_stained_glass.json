@@ -1,0 +1,17 @@
+{
+  "id": "light_blue_stained_glass",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "#D#",
+    "###"
+  ],
+  "key": {
+    "#": "glass",
+    "D": "light_blue_dye"
+  },
+  "result": {
+    "item": "light_blue_stained_glass",
+    "count": 8
+  }
+}

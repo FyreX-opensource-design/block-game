@@ -1,0 +1,17 @@
+{
+  "id": "wooden_fence",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#S#",
+    "#S#"
+  ],
+  "key": {
+    "#": "#planks",
+    "S": "#sticks"
+  },
+  "result": {
+    "item": "wooden_fence",
+    "count": 3
+  }
+}
+

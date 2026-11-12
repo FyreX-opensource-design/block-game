@@ -1,0 +1,15 @@
+{
+  "id": "lime_bricks",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "##"
+  ],
+  "key": {
+    "#": "lime_brick"
+  },
+  "result": {
+    "item": "lime_bricks",
+    "count": 1
+  }
+}

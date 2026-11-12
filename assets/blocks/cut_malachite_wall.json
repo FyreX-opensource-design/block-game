@@ -1,0 +1,19 @@
+{
+  "id": "cut_malachite_wall",
+  "lang": "block.cut_malachite_wall",
+  "tab": [
+    "building"
+  ],
+  "model": "wall_post",
+  "hardness": 4.0,
+  "tool": "pickaxe",
+  "mining_level": 2,
+  "loot_table": "blocks/cut_malachite_wall",
+  "sound": "stone",
+  "textures": {
+    "top": "cut_malachite",
+    "side": "cut_malachite",
+    "bottom": "cut_malachite"
+  },
+  "type": "wall"
+}

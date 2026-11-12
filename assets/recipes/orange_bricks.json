@@ -1,0 +1,15 @@
+{
+  "id": "orange_bricks",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "##"
+  ],
+  "key": {
+    "#": "orange_brick"
+  },
+  "result": {
+    "item": "orange_bricks",
+    "count": 1
+  }
+}

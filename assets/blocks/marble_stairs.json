@@ -1,0 +1,46 @@
+{
+  "id": "marble_stairs",
+  "lang": "block.marble_stairs",
+  "type": "stairs",
+  "tab": [
+    "building"
+  ],
+  "model": "stairs",
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "sound": "stone",
+  "loot_table": "blocks/marble_stairs",
+  "textures": {
+    "top": "marble/marble_var_1",
+    "side": "marble/marble_var_1",
+    "bottom": "marble/marble_var_1"
+  },
+  "palettes": [
+    {
+      "top": "marble/marble_var_1",
+      "side": "marble/marble_var_1",
+      "bottom": "marble/marble_var_1"
+    },
+    {
+      "top": "marble/marble_var_2",
+      "side": "marble/marble_var_2",
+      "bottom": "marble/marble_var_2"
+    },
+    {
+      "top": "marble/marble_var_3",
+      "side": "marble/marble_var_3",
+      "bottom": "marble/marble_var_3"
+    },
+    {
+      "top": "marble/marble_var_4",
+      "side": "marble/marble_var_4",
+      "bottom": "marble/marble_var_4"
+    },
+    {
+      "top": "marble/marble_var_5",
+      "side": "marble/marble_var_5",
+      "bottom": "marble/marble_var_5"
+    }
+  ]
+}

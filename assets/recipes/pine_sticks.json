@@ -1,0 +1,17 @@
+{
+    "id": "pine_sticks",
+    "type": "crafting_shaped",
+    "pattern": [
+      "#",
+      "#"
+    ],
+    "key": {
+      "#": "pine_planks"
+    },
+    "result": {
+      "item": "pine_stick",
+      "count": 4
+    }
+  }
+  
+  

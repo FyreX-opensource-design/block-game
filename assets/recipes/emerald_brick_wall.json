@@ -1,0 +1,15 @@
+{
+  "id": "emerald_brick_wall",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "###"
+  ],
+  "key": {
+    "#": "emerald_bricks"
+  },
+  "result": {
+    "item": "emerald_brick_wall",
+    "count": 6
+  }
+}

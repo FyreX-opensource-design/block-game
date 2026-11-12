@@ -1,0 +1,11 @@
+{
+  "id": "magenta_dye_from_lilac",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "lilac"
+  ],
+  "result": {
+    "item": "magenta_dye",
+    "count": 2
+  }
+}

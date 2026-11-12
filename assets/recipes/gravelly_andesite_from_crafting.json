@@ -1,0 +1,12 @@
+{
+  "id": "gravelly_andesite_from_crafting",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "andesite",
+    "gravel"
+  ],
+  "result": {
+    "item": "gravelly_andesite",
+    "count": 2
+  }
+}
