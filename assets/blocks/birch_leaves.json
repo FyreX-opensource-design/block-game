@@ -1,0 +1,21 @@
+{
+  "id": "birch_leaves",
+  "lang": "block.birch_leaves",
+  "tab": "natural",
+  "model": "cube",
+  "render": "cutout",
+  "hardness": 0.2,
+  "tool": "none",
+  "mining_level": 0,
+  "loot_table": "blocks/birch_leaves",
+  "textures": {
+    "top": "birch_leaves",
+    "side": "birch_leaves",
+    "bottom": "birch_leaves"
+  },
+  "properties": {
+    "leaf": true,
+    "decayable": true
+  }
+}
+

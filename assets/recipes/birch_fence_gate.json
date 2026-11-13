@@ -1,0 +1,16 @@
+{
+  "id": "birch_fence_gate",
+  "type": "crafting_shaped",
+  "pattern": [
+    "S#S",
+    "S#S"
+  ],
+  "key": {
+    "#": "birch_planks",
+    "S": "#sticks"
+  },
+  "result": {
+    "item": "birch_fence_gate",
+    "count": 1
+  }
+}

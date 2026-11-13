@@ -1,0 +1,18 @@
+{
+  "id": "cooked_beef",
+  "name": "Cooked Beef",
+  "lang": "item.cooked_beef",
+  "tab": [
+    "materials"
+  ],
+  "model": "flat",
+  "texture": "cooked_beef",
+  "max_stack": 64,
+  "left": "none",
+  "right": "eat",
+  "durability": 0,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 1,
+  "food": 8
+}

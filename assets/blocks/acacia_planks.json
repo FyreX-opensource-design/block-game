@@ -1,0 +1,17 @@
+{
+  "id": "acacia_planks",
+  "lang": "block.acacia_planks",
+  "tab": "building",
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "axe",
+  "mining_level": 0,
+  "loot_table": "blocks/acacia_planks",
+  "sound": "wood",
+  "textures": {
+    "top": "acacia_planks",
+    "side": "acacia_planks",
+    "bottom": "acacia_planks"
+  }
+}
+

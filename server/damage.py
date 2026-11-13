@@ -35,7 +35,7 @@ from server.blocks import ASSETS
 from server.lua import load_table
 
 DEFAULT_MAX_HEALTH = 20.0
-KINDS = ("fall", "suffocation", "starvation")
+KINDS = ("fall", "suffocation", "starvation", "contact")
 
 _BUILTIN = (
     {
@@ -62,6 +62,23 @@ _BUILTIN = (
         "damage": 1.0,
         "interval": 4.0,
         "message": "starved to death",
+    },
+    {
+        "id": "stalagmite",
+        "name": "Stalagmite",
+        "kind": "fall",
+        "damage": 2.0,
+        "min_distance": 0.8,
+        "per_block": True,
+        "message": "was impaled on a stalagmite",
+    },
+    {
+        "id": "cactus",
+        "name": "Cactus",
+        "kind": "contact",
+        "damage": 1.0,
+        "interval": 0.5,
+        "message": "was pricked to death by a cactus",
     },
 )
 

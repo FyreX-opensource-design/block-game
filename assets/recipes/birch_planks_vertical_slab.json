@@ -1,0 +1,16 @@
+{
+  "id": "birch_planks_vertical_slab",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "#",
+    "#"
+  ],
+  "key": {
+    "#": "birch_planks_slab"
+  },
+  "result": {
+    "item": "birch_planks_vertical_slab",
+    "count": 3
+  }
+}

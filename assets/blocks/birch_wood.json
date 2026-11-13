@@ -1,0 +1,23 @@
+{
+  "id": "birch_wood",
+  "lang": "block.birch_wood",
+  "tab": [
+    "building",
+    "natural"
+  ],
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "axe",
+  "mining_level": 0,
+  "loot_table": "blocks/birch_wood",
+  "sound": "wood",
+  "properties": {
+    "rotation": "axis"
+  },
+  "textures": {
+    "top": "birch_log_side",
+    "side": "birch_log_side",
+    "bottom": "birch_log_side"
+  }
+}
+

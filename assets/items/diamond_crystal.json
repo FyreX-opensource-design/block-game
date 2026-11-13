@@ -1,0 +1,7 @@
+{
+  "id": "diamond_crystal",
+  "lang": "item.diamond_crystal",
+  "tab": "natural",
+  "texture": "diamond_crystal",
+  "block": "diamond_crystal"
+}

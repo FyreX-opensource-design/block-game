@@ -11,6 +11,11 @@
             1,
             2
           ]
+        },
+        {
+          "type": "item",
+          "name": "sheep_hide",
+          "count": [1, 2]
         }
       ]
     }

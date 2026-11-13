@@ -1,0 +1,14 @@
+{
+  "id": "milk",
+  "lang": "block.milk",
+  "tab": "natural",
+  "model": "cube",
+  "render": "cutout",
+  "solid": false,
+  "opacity": 0.75,
+  "hardness": 100.0,
+  "tool": "none",
+  "mining_level": 0,
+  "properties": {"fluid": "milk", "level": 8},
+  "textures": {"top": "milk", "side": "milk", "bottom": "milk"}
+}

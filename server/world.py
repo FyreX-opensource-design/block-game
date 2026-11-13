@@ -8,12 +8,16 @@ from server.biomes import BIOMES, biome_at, biome_index_grid
 from server.blocks import (
     AIR,
     BLOCKS,
+    BRACKISH_WATER,
     CHUNK_SIZE,
     CLAY,
     GRAVEL,
     GRASS,
     LOAD_RADIUS,
+    MUD,
+    MUDDY_GRASS,
     SALT_WATER,
+    SAND,
     SECTION_COUNT,
     STONE,
     UNLOAD_RADIUS,
@@ -41,6 +45,7 @@ from server.noise import (
     fbm3_grid,
     fbm_grid,
     hash2,
+    hash2_grid,
     terrain_grid,
     terrain_height,
 )
@@ -129,7 +134,7 @@ def tree_at(x, z, seed=0):
 
 def _tree_site(x, z, height, seed, biomes, height_at):
     biome = biome_at(x, z, seed, biomes)
-    if not biome.trees or hash2(x, z, seed) > biome.tree_chance or height <= WATER_LEVEL:
+    if not biome.trees or hash2(x, z, seed) > biome.tree_chance or height < WATER_LEVEL:
         return None
     from server.tags import has_block_tag
 
@@ -374,7 +379,7 @@ def _label_mask(mask):
 
 
 class World:
-    def __init__(self, seed=0, store=None, caves=None, biomes=None, ores=None, day_time=1000.0, features=None, spawn_point=None):
+    def __init__(self, seed=0, store=None, caves=None, biomes=None, ores=None, day_time=1000.0, features=None, spawn_point=None, underground_biomes=None, load_entities=True):
         self.seed = int(seed)
         self.store = store
         self.day_time = float(day_time)
@@ -382,8 +387,10 @@ class World:
         self.biomes = BIOMES if biomes is None else tuple(biomes)
         self.ores = load_ores() if ores is None else tuple(ores)
         from server.features import FEATURES, load_features
+        from server.underground_biomes import load_underground_biomes
 
         self.features = FEATURES if features is None else tuple(features)
+        self.underground_biomes = load_underground_biomes() if underground_biomes is None else tuple(underground_biomes)
         self.chunks = {}
         self.dirty = set()
         self.modified = set()
@@ -424,6 +431,8 @@ class World:
 
         self.saplings = SaplingGrowthSystem(self)
         self._singleplayer_player = None
+        if load_entities and self.store is not None:
+            self.load_entities()
 
     def advance_time(self, dt):
         """Advance world time by dt seconds (20 ticks per second, 24000 ticks per day cycle)."""
@@ -504,9 +513,17 @@ class World:
                 self.lighting.on_block_changed(furnace.x, furnace.y, furnace.z, was_emitter=True)
 
     def update_fluids(self, dt):
-        if getattr(self, "fluid", None) is not None:
-            return self.fluid.update(dt)
-        return []
+        fluid = getattr(self, "fluid", None)
+        if fluid is None:
+            return []
+        lighting = getattr(self, "lighting", None)
+        if lighting is not None:
+            lighting.begin_batch()
+        try:
+            return fluid.update(dt)
+        finally:
+            if lighting is not None:
+                lighting.end_batch()
 
     def update_leaves(self, dt):
         if getattr(self, "leaf_decay", None) is not None:
@@ -545,18 +562,22 @@ class World:
         return entity
 
     def spawn_mob(self, mob_or_type, pos=None, vel=None, yaw=0.0, pitch=0.0):
-        from server.entity import Mob, Pig, Sheep, Zombie
+        from server.entity import Cow, Mob, Pig, Sheep, Zombie, Spider
 
-        if isinstance(mob_or_type, (Mob, Pig, Sheep, Zombie)):
+        if isinstance(mob_or_type, (Mob, Pig, Sheep, Zombie, Spider, Cow)):
             mob = mob_or_type
             if pos is not None:
                 mob.pos = list(pos)
         elif str(mob_or_type) == "pig":
             mob = Pig(pos=pos, vel=vel, yaw=yaw, pitch=pitch)
+        elif str(mob_or_type) == "cow":
+            mob = Cow(pos=pos, vel=vel, yaw=yaw, pitch=pitch)
         elif str(mob_or_type) == "sheep":
             mob = Sheep(pos=pos, vel=vel, yaw=yaw, pitch=pitch)
         elif str(mob_or_type) == "zombie":
             mob = Zombie(pos=pos, vel=vel, yaw=yaw, pitch=pitch)
+        elif str(mob_or_type) == "spider":
+            mob = Spider(pos=pos, vel=vel, yaw=yaw, pitch=pitch)
         else:
             mob = Mob(mob_type=str(mob_or_type), pos=pos, vel=vel, yaw=yaw, pitch=pitch)
         mob.world = self
@@ -722,6 +743,16 @@ class World:
         lz = z - chunk.cz * CHUNK_SIZE
         block = block_from_index(chunk.data[ly, lz, lx])
         return block.id if block is not None else AIR
+
+    def get_block_obj(self, x, y, z):
+        """Return the Block object at (x, y, z), or None if chunk missing."""
+        chunk = self.chunk_at(x, y, z)
+        if chunk is None:
+            return None
+        lx = x - chunk.cx * CHUNK_SIZE
+        ly = y - chunk.cy * CHUNK_SIZE
+        lz = z - chunk.cz * CHUNK_SIZE
+        return block_from_index(chunk.data[ly, lz, lx])
 
     def get_sub_cell(self, x, y, z):
         """Return the SubCell at (x, y, z), or None."""
@@ -960,9 +991,12 @@ class World:
         if is_wall(b_obj):
             return wall_collision_boxes(self, x, y, z)
 
-        from server.blocks import is_stairs, stair_collision_boxes
+        from server.blocks import is_stairs, stair_collision_boxes, is_dripstone, dripstone_collision_boxes
         if is_stairs(b_obj):
             return stair_collision_boxes(self, x, y, z, b_obj)
+
+        if is_dripstone(b_obj):
+            return dripstone_collision_boxes(self, x, y, z, b_obj)
 
         return [(float(x), float(y), float(z), float(x + 1), float(y + 1), float(z + 1))]
 
@@ -1005,6 +1039,14 @@ class World:
         if not found:
             return terrain_height(x, z, self.seed, self.biomes)
         return 0
+
+    def get_biome(self, x, y=None, z=None):
+        """Return the biome at (x, z) or 3D biome at (x, y, z)."""
+        if z is None:
+            x, z, y = x, y, None
+        return biome_at(
+            x, z, self.seed, self.biomes, y=y, underground_biomes=self.underground_biomes
+        )
 
     def set_block(self, x, y, z, block_id, simulate=None):
         if simulate is None:
@@ -1372,6 +1414,7 @@ class World:
                         self.biomes,
                         self.ores,
                         self.features,
+                        self.underground_biomes,
                     ),
                 )
             except Exception:
@@ -1527,6 +1570,38 @@ class World:
         self.dirty.discard(key)
         self._note_evicted(chunk.cx, chunk.cy, chunk.cz)
 
+    def load_entities(self):
+        if self.store is None or not hasattr(self.store, "read_meta"):
+            return
+        from server.entity import entity_from_dict
+
+        data = self.store.read_meta("entities.json")
+        if isinstance(data, list):
+            self.entities = []
+            for ed in data:
+                if not isinstance(ed, dict):
+                    continue
+                try:
+                    ent = entity_from_dict(ed)
+                    if ent is not None:
+                        ent.world = self
+                        self.entities.append(ent)
+                except Exception:
+                    pass
+
+    def save_entities(self):
+        if self.store is None or not hasattr(self.store, "write_meta"):
+            return
+        data = [
+            e.to_dict()
+            for e in self.entities
+            if getattr(e, "alive", True)
+            and getattr(e, "count", 1) > 0
+            and getattr(e, "despawn_timer", 1.0) > 0
+            and hasattr(e, "to_dict")
+        ]
+        self.store.write_meta("entities.json", data)
+
     def flush(self):
         if self.store is not None:
             for key in list(self.modified):
@@ -1534,6 +1609,7 @@ class World:
                 if chunk is not None:
                     self.store.write_chunk(chunk)
                 self.modified.discard(key)
+            self.save_entities()
         if getattr(self, "saplings", None) is not None:
             self.saplings.save()
 
@@ -1594,7 +1670,53 @@ class World:
         stone_mask = filled & ((levels == 0) | (levels < sub_top))
         top_mask = filled & (levels == tops) & (levels != 0)
         cover_mask = filled & ~stone_mask & ~top_mask
-        data[stone_mask] = stone
+
+        # Elevation coordinates for 3D strata and underground biomes
+        ys = np.arange(y0, y0 + CHUNK_SIZE, dtype=np.float64).reshape(CHUNK_SIZE, 1, 1)
+        zs = np.arange(z0, z0 + CHUNK_SIZE, dtype=np.float64).reshape(1, CHUNK_SIZE, 1)
+        xs = np.arange(x0, x0 + CHUNK_SIZE, dtype=np.float64).reshape(1, 1, CHUNK_SIZE)
+
+        andesite = block_index("andesite") or stone
+        diorite = block_index("diorite") or stone
+        granite = block_index("granite") or stone
+        marble = block_index("marble") or stone
+
+        strata_noise = fbm3_grid(xs * 0.04, ys * 0.04, zs * 0.04, 1, self.seed + 109)
+        eff_y = ys + (strata_noise - 0.5) * 8.0
+
+        stone_data = np.full(data.shape, stone, dtype=data.dtype)
+        stone_data[(eff_y >= 44) & ((ys % 4) < 2)] = andesite
+        stone_data[(eff_y >= 30) & (eff_y < 44) & ((ys % 5) < 2)] = diorite
+        stone_data[(eff_y >= 16) & (eff_y < 30) & ((ys % 4) < 2)] = granite
+        stone_data[(eff_y < 16) & ((ys % 3) == 0)] = marble
+
+        # 3D Underground Biomes
+        ub_active = self._get_active_underground_biomes(x0, y0, z0, xs, ys, zs)
+        for ub_id, (ub, ub_mask) in ub_active.items():
+            st_idx = block_index(ub.default_stone) or stone
+            stone_data[ub_mask] = st_idx
+            if ub.stone_layers:
+                for layer in ub.stone_layers:
+                    ly_min = layer.get("min_y", 0)
+                    ly_max = layer.get("max_y", WORLD_HEIGHT)
+                    l_st = layer.get("stone", ub.default_stone)
+                    l_idx = block_index(l_st)
+                    if l_idx is not None:
+                        l_mask = ub_mask & (ys >= ly_min) & (ys <= ly_max)
+                        stone_data[l_mask] = l_idx
+            elif getattr(ub, "stone_types", None) and len(ub.stone_types) > 1:
+                st_indices = [block_index(st) for st in ub.stone_types if block_index(st) is not None]
+                if len(st_indices) > 1:
+                    st_noise = fbm3_grid(xs * 0.05, ys * 0.05, zs * 0.05, 1, self.seed + ub.seed_offset + 503)
+                    st_choice = (st_noise * len(st_indices)).astype(np.int32) % len(st_indices)
+                    for idx, s_idx in enumerate(st_indices):
+                        stone_data[ub_mask & (st_choice == idx)] = s_idx
+
+        # Bedrock/floor of the world (y == 0) is always solid base STONE
+        if y0 == 0:
+            stone_data[0, :, :] = stone
+
+        data[stone_mask] = stone_data[stone_mask]
         for index, biome in enumerate(catalog):
             columns = here == index
             if not np.any(columns):
@@ -1608,17 +1730,56 @@ class World:
         patch = fbm_grid(chunk_xx * 0.08 + 15.0, chunk_zz * 0.08 - 25.0, 2, self.seed + 313)
         patch_3d = patch.reshape(1, CHUNK_SIZE, CHUNK_SIZE)
         submerged = tops < WATER_LEVEL
-        clay_mask = (top_mask | cover_mask) & submerged & (patch_3d > 0.62)
-        gravel_mask = (top_mask | cover_mask) & submerged & (patch_3d < 0.38)
-        data[clay_mask] = block_index(CLAY)
-        data[gravel_mask] = block_index(GRAVEL)
-
-        ocean_water = block_index(SALT_WATER)
         water_mask = (levels > tops) & (levels <= WATER_LEVEL)
-        data[water_mask] = ocean_water
+        has_submerged = np.any(submerged)
+        has_water = np.any(water_mask)
+        near_water_edge = np.any((surface >= WATER_LEVEL) & (surface <= WATER_LEVEL + 1))
 
-        self._place_ores(data, x0, y0, z0)
-        self._carve_caves(data, x0, y0, z0, heights, sub_top=sub_top)
+        if has_submerged or has_water or near_water_edge:
+            from server.biomes import climate_grid
+            chunk_clim = climate_grid(chunk_xx, chunk_zz, self.seed, self.biomes)
+
+            from server.rivers import is_river_channel_grid
+            in_river = is_river_channel_grid(chunk_xx, chunk_zz, self.seed, chunk_clim)
+
+            if has_submerged:
+                from server.rivers import river_bed_material_grid
+                river_cols = submerged[0] & in_river
+                if np.any(river_cols):
+                    bed_mat = river_bed_material_grid(chunk_xx, chunk_zz, self.seed)
+                    sand_idx = block_index(SAND)
+                    mud_idx = block_index(MUD)
+                    bed_idx_2d = np.where(bed_mat == MUD, mud_idx, sand_idx).astype(data.dtype)
+                    bed_idx_3d = np.broadcast_to(bed_idx_2d.reshape(1, CHUNK_SIZE, CHUNK_SIZE), data.shape)
+                    river_bed_mask = (top_mask | cover_mask) & river_cols.reshape(1, CHUNK_SIZE, CHUNK_SIZE)
+                    data[river_bed_mask] = bed_idx_3d[river_bed_mask]
+
+            clay_mask = (top_mask | cover_mask) & submerged & (patch_3d > 0.62)
+            gravel_mask = (top_mask | cover_mask) & submerged & (patch_3d < 0.38)
+            data[clay_mask] = block_index(CLAY)
+            data[gravel_mask] = block_index(GRAVEL)
+
+            # River edges: grass at the edge of the river becomes muddy_grass
+            river_edge = in_river & (surface >= WATER_LEVEL) & (surface <= WATER_LEVEL + 1)
+            if np.any(river_edge):
+                grass_idx = block_index(GRASS)
+                muddy_grass_idx = block_index(MUDDY_GRASS)
+                edge_mask_3d = top_mask & river_edge.reshape(1, CHUNK_SIZE, CHUNK_SIZE)
+                data[edge_mask_3d & (data == grass_idx)] = muddy_grass_idx
+
+            if has_water:
+                from server.rivers import river_water_type_grid
+                water_types = river_water_type_grid(chunk_xx, chunk_zz, self.seed, chunk_clim, surface)
+                w_idx_2d = np.full((CHUNK_SIZE, CHUNK_SIZE), block_index(SALT_WATER), dtype=data.dtype)
+                water_idx = block_index(WATER)
+                brackish_idx = block_index(BRACKISH_WATER)
+                w_idx_2d[water_types == WATER] = water_idx
+                w_idx_2d[water_types == BRACKISH_WATER] = brackish_idx
+                w_idx_3d = np.broadcast_to(w_idx_2d, data.shape)
+                data[water_mask] = w_idx_3d[water_mask]
+
+        self._place_ores(data, x0, y0, z0, ub_active=ub_active)
+        self._carve_caves(data, x0, y0, z0, heights, sub_top=sub_top, ub_active=ub_active)
         self._place_features(data, x0, y0, z0, heights, sample)
 
         blocked_below = np.zeros((CHUNK_SIZE, CHUNK_SIZE), dtype=bool)
@@ -1657,7 +1818,27 @@ class World:
             self._remember(chunk)
         return chunk
 
-    def _place_ores(self, data, x0, y0, z0, exclude_mask=None):
+    def _get_active_underground_biomes(self, x0, y0, z0, xs, ys, zs):
+        active = {}
+        if not getattr(self, "underground_biomes", None):
+            return active
+        y1 = y0 + CHUNK_SIZE - 1
+        for ub in self.underground_biomes:
+            if not ub.enabled or y0 > ub.max_y or y1 < ub.min_y:
+                continue
+            noise = fbm3_grid(
+                xs * ub.scale,
+                ys * ub.scale,
+                zs * ub.scale,
+                ub.octaves,
+                self.seed + ub.seed_offset,
+            )
+            mask = (noise >= ub.threshold) & (ys >= ub.min_y) & (ys <= ub.max_y)
+            if np.any(mask):
+                active[ub.id] = (ub, mask)
+        return active
+
+    def _place_ores(self, data, x0, y0, z0, exclude_mask=None, ub_active=None):
         if not self.ores:
             return
         y1 = y0 + CHUNK_SIZE - 1
@@ -1714,13 +1895,102 @@ class World:
             else:
                 data[mask] = ore_index
 
-    def _carve_caves(self, data, x0, y0, z0, heights, sub_top=None):
-        if not self.caves:
+        # Custom ores defined in underground biomes
+        if ub_active:
+            water = block_index(WATER)
+            salt_water = block_index(SALT_WATER)
+            for ub_id, (ub, ub_mask) in ub_active.items():
+                if not getattr(ub, "ores", None):
+                    continue
+                def_st = ub.default_stone
+                def_st_idx = block_index(def_st)
+                for ore_entry in ub.ores:
+                    if isinstance(ore_entry, str):
+                        ore_b_idx = block_index(ore_entry)
+                        target_indices = [def_st_idx] if def_st_idx is not None else []
+                        scale = 0.12
+                        threshold = 0.60
+                        octaves = 2
+                        s_offset = (abs(hash(ore_entry)) % 5000)
+                        ore_min_y = ub.min_y
+                        ore_max_y = ub.max_y
+                        matching_ores = [
+                            o for o in self.ores
+                            if not o.id.startswith(("0", "1", "2", "3", "4", "5", "6", "7", "8", "9"))
+                            and (
+                                o.id in ore_entry
+                                or ore_entry.endswith(f"_{o.id}")
+                                or ore_entry.endswith(f"_{o.id}_ore")
+                                or (getattr(o, "block", "") and o.block in ore_entry)
+                            )
+                        ]
+                        matching_ores.sort(key=lambda o: len(o.id), reverse=True)
+                        if matching_ores:
+                            m_ore = matching_ores[0]
+                            if ore_b_idx is None:
+                                if getattr(m_ore, "target_blocks", None) and def_st in m_ore.target_blocks:
+                                    ore_b_idx = block_index(m_ore.target_blocks[def_st])
+                                else:
+                                    ore_b_idx = block_index(m_ore.block)
+                                scale = m_ore.scale
+                                threshold = m_ore.threshold
+                                octaves = m_ore.octaves
+                                s_offset = m_ore.seed_offset
+                            ore_min_y = max(ub.min_y, getattr(m_ore, "min_y", ub.min_y))
+                            ore_max_y = min(ub.max_y, getattr(m_ore, "max_y", ub.max_y))
+                        if ore_b_idx is None:
+                            continue
+                        in_range = ub_mask & (data != 0) & (data != water) & (data != salt_water) & (ys >= ore_min_y) & (ys <= ore_max_y)
+                        if target_indices:
+                            in_range &= np.isin(data, target_indices)
+                        if not np.any(in_range):
+                            continue
+                        noise = fbm3_grid(
+                            xs * scale,
+                            ys * scale,
+                            zs * scale,
+                            octaves,
+                            self.seed + ub.seed_offset + s_offset,
+                        )
+                        mask = in_range & (noise > threshold)
+                        if np.any(mask):
+                            data[mask] = ore_b_idx
+                    elif isinstance(ore_entry, dict):
+                        b_name = ore_entry.get("block")
+                        ore_b_idx = block_index(b_name) if b_name else None
+                        if ore_b_idx is None:
+                            continue
+                        t_name = ore_entry.get("target", def_st)
+                        t_list = t_name if isinstance(t_name, (list, tuple)) else [t_name]
+                        target_indices = [block_index(t) for t in t_list if block_index(t) is not None]
+                        scale = float(ore_entry.get("scale", 0.12))
+                        threshold = float(ore_entry.get("threshold", 0.60))
+                        octaves = int(ore_entry.get("octaves", 2))
+                        s_offset = int(ore_entry.get("seed_offset", 101))
+                        d_min_y = max(ub.min_y, ore_entry.get("min_y", ub.min_y))
+                        d_max_y = min(ub.max_y, ore_entry.get("max_y", ub.max_y))
+                        in_range = ub_mask & (data != 0) & (data != water) & (data != salt_water) & (ys >= d_min_y) & (ys <= d_max_y)
+                        if target_indices:
+                            in_range &= np.isin(data, target_indices)
+                        if not np.any(in_range):
+                            continue
+                        noise = fbm3_grid(
+                            xs * scale,
+                            ys * scale,
+                            zs * scale,
+                            octaves,
+                            self.seed + ub.seed_offset + s_offset,
+                        )
+                        mask = in_range & (noise > threshold)
+                        if np.any(mask):
+                            data[mask] = ore_b_idx
+
+    def _carve_caves(self, data, x0, y0, z0, heights, sub_top=None, ub_active=None):
+        has_ub_caves = bool(ub_active and any(getattr(ub, "cave_generation", None) for ub, _ in ub_active.values()))
+        if not self.caves and not has_ub_caves:
             return
         y1 = y0 + CHUNK_SIZE - 1
         active = [cave for cave in self.caves if cave.enabled and cave.max_y >= y0 and cave.min_y <= y1]
-        if not active:
-            return
         ys = np.arange(y0, y0 + CHUNK_SIZE, dtype=np.float64).reshape(CHUNK_SIZE, 1, 1)
         zs = np.arange(z0, z0 + CHUNK_SIZE, dtype=np.float64).reshape(1, CHUNK_SIZE, 1)
         xs = np.arange(x0, x0 + CHUNK_SIZE, dtype=np.float64).reshape(1, 1, CHUNK_SIZE)
@@ -1732,6 +2002,7 @@ class World:
         if sub_top is not None:
             safe_stone_ceiling = sub_top - 2
             needs_safe_depth = is_water_col | (tops <= WATER_LEVEL + 4)
+        total_opened = np.zeros(data.shape, dtype=bool)
         for cave in active:
             noise = fbm3_grid(
                 xs * cave.horizontal_scale,
@@ -1770,7 +2041,206 @@ class World:
                 )
                 safe_mask = needs_safe_depth if sub_top is not None else is_water_col
                 opened &= ~near_surface | ((breach > cave.breach_threshold) & ~safe_mask)
-            data[opened & (data != 0) & (data != water) & (data != salt_water)] = 0
+
+            # Cave threshold modifier from underground biomes
+            if ub_active:
+                for ub_id, (ub, ub_mask) in ub_active.items():
+                    if getattr(ub, "cave_generation", None) and isinstance(ub.cave_generation, dict):
+                        c_mod = ub.cave_generation.get("carve_threshold_modifier")
+                        if c_mod:
+                            if cave.style == "tunnel":
+                                extra_thick = -float(c_mod) * 0.1
+                                opened |= ub_mask & (np.abs(noise - 0.5) < (cave.thickness + extra_thick)) & (ys > 0) & (ys <= max_y)
+                            else:
+                                opened |= ub_mask & (noise > (cave.threshold + float(c_mod))) & (ys > 0) & (ys <= max_y)
+
+            carve_mask = opened & (data != 0) & (data != water) & (data != salt_water)
+            data[carve_mask] = 0
+            total_opened |= carve_mask
+
+        # Custom cave generators defined in underground biomes
+        if ub_active:
+            for ub_id, (ub, ub_mask) in ub_active.items():
+                if not getattr(ub, "cave_generation", None):
+                    continue
+                gens = ub.cave_generation if isinstance(ub.cave_generation, (list, tuple)) else [ub.cave_generation]
+                for cg in gens:
+                    if not isinstance(cg, dict):
+                        continue
+                    cg_style = cg.get("style", "cavern")
+                    h_scale = float(cg.get("horizontal_scale", cg.get("scale", 0.03)))
+                    v_scale = float(cg.get("vertical_scale", cg.get("scale", 0.035)))
+                    octaves = int(cg.get("octaves", 2))
+                    s_off = int(cg.get("seed_offset", 71))
+                    cg_min_y = int(cg.get("min_y", ub.min_y))
+                    cg_max_y = int(cg.get("max_y", ub.max_y))
+                    c_noise = fbm3_grid(
+                        xs * h_scale,
+                        ys * v_scale,
+                        zs * h_scale,
+                        octaves,
+                        self.seed + ub.seed_offset + s_off,
+                    )
+                    if cg_style == "tunnel":
+                        thick = float(cg.get("thickness", 0.03))
+                        ub_opened = np.abs(c_noise - 0.5) < thick
+                    else:
+                        thresh = float(cg.get("threshold", 0.52))
+                        ub_opened = c_noise > thresh
+
+                    ub_opened &= ub_mask & (ys > 0) & (ys >= cg_min_y) & (ys <= cg_max_y)
+                    ub_opened &= (ys <= (tops - 4))
+                    carve_mask = ub_opened & (data != 0) & (data != water) & (data != salt_water)
+                    data[carve_mask] = 0
+                    total_opened |= carve_mask
+
+        if ub_active and np.any(total_opened):
+            self._decorate_cave_features(data, x0, y0, z0, total_opened, ub_active)
+
+    def _decorate_cave_features(self, data, x0, y0, z0, opened, ub_active):
+        water = block_index(WATER)
+        salt_water = block_index(SALT_WATER)
+        for ub_id, (ub, ub_mask) in ub_active.items():
+            opened_in_biome = opened & ub_mask
+            if not np.any(opened_in_biome):
+                continue
+
+            # Cave fill (floors / ceilings)
+            if ub.cave_fill:
+                fl_block = ub.cave_fill.get("floor")
+                if fl_block:
+                    fl_idx = block_index(fl_block)
+                    if fl_idx is not None:
+                        for ly in range(1, CHUNK_SIZE):
+                            if y0 + ly - 1 == 0:
+                                continue
+                            is_fl = opened_in_biome[ly] & (data[ly - 1] != 0) & (data[ly - 1] != water) & (data[ly - 1] != salt_water)
+                            if np.any(is_fl):
+                                data[ly - 1, is_fl] = fl_idx
+
+                cl_block = ub.cave_fill.get("ceiling")
+                if cl_block:
+                    cl_idx = block_index(cl_block)
+                    if cl_idx is not None:
+                        for ly in range(0, CHUNK_SIZE - 1):
+                            is_cl = opened_in_biome[ly] & (data[ly + 1] != 0) & (data[ly + 1] != water) & (data[ly + 1] != salt_water)
+                            if np.any(is_cl):
+                                data[ly + 1, is_cl] = cl_idx
+
+            # Cave features
+            for feat in ub.features:
+                feat_type = feat.get("type")
+                chance = feat.get("chance", 0.08)
+                if feat_type == "stalactite":
+                    st_idx = block_index(feat.get("block", "limestone_stalactite"))
+                    if st_idx is None:
+                        continue
+                    max_len = feat.get("max_length", 2)
+                    for ly in range(CHUNK_SIZE - 2, -1, -1):
+                        is_ceil = (data[ly] == 0) & (data[ly + 1] != 0) & opened_in_biome[ly]
+                        if not np.any(is_ceil):
+                            continue
+                        f_hash = hash2_grid(
+                            np.int64(x0) + np.arange(CHUNK_SIZE, dtype=np.int64)[None, :],
+                            np.int64(z0) + np.arange(CHUNK_SIZE, dtype=np.int64)[:, None],
+                            int(self.seed + ly * 31 + 401),
+                        )
+                        place_mask = is_ceil & (f_hash < chance)
+                        data[ly, place_mask] = st_idx
+                        if max_len > 1 and ly > 0:
+                            tip_mask = place_mask & (data[ly - 1] == 0) & (f_hash < chance * 0.4)
+                            data[ly - 1, tip_mask] = st_idx
+
+                elif feat_type == "stalagmite":
+                    sm_idx = block_index(feat.get("block", "limestone_stalagmite"))
+                    if sm_idx is None:
+                        continue
+                    max_len = feat.get("max_length", 2)
+                    for ly in range(1, CHUNK_SIZE - 1):
+                        is_fl = (data[ly] == 0) & (data[ly - 1] != 0) & opened_in_biome[ly]
+                        if not np.any(is_fl):
+                            continue
+                        f_hash = hash2_grid(
+                            np.int64(x0) + np.arange(CHUNK_SIZE, dtype=np.int64)[None, :],
+                            np.int64(z0) + np.arange(CHUNK_SIZE, dtype=np.int64)[:, None],
+                            int(self.seed + ly * 29 + 509),
+                        )
+                        place_mask = is_fl & (f_hash < chance)
+                        data[ly, place_mask] = sm_idx
+                        if max_len > 1 and ly < CHUNK_SIZE - 1:
+                            tip_mask = place_mask & (data[ly + 1] == 0) & (f_hash < chance * 0.4)
+                            data[ly + 1, tip_mask] = sm_idx
+
+                elif feat_type == "crystal":
+                    cr_blocks = [block_index(b) for b in feat.get("blocks", []) if block_index(b) is not None]
+                    if not cr_blocks:
+                        continue
+                    num_cr = len(cr_blocks)
+                    for ly in range(1, CHUNK_SIZE - 1):
+                        is_mount = (data[ly] == 0) & ((data[ly - 1] != 0) | (data[ly + 1] != 0)) & opened_in_biome[ly]
+                        if not np.any(is_mount):
+                            continue
+                        f_hash = hash2_grid(
+                            np.int64(x0) + np.arange(CHUNK_SIZE, dtype=np.int64)[None, :],
+                            np.int64(z0) + np.arange(CHUNK_SIZE, dtype=np.int64)[:, None],
+                            int(self.seed + ly * 37 + 719),
+                        )
+                        place_mask = is_mount & (f_hash < chance)
+                        if np.any(place_mask):
+                            zs_idx, xs_idx = np.nonzero(place_mask)
+                            for pz, px in zip(zs_idx, xs_idx):
+                                chosen_cr = cr_blocks[int(f_hash[pz, px] * 1000) % num_cr]
+                                data[ly, pz, px] = chosen_cr
+
+                elif feat_type == "floor_patch":
+                    p_idx = block_index(feat.get("block"))
+                    if p_idx is None:
+                        continue
+                    for ly in range(1, CHUNK_SIZE):
+                        if y0 + ly - 1 == 0:
+                            continue
+                        is_fl = opened_in_biome[ly] & (data[ly - 1] != 0) & (data[ly - 1] != water) & (data[ly - 1] != salt_water)
+                        if not np.any(is_fl):
+                            continue
+                        f_hash = hash2_grid(
+                            np.int64(x0) + np.arange(CHUNK_SIZE, dtype=np.int64)[None, :],
+                            np.int64(z0) + np.arange(CHUNK_SIZE, dtype=np.int64)[:, None],
+                            int(self.seed + ly * 43 + 613),
+                        )
+                        place_mask = is_fl & (f_hash < chance)
+                        data[ly - 1, place_mask] = p_idx
+
+                elif feat_type == "ceiling_attachment":
+                    att_idx = block_index(feat.get("block"))
+                    if att_idx is None:
+                        continue
+                    for ly in range(0, CHUNK_SIZE - 1):
+                        is_ceil = (data[ly] == 0) & (data[ly + 1] != 0) & opened_in_biome[ly]
+                        if not np.any(is_ceil):
+                            continue
+                        f_hash = hash2_grid(
+                            np.int64(x0) + np.arange(CHUNK_SIZE, dtype=np.int64)[None, :],
+                            np.int64(z0) + np.arange(CHUNK_SIZE, dtype=np.int64)[:, None],
+                            int(self.seed + ly * 47 + 823),
+                        )
+                        place_mask = is_ceil & (f_hash < chance)
+                        data[ly, place_mask] = att_idx
+
+                elif feat_type == "floor_attachment":
+                    att_idx = block_index(feat.get("block"))
+                    if att_idx is None:
+                        continue
+                    for ly in range(1, CHUNK_SIZE):
+                        is_fl = (data[ly] == 0) & (data[ly - 1] != 0) & opened_in_biome[ly]
+                        if not np.any(is_fl):
+                            continue
+                        f_hash = hash2_grid(
+                            np.int64(x0) + np.arange(CHUNK_SIZE, dtype=np.int64)[None, :],
+                            np.int64(z0) + np.arange(CHUNK_SIZE, dtype=np.int64)[:, None],
+                            int(self.seed + ly * 53 + 937),
+                        )
+                        place_mask = is_fl & (f_hash < chance)
+                        data[ly, place_mask] = att_idx
 
     def _place_features(self, data, x0, y0, z0, heights, sample):
         if not self.features:
@@ -2068,7 +2538,7 @@ class World:
                 is_upper_boundary = dec_y + 1 == y0
                 if not is_upper_boundary and (dec_y < y0 or dec_y >= y0 + CHUNK_SIZE):
                     continue
-                if gy <= WATER_LEVEL:
+                if gy < WATER_LEVEL:
                     continue
                 if is_upper_boundary:
                     if data[0, lz, lx] != 0:
@@ -2153,6 +2623,16 @@ class World:
                         if upper_chunk is not None and upper_chunk.data[0, lz, lx] not in (0, upper_idx):
                             continue
                         data[dec_y - y0, lz, lx] = b_idx
+                elif chosen == "cactus":
+                    c_height = 1 + int(hash2(wx, wz, self.seed + 777) * 3)
+                    c_height = min(3, max(1, c_height))
+                    for ch in range(c_height):
+                        cy = dec_y + ch
+                        if cy < y0 + CHUNK_SIZE:
+                            if data[cy - y0, lz, lx] == 0:
+                                data[cy - y0, lz, lx] = b_idx
+                            else:
+                                break
                 else:
                     data[dec_y - y0, lz, lx] = b_idx
 
@@ -2224,7 +2704,7 @@ class World:
 
     def _valid_spawn_biome_and_height(self, x, z):
         height = terrain_height(x, z, self.seed, self.biomes)
-        if height <= WATER_LEVEL:
+        if height < WATER_LEVEL:
             return False
         biome = biome_at(x, z, self.seed, self.biomes)
         if not getattr(biome, "valid_spawn", True):
@@ -2677,6 +3157,9 @@ class World:
                         elif (from_blocks := __import__('server.blocks', fromlist=['is_stairs', 'stair_raycast_boxes'])).is_stairs(b_obj):
                             for r_box in from_blocks.stair_raycast_boxes(self, x, y, z, b_obj):
                                 boxes.append(r_box)
+                        elif (from_drip := __import__('server.blocks', fromlist=['is_dripstone', 'dripstone_raycast_boxes'])).is_dripstone(b_obj):
+                            for r_box in from_drip.dripstone_raycast_boxes(self, x, y, z, b_obj):
+                                boxes.append(r_box)
                         elif b_obj is not None and b_obj.properties.get("torch") and b_obj.elements:
                             el = b_obj.elements[0]
                             fx0, fy0, fz0 = el["from"]
@@ -2920,7 +3403,7 @@ class World:
 _worker_world = None
 
 
-def _init_world_gen_worker(seed, store_folder=None, caves=None, biomes=None, ores=None, features=None):
+def _init_world_gen_worker(seed, store_folder=None, caves=None, biomes=None, ores=None, features=None, underground_biomes=None):
     global _worker_world
     store = None
     if store_folder is not None:
@@ -2933,6 +3416,8 @@ def _init_world_gen_worker(seed, store_folder=None, caves=None, biomes=None, ore
         biomes=biomes,
         ores=ores,
         features=features,
+        underground_biomes=underground_biomes,
+        load_entities=False,
     )
     _worker_world.simulate_blocks = False
 

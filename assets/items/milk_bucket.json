@@ -1,0 +1,19 @@
+{
+  "id": "milk_bucket",
+  "name": "Milk Bucket",
+  "lang": "item.milk_bucket",
+  "tab": [
+    "tools",
+    "natural"
+  ],
+  "model": "flat",
+  "texture": "milk_bucket",
+  "max_stack": 1,
+  "left": "none",
+  "right": "use",
+  "durability": 0,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 1,
+  "food": 0
+}

@@ -1,0 +1,19 @@
+{
+  "id": "spider_eye",
+  "name": "Spider Eye",
+  "tab": [
+    "materials"
+  ],
+  "model": "flat",
+  "texture": "spider_eye",
+  "max_stack": 64,
+  "left": "none",
+  "right": "eat",
+  "food": 2,
+  "durability": 0,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 1,
+  "lang": "item.spider_eye"
+}
+

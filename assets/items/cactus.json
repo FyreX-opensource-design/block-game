@@ -1,0 +1,13 @@
+{
+  "id": "cactus",
+  "lang": "block.cactus",
+  "tab": [
+    "natural"
+  ],
+  "model": "block",
+  "block": "cactus",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}

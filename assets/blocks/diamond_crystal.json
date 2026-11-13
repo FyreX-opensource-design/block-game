@@ -1,0 +1,21 @@
+{
+  "id": "diamond_crystal",
+  "lang": "block.diamond_crystal",
+  "tab": "natural",
+  "model": "cross",
+  "render": "cutout",
+  "solid": false,
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 5,
+  "loot_table": "blocks/diamond_crystal",
+  "fluid_breakable": true,
+  "textures": {
+    "cross": "diamond_crystal"
+  },
+  "emission": [
+    4,
+    8,
+    8
+  ]
+}

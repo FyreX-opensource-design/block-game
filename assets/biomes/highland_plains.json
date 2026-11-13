@@ -1,6 +1,8 @@
 {
   "id": "highland_plains",
   "name": "Highland Plains",
+  "temperature": [0.0, 0.50],
+  "touching": ["savanna_hills", "plains", "river", "mountains", "forest"],
   "surface": "grass",
   "soil": "dirt",
   "soil_depth": 3,

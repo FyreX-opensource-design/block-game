@@ -167,6 +167,10 @@ BUCKET_FLUID_MAP = {
     ("clay_bucket", "brackish_water"): "clay_brackish_water_bucket",
     ("iron_bucket", "brackish_water"): "brackish_water_bucket",
     ("bucket", "brackish_water"): "brackish_water_bucket",
+    ("wood_bucket", "milk"): "wood_milk_bucket",
+    ("clay_bucket", "milk"): "clay_milk_bucket",
+    ("iron_bucket", "milk"): "milk_bucket",
+    ("bucket", "milk"): "milk_bucket",
 }
 
 FILLED_BUCKETS = {
@@ -188,6 +192,12 @@ FILLED_BUCKETS = {
     "brackish_water_clay_bucket": ("brackish_water", "clay_bucket"),
     "iron_brackish_water_bucket": ("brackish_water", "iron_bucket"),
     "brackish_water_bucket": ("brackish_water", "iron_bucket"),
+    "wood_milk_bucket": ("milk", "wood_bucket"),
+    "milk_wood_bucket": ("milk", "wood_bucket"),
+    "clay_milk_bucket": ("milk", "clay_bucket"),
+    "milk_clay_bucket": ("milk", "clay_bucket"),
+    "iron_milk_bucket": ("milk", "iron_bucket"),
+    "milk_bucket": ("milk", "iron_bucket"),
 }
 
 

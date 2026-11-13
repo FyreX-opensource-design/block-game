@@ -1,0 +1,13 @@
+{
+  "id": "birch_leaves",
+  "lang": "block.birch_leaves",
+  "tab": [
+    "natural"
+  ],
+  "model": "block",
+  "block": "birch_leaves",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}

@@ -1,0 +1,30 @@
+{
+  "id": "desert_hills",
+  "name": "Desert Hills",
+  "variant_of": "highland_plains",
+  "temperature": [0.75, 1.0],
+  "touching": ["savanna_hills", "desert", "desert_river", "mountains"],
+  "surface": "sand",
+  "soil": "sand",
+  "soil_depth": 3,
+  "subsoil": "sandstone",
+  "subsoil_depth": 3,
+  "scale": 0.006,
+  "octaves": 2,
+  "seed_offset": 90,
+  "ceiling": 0.54,
+  "min_size": 20,
+  "tree_chance": 0.0,
+  "height_offset": -1.0,
+  "height_scale": 0.95,
+  "cliff": false,
+  "transition": {
+    "blend": 0.08,
+    "curve": "smoothstep"
+  },
+  "trees": [],
+  "decorations": ["dead_bush", "cactus"],
+  "grass_color": "#c7be58",
+  "foliage_color": "#9e983b"
+}
+

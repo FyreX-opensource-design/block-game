@@ -1,0 +1,15 @@
+{
+  "id": "birch_trapdoor",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "###"
+  ],
+  "key": {
+    "#": "birch_planks"
+  },
+  "result": {
+    "item": "birch_trapdoor",
+    "count": 2
+  }
+}

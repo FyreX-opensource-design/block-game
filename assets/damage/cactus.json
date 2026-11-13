@@ -1,0 +1,9 @@
+{
+  "id": "cactus",
+  "name": "Cactus",
+  "kind": "contact",
+  "damage": 1.0,
+  "interval": 0.5,
+  "message": "was pricked to death by a cactus"
+}
+

@@ -1,0 +1,15 @@
+{
+  "id": "milk",
+  "lang": "block.milk",
+  "tab": [],
+  "model": "block",
+  "block": "milk",
+  "max_stack": 64,
+  "left": "none",
+  "right": "place",
+  "durability": 0,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 0,
+  "food": 0
+}

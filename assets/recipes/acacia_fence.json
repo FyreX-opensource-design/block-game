@@ -1,0 +1,16 @@
+{
+  "id": "acacia_fence",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#S#",
+    "#S#"
+  ],
+  "key": {
+    "#": "acacia_planks",
+    "S": "#sticks"
+  },
+  "result": {
+    "item": "acacia_fence",
+    "count": 3
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "type": "block",
+  "pools": [
+    {
+      "rolls": 1,
+      "entries": [
+        {
+          "type": "item",
+          "name": "limestone_stalagmite",
+          "count": 1,
+          "conditions": []
+        }
+      ]
+    }
+  ]
+}

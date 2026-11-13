@@ -1,0 +1,20 @@
+{
+  "id": "limestone_stalagmite",
+  "lang": "block.limestone_stalagmite",
+  "tab": "natural",
+  "model": "cross",
+  "render": "cutout",
+  "solid": true,
+  "light_opacity": 0,
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "loot_table": "blocks/limestone_stalagmite",
+  "fluid_breakable": true,
+  "textures": {
+    "cross": "limestone_stalagmite",
+    "base": "limestone_stalagmite_base",
+    "middle": "limestone_stalagmite_middle",
+    "tip": "limestone_stalagmite_tip"
+  }
+}

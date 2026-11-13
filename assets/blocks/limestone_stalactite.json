@@ -1,0 +1,20 @@
+{
+  "id": "limestone_stalactite",
+  "lang": "block.limestone_stalactite",
+  "tab": "natural",
+  "model": "cross",
+  "render": "cutout",
+  "solid": true,
+  "light_opacity": 0,
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "loot_table": "blocks/limestone_stalactite",
+  "fluid_breakable": true,
+  "textures": {
+    "cross": "limestone_stalactite",
+    "base": "limestone_stalactite_base",
+    "middle": "limestone_stalactite_middle",
+    "tip": "limestone_stalactite_tip"
+  }
+}

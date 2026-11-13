@@ -17,6 +17,8 @@ SANDSTONE = "sandstone"
 SMOOTH_SANDSTONE = "smooth_sandstone"
 LOG = "log"
 LEAVES = "leaves"
+MUD = "mud"
+MUDDY_GRASS = "muddy_grass"
 WATER = "water"
 SALT_WATER = "salt_water"
 BRACKISH_WATER = "brackish_water"
@@ -115,6 +117,7 @@ class Block:
         palette_ctm_rects=None,
         palette_texture_rects=None,
         translucent=False,
+        light_opacity=None,
     ):
         from server.lighting import parse_light_levels
 
@@ -129,7 +132,18 @@ class Block:
         self.opacity = opacity
         self.tabs = tuple(tabs)
         self.properties = dict(properties or {})
+        lo = light_opacity if light_opacity is not None else self.properties.get("light_opacity")
+        self.light_opacity = int(lo) if lo is not None else None
+        if self.light_opacity is not None:
+            self.properties["light_opacity"] = self.light_opacity
         self.base_id = base_id or block_id
+        self.ctm_group = self.properties.get("ctm_group") or self.base_id or self.id
+        self._is_glass = bool(
+            getattr(self, "glass", False)
+            or self.properties.get("glass", False)
+            or self.id in ("glass", "glass_slab", "glass_vertical_slab")
+            or self.base_id in ("glass", "glass_slab", "glass_vertical_slab")
+        )
         self.is_variant = is_variant
         self.hardness = float(hardness)
         self.tool = str(tool).lower() if tool and tool != "none" else None
@@ -346,6 +360,8 @@ def is_sub_cell(block_or_id):
 def is_glass(block_or_id):
     if not block_or_id:
         return False
+    if hasattr(block_or_id, "_is_glass"):
+        return block_or_id._is_glass
     block = BLOCKS.get(block_or_id) if isinstance(block_or_id, str) else block_or_id
     if block is None:
         return isinstance(block_or_id, str) and (
@@ -402,6 +418,12 @@ def get_glass_ctm_uv(mask, model_uv=(0, 0, 16, 16)):
 
 def get_block_ctm_uv(block, mask, model_uv=(0, 0, 16, 16), p_idx=0):
     if block is not None:
+        if isinstance(block, str):
+            from server.sub_cell import full_block_for
+            f_id = full_block_for(block)
+            block = (BLOCKS.get(f_id) if f_id else None) or BLOCKS.get(block)
+        if block is None:
+            return None
         rects = getattr(block, "palette_ctm_rects", None)
         if rects and (p_idx, mask) in rects:
             return _map_uv(rects[(p_idx, mask)], model_uv)
@@ -410,7 +432,61 @@ def get_block_ctm_uv(block, mask, model_uv=(0, 0, 16, 16), p_idx=0):
             uv = ctm_uvs[p_idx][mask]
             if uv is not None:
                 return uv
-    return get_glass_ctm_uv(mask, model_uv)
+
+        from server.sub_cell import full_block_for
+        candidates = []
+        b_id = getattr(block, "id", "")
+        if b_id:
+            candidates.append(full_block_for(b_id))
+        props = getattr(block, "properties", {})
+        for prop_key in ("offset_base", "top_slab", "bottom", "positive_block", "negative_block"):
+            val = props.get(prop_key)
+            if val:
+                candidates.append(val)
+                candidates.append(full_block_for(val))
+        base_id = getattr(block, "base_id", None)
+        if base_id:
+            candidates.append(base_id)
+            candidates.append(full_block_for(base_id))
+
+        for cand_id in candidates:
+            if cand_id and "BLOCKS" in globals() and cand_id in BLOCKS and cand_id != b_id:
+                base_blk = BLOCKS[cand_id]
+                b_rects = getattr(base_blk, "palette_ctm_rects", None)
+                if b_rects and (p_idx, mask) in b_rects:
+                    return _map_uv(b_rects[(p_idx, mask)], model_uv)
+                b_uvs = getattr(base_blk, "palette_ctm_uvs", None)
+                if b_uvs and p_idx < len(b_uvs) and 0 <= mask < len(b_uvs[p_idx]):
+                    uv = b_uvs[p_idx][mask]
+                    if uv is not None:
+                        return uv
+
+        is_stained = (
+            "stained_glass" in b_id
+            or props.get("stained_glass")
+            or getattr(block, "translucent", False)
+            or any("stained_glass" in c for c in candidates if c)
+        )
+        if is_stained:
+            target_blk = block
+            for cand_id in candidates:
+                if cand_id and cand_id in BLOCKS and "stained_glass" in cand_id:
+                    target_blk = BLOCKS[cand_id]
+                    break
+            if getattr(target_blk, "palette_texture_rects", None) and (p_idx, 0) in target_blk.palette_texture_rects:
+                return _map_uv(target_blk.palette_texture_rects[(p_idx, 0)], model_uv)
+            if getattr(target_blk, "face_uvs", None) and target_blk.face_uvs[0] is not None:
+                u0_f, v0_f = target_blk.face_uvs[0][0]
+                u1_f, v1_f = target_blk.face_uvs[0][2]
+                left = u0_f + (float(model_uv[0]) / 16.0) * (u1_f - u0_f)
+                right = u0_f + (float(model_uv[2]) / 16.0) * (u1_f - u0_f)
+                bottom = v0_f + (float(model_uv[1]) / 16.0) * (v1_f - v0_f)
+                top = v0_f + (float(model_uv[3]) / 16.0) * (v1_f - v0_f)
+                return ((left, bottom), (right, bottom), (right, top), (left, top))
+
+    if block is None or getattr(block, "id", "") in ("glass", "glass_slab", "glass_vertical_slab") or "glass" in getattr(block, "id", ""):
+        return get_glass_ctm_uv(mask, model_uv)
+    return None
 
 
 def block_palette_index(x, y, z, seed=0, num_palettes=1):
@@ -1843,6 +1919,173 @@ def get_wall_elements(world, wx, wy, wz, block):
     return elements
 
 
+def is_stalactite(block_or_id):
+    """Return True if block_or_id is a stalactite (hanging downwards from ceiling)."""
+    if not block_or_id:
+        return False
+    blocks_dict = globals().get("BLOCKS")
+    block = blocks_dict.get(block_or_id) if blocks_dict and isinstance(block_or_id, str) else block_or_id
+    if block is None:
+        b_id = str(block_or_id)
+    else:
+        props = getattr(block, "properties", {})
+        if props.get("stalactite"):
+            return True
+        b_id = getattr(block, "id", "")
+    return "stalactite" in b_id
+
+
+def is_stalagmite(block_or_id):
+    """Return True if block_or_id is a stalagmite (pointing upwards from floor)."""
+    if not block_or_id:
+        return False
+    blocks_dict = globals().get("BLOCKS")
+    block = blocks_dict.get(block_or_id) if blocks_dict and isinstance(block_or_id, str) else block_or_id
+    if block is None:
+        b_id = str(block_or_id)
+    else:
+        props = getattr(block, "properties", {})
+        if props.get("stalagmite"):
+            return True
+        b_id = getattr(block, "id", "")
+    return "stalagmite" in b_id
+
+
+def is_dripstone(block_or_id):
+    """Return True if block_or_id is a stalactite or stalagmite."""
+    return is_stalactite(block_or_id) or is_stalagmite(block_or_id)
+
+
+def get_dripstone_elements(world, wx, wy, wz, block):
+    """Return model elements for a stalactite or stalagmite at (wx, wy, wz),
+    dynamically connecting with adjacent dripstone above and below."""
+    variants = getattr(block, "dripstone_variants", None)
+    if not variants:
+        return block.elements
+    if world is None:
+        return block.elements
+
+    above = world.get_block(wx, wy + 1, wz)
+    below = world.get_block(wx, wy - 1, wz)
+
+    is_stala = is_stalactite(block)
+    is_stalag = is_stalagmite(block)
+
+    if is_stala:
+        has_above_same = is_stalactite(above)
+        has_below_same = is_stalactite(below)
+        has_below_opp = is_stalagmite(below)
+
+        if has_above_same:
+            if has_below_same or has_below_opp:
+                variant = "middle"
+            else:
+                variant = "tip"
+        else:
+            if has_below_same or has_below_opp:
+                variant = "base"
+            else:
+                variant = "single"
+
+        return variants.get(variant, block.elements)
+
+    elif is_stalag:
+        has_below_same = is_stalagmite(below)
+        has_above_same = is_stalagmite(above)
+        has_above_opp = is_stalactite(above)
+
+        if has_below_same:
+            if has_above_same or has_above_opp:
+                variant = "middle"
+            else:
+                variant = "tip"
+        else:
+            if has_above_same or has_above_opp:
+                variant = "base"
+            else:
+                variant = "single"
+
+        return variants.get(variant, block.elements)
+
+    return block.elements
+
+
+def dripstone_collision_boxes(world, x, y, z, block=None):
+    """World-space collision boxes for a stalactite or stalagmite at (x, y, z)."""
+    fx = float(x)
+    fy = float(y)
+    fz = float(z)
+
+    if block is None and world is not None:
+        block = world.get_block(int(x), int(y), int(z))
+
+    is_stala = is_stalactite(block)
+    is_stalag = is_stalagmite(block)
+
+    part = None
+    if block is not None:
+        props = getattr(block, "properties", {})
+        part = props.get("dripstone_part")
+        if not part:
+            b_id = getattr(block, "id", str(block))
+            for p in ("base", "middle", "tip", "single"):
+                if f"_{p}" in b_id or b_id.endswith(p):
+                    part = p
+                    break
+
+    if part is None and world is not None:
+        ix, iy, iz = int(x), int(y), int(z)
+        above = world.get_block(ix, iy + 1, iz)
+        below = world.get_block(ix, iy - 1, iz)
+        if is_stala:
+            has_above_same = is_stalactite(above)
+            has_below_same = is_stalactite(below)
+            has_below_opp = is_stalagmite(below)
+            if has_above_same:
+                part = "middle" if (has_below_same or has_below_opp) else "tip"
+            else:
+                part = "base" if (has_below_same or has_below_opp) else "single"
+        elif is_stalag:
+            has_below_same = is_stalagmite(below)
+            has_above_same = is_stalagmite(above)
+            has_above_opp = is_stalactite(above)
+            if has_below_same:
+                part = "middle" if (has_above_same or has_above_opp) else "tip"
+            else:
+                part = "base" if (has_above_same or has_above_opp) else "single"
+
+    if part is None:
+        part = "single"
+
+    if is_stalag:
+        if part == "tip":
+            return [(fx + 5.0 / 16.0, fy, fz + 5.0 / 16.0, fx + 11.0 / 16.0, fy + 11.0 / 16.0, fz + 11.0 / 16.0)]
+        elif part == "single":
+            return [(fx + 4.0 / 16.0, fy, fz + 4.0 / 16.0, fx + 12.0 / 16.0, fy + 12.0 / 16.0, fz + 12.0 / 16.0)]
+        elif part == "base":
+            return [(fx + 2.0 / 16.0, fy, fz + 2.0 / 16.0, fx + 14.0 / 16.0, fy + 1.0, fz + 14.0 / 16.0)]
+        else:
+            return [(fx + 3.0 / 16.0, fy, fz + 3.0 / 16.0, fx + 13.0 / 16.0, fy + 1.0, fz + 13.0 / 16.0)]
+    elif is_stala:
+        if part == "tip":
+            return [(fx + 5.0 / 16.0, fy + 5.0 / 16.0, fz + 5.0 / 16.0, fx + 11.0 / 16.0, fy + 1.0, fz + 11.0 / 16.0)]
+        elif part == "single":
+            return [(fx + 4.0 / 16.0, fy + 4.0 / 16.0, fz + 4.0 / 16.0, fx + 12.0 / 16.0, fy + 1.0, fz + 12.0 / 16.0)]
+        elif part == "base":
+            return [(fx + 2.0 / 16.0, fy, fz + 2.0 / 16.0, fx + 14.0 / 16.0, fy + 1.0, fz + 14.0 / 16.0)]
+        else:
+            return [(fx + 3.0 / 16.0, fy, fz + 3.0 / 16.0, fx + 13.0 / 16.0, fy + 1.0, fz + 13.0 / 16.0)]
+
+    return [(fx + 3.0 / 16.0, fy, fz + 3.0 / 16.0, fx + 13.0 / 16.0, fy + 1.0, fz + 13.0 / 16.0)]
+
+
+def dripstone_raycast_boxes(world, x, y, z, block=None):
+    """World-space selection/raycast boxes for a dripstone block at (x, y, z)."""
+    boxes = dripstone_collision_boxes(world, x, y, z, block)
+    ix, iy, iz = int(x), int(y), int(z)
+    return [(ix, iy, iz, "dripstone", b) for b in boxes]
+
+
 _STAIR_STEP_QUADRANTS = {
     ("north", "straight"): ("NW", "NE"),
     ("north", "outer_left"): ("NW",),
@@ -3145,6 +3388,10 @@ def _load_registry():
         mining_level = int(entry.get("mining_level", 0))
         loot_table = entry.get("loot_table")
         light_val = entry.get("light") or entry.get("emission") or properties.get("light") or properties.get("emission")
+        light_opacity_val = entry.get("light_opacity") if "light_opacity" in entry else properties.get("light_opacity")
+        if light_opacity_val is not None:
+            light_opacity_val = int(light_opacity_val)
+            base_props["light_opacity"] = light_opacity_val
         gravity_val = bool(entry.get("gravity", False) or properties.get("gravity", False))
         traits = entry.get("traits", [])
         if isinstance(traits, str):
@@ -3281,6 +3528,7 @@ def _load_registry():
             palette_ctm_rects=palette_ctm_rects,
             palette_texture_rects=palette_texture_rects,
             translucent=translucent,
+            light_opacity=light_opacity_val,
         )
         def _register_block(b_id, b_obj):
             if len(by_index) == 99:
@@ -3527,6 +3775,67 @@ def _load_registry():
                 sounds=sounds_val,
             )
             _register_block(upper_id, upper_block)
+
+        is_dripstone_type = is_dripstone(entry["id"]) or "base" in textures
+        if is_dripstone_type:
+            drip_variants = {}
+            for variant_key, tex_key in (
+                ("single", "cross"),
+                ("base", "base"),
+                ("middle", "middle"),
+                ("tip", "tip"),
+            ):
+                t_name = textures.get(tex_key) or textures.get("cross") or entry["id"]
+                if t_name not in rects:
+                    t_name = textures.get("cross") or entry["id"]
+                    if t_name not in rects:
+                        t_name = next(iter(rects))
+                v_resolved = []
+                for element in elements:
+                    u_origin = [float(value) for value in element["from"]]
+                    u_extent = [float(value) for value in element["to"]]
+                    u_faces = {}
+                    for face_name, spec in element["faces"].items():
+                        if face_name not in FACE_INDEX:
+                            continue
+                        spec_uv = spec.get("uv", [0, 0, 16, 16])
+                        uv = _map_uv(rects[t_name], spec_uv)
+                        f_idx = FACE_INDEX[face_name]
+                        u_faces[f_idx] = uv
+                    v_resolved.append({"from": u_origin, "to": u_extent, "faces": u_faces})
+                drip_variants[variant_key] = tuple(v_resolved)
+            block.dripstone_variants = drip_variants
+
+            for variant_key in ("base", "middle", "tip"):
+                var_id = f"{block.id}_{variant_key}"
+                var_props = dict(base_props)
+                var_props["dripstone_part"] = variant_key
+                var_resolved = drip_variants[variant_key]
+                var_block = Block(
+                    var_id,
+                    f"{name} ({variant_key.title()})",
+                    block.solid,
+                    False,
+                    block.face_uvs,
+                    var_resolved,
+                    cutout,
+                    opacity,
+                    (),
+                    properties=var_props,
+                    base_id=block.id,
+                    is_variant=True,
+                    hardness=block.hardness,
+                    tool=block.tool,
+                    mining_level=block.mining_level,
+                    loot_table=block.loot_table,
+                    emission=block.emission,
+                    gravity=block.gravity,
+                    fluid_breakable=block.fluid_breakable,
+                    sound=sound_val,
+                    sounds=sounds_val,
+                )
+                var_block.dripstone_variants = drip_variants
+                _register_block(var_id, var_block)
 
         if is_door_type:
             lower_tex = textures.get("lower", entry["id"])
@@ -4695,7 +5004,7 @@ def _load_registry():
             palette_ctm_uvs=slab_a.palette_ctm_uvs if same_slab else None,
             palette_ctm_rects=slab_a.palette_ctm_rects if same_slab else None,
             palette_texture_rects=slab_a.palette_texture_rects if same_slab else None,
-            translucent=bool(slab_a.translucent and slab_b.translucent),
+            translucent=bool(slab_a.translucent or slab_b.translucent),
         )
         alias = f"double_slab_{slab_a.id}" if same_slab else None
         return _register_dyn(double_id, d_block, alias_id=alias)
@@ -4715,6 +5024,7 @@ def _load_registry():
                 "glass": fb_glass,
                 "cutout": fb.cutout,
                 "translucent": fb.translucent,
+                "source_block": fb.id,
                 "face_uv_specs": {i: [0, 0, 16, 16] for i in offset_faces},
             }
         ]
@@ -4839,7 +5149,13 @@ def _load_registry():
             station=fb.station,
             recipe_types=fb.recipe_types,
             cook_speed=fb.cook_speed,
-            translucent=bool(fb.translucent and slab_b.translucent),
+            ctm=fb.ctm,
+            palettes=fb.palettes,
+            palette_face_uvs=fb.palette_face_uvs,
+            palette_ctm_uvs=fb.palette_ctm_uvs,
+            palette_ctm_rects=fb.palette_ctm_rects,
+            palette_texture_rects=fb.palette_texture_rects,
+            translucent=bool(fb.translucent or slab_b.translucent),
         )
         return _register_dyn(capped_id, cap_block)
 
@@ -4977,7 +5293,7 @@ def _load_registry():
             palette_ctm_uvs=positive_block.palette_ctm_uvs if same_material else None,
             palette_ctm_rects=positive_block.palette_ctm_rects if same_material else None,
             palette_texture_rects=positive_block.palette_texture_rects if same_material else None,
-            translucent=bool(positive_block.translucent and negative_block.translucent),
+            translucent=bool(positive_block.translucent or negative_block.translucent),
         )
         alias = f"double_vertical_slab_{axis}_{pos_base.id}" if same_material else None
         return _register_dyn(double_id, double_block, alias_id=alias)
@@ -5101,7 +5417,13 @@ def _load_registry():
             gravity=False,
             fluid_breakable=False,
             tint=off_dvs.tint,
-            translucent=bool(off_dvs.translucent and h_slab.translucent),
+            ctm=off_dvs.ctm,
+            palettes=off_dvs.palettes,
+            palette_face_uvs=off_dvs.palette_face_uvs,
+            palette_ctm_uvs=off_dvs.palette_ctm_uvs,
+            palette_ctm_rects=off_dvs.palette_ctm_rects,
+            palette_texture_rects=off_dvs.palette_texture_rects,
+            translucent=bool(off_dvs.translucent or h_slab.translucent),
         )
         alias = f"double_vertical_slab_{axis}_{pos_base.id}_offset_{h_slab.id}" if pos_base.id == neg_base.id else None
         return _register_dyn(capped_double_id, capped_double_block, alias_id=alias)
@@ -5193,6 +5515,7 @@ def _load_registry():
             bot_el["glass"] = vs_is_glass
             bot_el["cutout"] = bool(vs.cutout)
             bot_el["translucent"] = bool(vs.translucent)
+            bot_el["source_block"] = el.get("source_block") or v_block.id
             if "face_uv_specs" in el:
                 bot_el["face_uv_specs"] = {k: v for k, v in el["face_uv_specs"].items() if k in bot_el["faces"]}
             bot_elements.append(bot_el)
@@ -5249,7 +5572,13 @@ def _load_registry():
             station=vs.station,
             recipe_types=vs.recipe_types,
             cook_speed=vs.cook_speed,
-            translucent=bool(vs.translucent and h_slab.translucent),
+            ctm=off_v.ctm,
+            palettes=off_v.palettes,
+            palette_face_uvs=off_v.palette_face_uvs,
+            palette_ctm_uvs=off_v.palette_ctm_uvs,
+            palette_ctm_rects=off_v.palette_ctm_rects,
+            palette_texture_rects=off_v.palette_texture_rects,
+            translucent=bool(vs.translucent or h_slab.translucent),
         )
         alias = f"{vs.id}_south_offset_{h_slab.id}" if v_facing == "south" else None
         return _register_dyn(capped_id, capped_block, alias_id=alias)
@@ -5482,6 +5811,8 @@ def can_sustain_plant(ground, plant=None):
         if ground_id in plant_obj.valid_ground:
             return True
         if "soil" in plant_obj.valid_ground and is_soil(ground_obj):
+            return True
+        if "terracotta" in plant_obj.valid_ground and "terracotta" in ground_id:
             return True
         return False
 

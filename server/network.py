@@ -1087,7 +1087,9 @@ class MultiplayerServer:
                     p_pos = client.pos
                     dist = math.hypot(entity.pos[0] - p_pos[0], entity.pos[2] - p_pos[2])
                     if dist <= 6.0:
-                        if getattr(entity, "mob_type", "") == "sheep":
+                        if getattr(entity, "mob_type", "") == "cow" and hasattr(entity, "milk"):
+                            entity.milk(item_id)
+                        elif getattr(entity, "mob_type", "") == "sheep":
                             if item_id in ("shears", ""):
                                 drops = entity.shear(world=self.world)
                                 if drops:
@@ -1147,13 +1149,13 @@ class MultiplayerServer:
             built, removed = self.world.sync_players(centers)
             if removed:
                 for rem_key in removed:
-                    for cl in self.clients.values():
+                    for cl in list(self.clients.values()):
                         cl.sent_chunks.discard(rem_key)
             if built is None:
                 break
 
         # Send newly available chunks to players who need them
-        for client in self.clients.values():
+        for client in list(self.clients.values()):
             if not client.alive or not client.uuid:
                 continue
             cx = math.floor(client.pos[0] / CHUNK_SIZE)

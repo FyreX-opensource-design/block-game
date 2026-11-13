@@ -1,0 +1,13 @@
+{
+  "id": "acacia_trapdoor",
+  "lang": "item.acacia_trapdoor",
+  "tab": "building",
+  "model": "flat",
+  "texture": "acacia_trapdoor",
+  "block": "acacia_trapdoor",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}
+

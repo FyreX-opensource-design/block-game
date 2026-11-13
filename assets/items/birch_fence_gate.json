@@ -1,0 +1,14 @@
+{
+  "id": "birch_fence_gate",
+  "lang": "item.birch_fence_gate",
+  "tab": [
+    "building"
+  ],
+  "model": "block",
+  "item_model": "fence_gate_inventory",
+  "block": "birch_fence_gate",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}

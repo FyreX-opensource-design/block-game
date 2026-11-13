@@ -1,7 +1,33 @@
 import ctypes
+import sys
 
 
-_LIB = ctypes.CDLL("liblua.so.5.5")
+def lua_library_names():
+    """Shared-library names for Lua 5.5, per platform.
+
+    Windows builds ship ``lua55.dll``. The Linux soname is a different file
+    and will not load there.
+    """
+    if sys.platform == "win32":
+        return ("lua55.dll", "lua5.5.dll", "liblua-5.5.dll", "liblua.dll")
+    if sys.platform == "darwin":
+        return ("liblua.5.5.dylib", "liblua.dylib")
+    return ("liblua.so.5.5",)
+
+
+def _load_lua():
+    errors = []
+    for name in lua_library_names():
+        try:
+            return ctypes.CDLL(name)
+        except OSError as exc:
+            errors.append(f"{name}: {exc}")
+    tried = ", ".join(lua_library_names())
+    detail = "; ".join(errors)
+    raise OSError(f"could not load Lua 5.5 ({tried}): {detail}")
+
+
+_LIB = _load_lua()
 _STATE = ctypes.c_void_p
 _LIB.luaL_newstate.restype = _STATE
 _LIB.luaL_openselectedlibs.argtypes = [_STATE, ctypes.c_int, ctypes.c_int]

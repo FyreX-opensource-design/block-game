@@ -46,12 +46,13 @@ def full_block_for(block_or_id: str) -> str:
         explicit_full = getattr(blk, "full_block", None) or blk.properties.get("full_block")
         if explicit_full and explicit_full in BLOCKS:
             return explicit_full
-    if "_slab" in b_id or "_vertical" in b_id:
+    if "_slab" in b_id or "_vertical" in b_id or "_offset" in b_id:
         candidate = (
             b_id.replace("_vertical_slab", "")
             .replace("_vertical", "")
             .replace("_slab", "")
             .replace("_top", "")
+            .replace("_offset", "")
         )
         if "_waterlogged" in candidate:
             candidate = candidate.split("_waterlogged")[0]
@@ -136,37 +137,39 @@ class SubCell:
     def from_horizontal_slab(cls, base_id: str, half: str = "bottom", waterlogged: bool = False) -> "SubCell":
         """Create a SubCell representing a horizontal bottom or top slab."""
         cell = cls()
+        mat = full_block_for(base_id) or base_id
         oy = 0 if half == "bottom" else 1
         for oz in (0, 1):
             for ox in (0, 1):
-                cell.set_octant(ox, oy, oz, base_id, waterlogged)
+                cell.set_octant(ox, oy, oz, mat, waterlogged)
         return cell
 
     @classmethod
     def from_vertical_slab(cls, base_id: str, facing: str = "south", waterlogged: bool = False) -> "SubCell":
         """Create a SubCell representing a vertical slab with the given facing."""
         cell = cls()
+        mat = full_block_for(base_id) or base_id
         facing = facing.lower()
         if facing == "north":
             # Solid half is north (oz=0)
             for oy in (0, 1):
                 for ox in (0, 1):
-                    cell.set_octant(ox, oy, 0, base_id, waterlogged)
+                    cell.set_octant(ox, oy, 0, mat, waterlogged)
         elif facing == "south":
             # Solid half is south (oz=1)
             for oy in (0, 1):
                 for ox in (0, 1):
-                    cell.set_octant(ox, oy, 1, base_id, waterlogged)
+                    cell.set_octant(ox, oy, 1, mat, waterlogged)
         elif facing == "west":
             # Solid half is west (ox=0)
             for oy in (0, 1):
                 for oz in (0, 1):
-                    cell.set_octant(0, oy, oz, base_id, waterlogged)
+                    cell.set_octant(0, oy, oz, mat, waterlogged)
         elif facing == "east":
             # Solid half is east (ox=1)
             for oy in (0, 1):
                 for oz in (0, 1):
-                    cell.set_octant(1, oy, oz, base_id, waterlogged)
+                    cell.set_octant(1, oy, oz, mat, waterlogged)
         return cell
 
     def bounding_boxes(self, x: float, y: float, z: float) -> List[Tuple[float, float, float, float, float, float]]:

@@ -1,0 +1,11 @@
+{
+  "id": "birch_planks",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "birch_log"
+  ],
+  "result": {
+    "item": "birch_planks",
+    "count": 4
+  }
+}

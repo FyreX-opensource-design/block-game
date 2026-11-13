@@ -1,0 +1,18 @@
+{
+  "id": "spider_fang",
+  "name": "Spider Fang",
+  "tab": [
+    "materials"
+  ],
+  "model": "flat",
+  "texture": "spider_fang",
+  "max_stack": 64,
+  "left": "none",
+  "right": "none",
+  "durability": 0,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 2,
+  "lang": "item.spider_fang"
+}
+

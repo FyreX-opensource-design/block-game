@@ -1,0 +1,28 @@
+{
+  "id": "savanna_hills",
+  "name": "Savanna Hills",
+  "variant_of": "highland_plains",
+  "temperature": [0.50, 0.75],
+  "touching": ["highland_plains", "desert_hills", "savanna", "savanna_river", "mountains"],
+  "surface": "grass",
+  "soil": "dirt",
+  "soil_depth": 3,
+  "scale": 0.006,
+  "octaves": 2,
+  "seed_offset": 90,
+  "ceiling": 0.54,
+  "min_size": 50,
+  "tree_chance": 0.002,
+  "height_offset": -1.0,
+  "height_scale": 0.95,
+  "cliff": false,
+  "transition": {
+    "blend": 0.08,
+    "curve": "smoothstep"
+  },
+  "trees": ["acacia", "shrub"],
+  "decorations": ["tall_grass", "dandelion"],
+  "grass_color": "#a8a53a",
+  "foliage_color": "#949e32"
+}
+

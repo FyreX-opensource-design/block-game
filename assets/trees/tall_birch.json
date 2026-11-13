@@ -1,0 +1,18 @@
+{
+  "id": "tall_birch",
+  "shape": "birch",
+  "trunk": "birch_log",
+  "leaves": "birch_leaves",
+  "trunk_min": 7,
+  "trunk_extra": 2,
+  "extra_threshold": 0.45,
+  "radius": 2,
+  "leaf_down": 3,
+  "leaf_up": 1,
+  "valid_blocks": [
+    "grass",
+    "dirt",
+    "muddy_grass",
+    "mud"
+  ]
+}

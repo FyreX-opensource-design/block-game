@@ -601,6 +601,27 @@ class Mob:
                         return True
         return False
 
+    def is_touching_cactus(self, world=None, margin=0.05):
+        w = world or getattr(self, "world", None)
+        if w is None:
+            return False
+        min_x = math.floor(self.pos[0] - self.radius - margin)
+        max_x = math.floor(self.pos[0] + self.radius + margin - 1e-6)
+        min_y = math.floor(self.pos[1] - margin)
+        max_y = math.floor(self.pos[1] + self.height + margin - 1e-6)
+        min_z = math.floor(self.pos[2] - self.radius - margin)
+        max_z = math.floor(self.pos[2] + self.radius + margin - 1e-6)
+        for x in range(min_x, max_x + 1):
+            for y in range(min_y, max_y + 1):
+                for z in range(min_z, max_z + 1):
+                    try:
+                        blk = w.get_block(x, y, z)
+                    except Exception:
+                        continue
+                    if blk == "cactus":
+                        return True
+        return False
+
     def sweep(self, axis, delta, world):
         if delta == 0 or world is None:
             return False
@@ -651,7 +672,7 @@ class Mob:
             return
         start_x, start_y, start_z = self.pos
 
-        if avoid_hazards and self.on_ground and self.hurt_time <= 0 and not self.in_water(world):
+        if avoid_hazards and self.on_ground and self.hurt_time <= 0 and not self.in_water(world) and not getattr(self, "can_climb", False):
             from server.ai import is_position_hazardous
 
             # Look slightly ahead along the movement vector so the mob stops before stepping into water or off a >4 block cliff
@@ -838,6 +859,10 @@ class Mob:
         if self.on_ground and hspeed > 0.05:
             self.walk_time += dt * hspeed * 2.5
 
+        # Cactus contact damage
+        if world is not None and self.is_touching_cactus(world):
+            self.take_damage(1.0, world=world)
+
         # Void despawn
         if self.pos[1] < -32.0:
             self.alive = False
@@ -852,6 +877,7 @@ class Mob:
             "yaw": round(self.yaw, 4),
             "pitch": round(self.pitch, 4),
             "health": round(self.health, 2),
+            "max_health": round(self.max_health, 2),
             "hurt_time": round(self.hurt_time, 2),
         }
 
@@ -860,6 +886,8 @@ class Mob:
         mob_type = data.get("type", data.get("mob_type", "pig"))
         if mob_type == "pig":
             return Pig.from_dict(data)
+        if mob_type == "cow":
+            return Cow.from_dict(data)
         if mob_type == "sheep":
             return Sheep.from_dict(data)
         if mob_type == "zombie":
@@ -871,6 +899,7 @@ class Mob:
             yaw=data.get("yaw", 0.0),
             pitch=data.get("pitch", 0.0),
             health=data.get("health", 10.0),
+            max_health=data.get("max_health", 10.0),
             entity_id=data.get("id"),
             uuid_val=data.get("uuid"),
         )
@@ -923,11 +952,74 @@ class Pig(Mob):
             yaw=data.get("yaw", 0.0),
             pitch=data.get("pitch", 0.0),
             health=data.get("health", 10.0),
+            max_health=data.get("max_health", 10.0),
             entity_id=data.get("id"),
             uuid_val=data.get("uuid"),
         )
         pig.hurt_time = float(data.get("hurt_time", 0.0))
         return pig
+
+
+class Cow(Mob):
+    """Passive cow. An empty bucket milks it, and it drops beef and leather."""
+
+    def __init__(
+        self,
+        pos=None,
+        vel=None,
+        yaw=0.0,
+        pitch=0.0,
+        health=10.0,
+        max_health=10.0,
+        entity_id=None,
+        uuid_val=None,
+    ):
+        super().__init__(
+            mob_type="cow",
+            pos=pos,
+            vel=vel,
+            yaw=yaw,
+            pitch=pitch,
+            health=health,
+            max_health=max_health,
+            entity_id=entity_id,
+            uuid_val=uuid_val,
+        )
+        self.walk_speed = 1.05
+        self.run_speed = 2.4
+        self.radius = 0.5
+        self.height = 1.4
+
+        from server.ai import GoalSelector, PanicGoal, WanderGoal
+
+        self.goals = GoalSelector()
+        self.goals.add_goal(1, PanicGoal(self, speed_mult=2.1))
+        self.goals.add_goal(2, WanderGoal(self))
+
+    def milk(self, bucket_id):
+        """Return the milk-bucket item for an empty bucket, or None."""
+        if not self.alive:
+            return None
+        from server.fluid import get_filled_bucket, is_empty_bucket
+
+        if not is_empty_bucket(bucket_id):
+            return None
+        return get_filled_bucket(bucket_id, "milk")
+
+    @classmethod
+    def from_dict(cls, data):
+        cow = cls(
+            pos=data.get("pos"),
+            vel=data.get("vel"),
+            yaw=data.get("yaw", 0.0),
+            pitch=data.get("pitch", 0.0),
+            health=data.get("health", 10.0),
+            max_health=data.get("max_health", 10.0),
+            entity_id=data.get("id"),
+            uuid_val=data.get("uuid"),
+        )
+        cow.hurt_time = float(data.get("hurt_time", 0.0))
+        return cow
 
 
 SHEEP_WOOL_BLOCKS = {
@@ -1076,6 +1168,7 @@ class Sheep(Mob):
             yaw=data.get("yaw", 0.0),
             pitch=data.get("pitch", 0.0),
             health=data.get("health", 8.0),
+            max_health=data.get("max_health", 8.0),
             entity_id=data.get("id"),
             sheared=data.get("sheared", False),
             color=data.get("color", "white"),
@@ -1155,16 +1248,284 @@ class Zombie(Mob):
         return zombie
 
 
+class Spider(Mob):
+    """Hostile spider mob that can climb walls and ceilings.
+
+    Only targets the player in low skylight (<= 10) and low infrared light (<= 10).
+    If either skylight or infrared light is above 10, it will not target the player.
+    Drops string and sometimes spider eyes and spider fangs.
+    """
+
+    def __init__(
+        self,
+        pos=None,
+        vel=None,
+        yaw=0.0,
+        pitch=0.0,
+        health=16.0,
+        max_health=16.0,
+        entity_id=None,
+        uuid_val=None,
+    ):
+        super().__init__(
+            mob_type="spider",
+            pos=pos,
+            vel=vel,
+            yaw=yaw,
+            pitch=pitch,
+            health=health,
+            max_health=max_health,
+            entity_id=entity_id,
+            uuid_val=uuid_val,
+        )
+        self.name = "Spider"
+        self.walk_speed = 1.4
+        self.run_speed = 3.0
+        self.climb_speed = 2.4
+        self.radius = 0.6
+        self.height = 0.8
+        self.attack_damage = 2.5
+        self.attack_range = 1.8
+        self.loot_table = "entities/spider"
+        self.climbing = False
+        self.on_ceiling = False
+        self.can_climb = True
+
+        from server.ai import GoalSelector, WanderGoal, SpiderAttackGoal
+
+        self.goals = GoalSelector()
+        self.goals.add_goal(1, SpiderAttackGoal(self, target_range=16.0, reach=1.8, damage=2.5))
+        self.goals.add_goal(2, WanderGoal(self))
+
+    def in_panic(self):
+        return False
+
+    def can_target_player(self, player=None, world=None):
+        w = world or getattr(self, "world", None)
+        if w is None:
+            return True
+        sx, sy, sz = int(self.pos[0]), int(self.pos[1]), int(self.pos[2])
+        sky = 0
+        ir = 0
+        if hasattr(w, "get_light"):
+            l = w.get_light(sx, sy, sz)
+            if isinstance(l, dict):
+                ir = l.get("ir", 0)
+                sky = l.get("current_sky", l.get("sky", 0))
+        else:
+            if hasattr(w, "get_current_skylight"):
+                sky = w.get_current_skylight(sx, sy, sz)
+            elif hasattr(w, "get_skylight"):
+                sky = w.get_skylight(sx, sy, sz)
+            if hasattr(w, "get_blocklight"):
+                bl = w.get_blocklight(sx, sy, sz)
+                if isinstance(bl, (list, tuple)) and len(bl) > 4:
+                    ir = bl[4]
+                elif isinstance(bl, dict):
+                    ir = bl.get("ir", 0)
+
+        # "only target the player in low skylight and low infrared light, if either one is above 10, it won't target the player."
+        if sky > 10 or ir > 10:
+            return False
+
+        if player is not None:
+            if not getattr(player, "alive", True) or getattr(player, "dead", False):
+                return False
+            if not getattr(player, "survival", True):
+                return False
+
+        return True
+
+    def is_touching_wall(self, world):
+        if world is None:
+            return False
+        px, py, pz = self.pos
+        blocks = getattr(world, "blocks_movement", world.is_solid)
+        min_y = math.floor(py)
+        max_y = math.floor(py + self.height - 1e-4)
+        reach = self.radius + 0.15
+        for y in range(min_y, max_y + 1):
+            for dx, dz in ((reach, 0), (-reach, 0), (0, reach), (0, -reach)):
+                bx = math.floor(px + dx)
+                bz = math.floor(pz + dz)
+                if blocks(bx, y, bz):
+                    return True
+        return False
+
+    def get_wall_direction(self, world):
+        if world is None:
+            return None
+        px, py, pz = self.pos
+        blocks = getattr(world, "blocks_movement", world.is_solid)
+        min_y = math.floor(py)
+        max_y = math.floor(py + self.height - 1e-4)
+        reach = self.radius + 0.18
+        for y in range(min_y, max_y + 1):
+            for dx, dz in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                bx = math.floor(px + dx * reach)
+                bz = math.floor(pz + dz * reach)
+                if blocks(bx, y, bz):
+                    return (dx, dz)
+        return None
+
+    def get_ceiling_y(self, world):
+        if world is None:
+            return None
+        px, py, pz = self.pos
+        blocks = getattr(world, "blocks_movement", world.is_solid)
+        check_y = math.floor(py + self.height + 0.35)
+        bx = math.floor(px)
+        bz = math.floor(pz)
+        if blocks(bx, check_y, bz):
+            return float(check_y)
+        r = self.radius * 0.7
+        for dx in (-r, r):
+            for dz in (-r, r):
+                cbx = math.floor(px + dx)
+                cbz = math.floor(pz + dz)
+                if blocks(cbx, check_y, cbz):
+                    return float(check_y)
+        return None
+
+    def is_touching_ceiling(self, world):
+        return self.get_ceiling_y(world) is not None
+
+    def update(self, dt, world=None):
+        if not self.alive:
+            return
+        if world is not None:
+            self.world = world
+
+        w = getattr(self, "world", None)
+        ceil_y = self.get_ceiling_y(w)
+        touch_ceiling = ceil_y is not None
+        touch_wall = self.is_touching_wall(w)
+        is_moving = self.desired_speed > 0 or math.hypot(self.vel[0], self.vel[2]) > 0.02
+
+        # If climbing a wall towards a ceiling, continue climbing until snug against the ceiling
+        if touch_wall and touch_ceiling and ceil_y is not None:
+            target_py = ceil_y - self.height
+            if self.pos[1] < target_py - 0.06:
+                self.climbing = True
+                self.on_ceiling = False
+            else:
+                self.pos[1] = target_py
+                self.on_ceiling = True
+                self.climbing = False
+        elif touch_ceiling and ceil_y is not None:
+            target_py = ceil_y - self.height
+            self.pos[1] = target_py
+            self.on_ceiling = True
+            self.climbing = False
+        elif touch_wall:
+            self.climbing = True
+            self.on_ceiling = False
+        else:
+            self.climbing = False
+            self.on_ceiling = False
+
+        if self.on_ceiling:
+            # Clinging to ceiling: counteract downward gravity
+            self.vel[1] = max(0.0, self.vel[1]) + GRAVITY * dt
+            self.on_ground = True
+        elif self.climbing:
+            wdir = self.get_wall_direction(w)
+            if wdir is not None:
+                wall_yaw = math.atan2(-wdir[0], -wdir[1])
+                self.yaw = wall_yaw
+                self.target_yaw = wall_yaw
+                if w is not None:
+                    push = 0.8 * dt
+                    self.move_horizontal(wdir[0] * push, wdir[1] * push, w, avoid_hazards=False)
+            if is_moving:
+                self.vel[1] = self.climb_speed + GRAVITY * dt
+            else:
+                self.vel[1] = max(0.0, self.vel[1]) + GRAVITY * dt
+            self.on_ground = True
+
+        super().update(dt, world=world)
+
+        # Update animation walk_time with vertical climb speed if climbing
+        v_speed = abs(self.vel[1]) if self.climbing else 0.0
+        h_speed = math.hypot(self.vel[0], self.vel[2])
+        effective_speed = max(h_speed, v_speed)
+        if effective_speed > 0.05:
+            self.walk_time += dt * effective_speed * 2.5
+
+        # Re-check and enforce ceiling snap and wall contact after movement
+        ceil_y = self.get_ceiling_y(w)
+        touch_ceiling = ceil_y is not None
+        touch_wall = self.is_touching_wall(w)
+        if touch_wall and touch_ceiling and ceil_y is not None:
+            target_py = ceil_y - self.height
+            if self.pos[1] >= target_py - 0.06:
+                self.pos[1] = target_py
+                self.on_ceiling = True
+                self.climbing = False
+                self.vel[1] = 0.0
+                self.on_ground = True
+        elif touch_ceiling and ceil_y is not None:
+            target_py = ceil_y - self.height
+            self.pos[1] = target_py
+            self.on_ceiling = True
+            self.climbing = False
+            self.vel[1] = 0.0
+            self.on_ground = True
+        elif touch_wall:
+            self.climbing = True
+            self.on_ceiling = False
+            self.on_ground = True
+        else:
+            self.climbing = False
+            self.on_ceiling = False
+
+    def take_damage(self, amount, attacker=None, knockback_dir=None, world=None):
+        res = super().take_damage(amount, attacker=attacker, knockback_dir=knockback_dir, world=world)
+        self.panic_timer = 0.0
+        if attacker is not None and self.goals is not None:
+            for _, goal in self.goals.goals:
+                if hasattr(goal, "target"):
+                    goal.target = attacker
+        return res
+
+    def to_dict(self):
+        d = super().to_dict()
+        d["climbing"] = self.climbing
+        d["on_ceiling"] = self.on_ceiling
+        return d
+
+    @classmethod
+    def from_dict(cls, data):
+        spider = cls(
+            pos=data.get("pos"),
+            vel=data.get("vel"),
+            yaw=data.get("yaw", 0.0),
+            pitch=data.get("pitch", 0.0),
+            health=data.get("health", 16.0),
+            max_health=data.get("max_health", 16.0),
+            entity_id=data.get("id"),
+            uuid_val=data.get("uuid"),
+        )
+        spider.hurt_time = float(data.get("hurt_time", 0.0))
+        spider.climbing = bool(data.get("climbing", False))
+        spider.on_ceiling = bool(data.get("on_ceiling", False))
+        return spider
+
+
 def entity_from_dict(data):
     etype = data.get("type")
     if etype == "falling_block" or "block" in data:
         return FallingBlockEntity.from_dict(data)
     elif etype == "pig" or data.get("mob_type") == "pig":
         return Pig.from_dict(data)
+    elif etype == "cow" or data.get("mob_type") == "cow":
+        return Cow.from_dict(data)
     elif etype == "sheep" or data.get("mob_type") == "sheep":
         return Sheep.from_dict(data)
     elif etype == "zombie" or data.get("mob_type") == "zombie":
         return Zombie.from_dict(data)
+    elif etype == "spider" or data.get("mob_type") == "spider":
+        return Spider.from_dict(data)
     elif etype == "mob":
         return Mob.from_dict(data)
     return ItemEntity.from_dict(data)

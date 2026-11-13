@@ -35,17 +35,18 @@ class SaplingTests(unittest.TestCase):
         saplings = {sapling.id: sapling for sapling in load_saplings()}
         tree_ids = {tree.id for tree in DECORATORS}
 
-        self.assertEqual(set(saplings), {"oak_sapling", "pine_sapling"})
+        self.assertEqual(set(saplings), {"oak_sapling", "pine_sapling", "birch_sapling"})
         self.assertEqual(saplings["oak_sapling"].block, "oak_sapling")
         self.assertEqual(set(saplings["oak_sapling"].tree_ids), {"oak", "fancy_oak", "tall_oak"})
         self.assertEqual(saplings["pine_sapling"].tree_ids, ("pine",))
+        self.assertEqual(set(saplings["birch_sapling"].tree_ids), {"birch", "tall_birch"})
         for sapling in saplings.values():
             self.assertTrue(set(sapling.tree_ids) <= tree_ids)
             self.assertGreaterEqual(sapling.min_time, 15 * 60)
             self.assertLessEqual(sapling.max_time, 30 * 60)
 
     def test_sapling_blocks_and_items_are_registered(self):
-        for sapling_id in ("oak_sapling", "pine_sapling"):
+        for sapling_id in ("oak_sapling", "pine_sapling", "birch_sapling"):
             block = BLOCKS[sapling_id]
             self.assertFalse(block.solid)
             self.assertTrue(block.cutout)
@@ -60,11 +61,15 @@ class SaplingTests(unittest.TestCase):
     def test_leaves_drop_their_own_sapling(self):
         oak_drops = dict(get_block_drops("leaves", rng=_AlwaysDropRng()))
         pine_drops = dict(get_block_drops("pine_leaves", rng=_AlwaysDropRng()))
+        birch_drops = dict(get_block_drops("birch_leaves", rng=_AlwaysDropRng()))
 
         self.assertEqual(oak_drops.get("oak_sapling"), 1)
         self.assertNotIn("pine_sapling", oak_drops)
+        self.assertNotIn("birch_sapling", oak_drops)
         self.assertEqual(pine_drops.get("pine_sapling"), 1)
         self.assertNotIn("oak_sapling", pine_drops)
+        self.assertEqual(birch_drops.get("birch_sapling"), 1)
+        self.assertNotIn("oak_sapling", birch_drops)
 
     def test_saplings_can_only_be_placed_on_soil(self):
         world = _flat_world()

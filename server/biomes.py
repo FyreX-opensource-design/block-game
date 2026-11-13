@@ -13,6 +13,57 @@ from server.trees import DECORATORS
 
 _ID = re.compile(r"[a-z0-9_]+")
 
+TEMP_SCALE = 0.0015
+TEMP_WARP_SCALE = 0.0010
+TEMP_WARP_AMP = 60.0
+TEMP_SEED_OFFSET = 1000
+
+
+@functools.lru_cache(maxsize=262144)
+def _cached_temperature_at(x, z, seed):
+    fx = float(x)
+    fz = float(z)
+    wx = fx + fbm(fx * TEMP_WARP_SCALE + 18.3, fz * TEMP_WARP_SCALE - 42.1, 2, seed + TEMP_SEED_OFFSET + 1) * TEMP_WARP_AMP
+    wz = fz + fbm(fx * TEMP_WARP_SCALE - 31.7, fz * TEMP_WARP_SCALE + 57.4, 2, seed + TEMP_SEED_OFFSET + 2) * TEMP_WARP_AMP
+    raw = fbm(wx * TEMP_SCALE, wz * TEMP_SCALE, 3, seed + TEMP_SEED_OFFSET)
+    return float(np.clip((raw - 0.22) / 0.58, 0.0, 1.0))
+
+
+def temperature_at(x, z, seed):
+    """Return a continuous scalar temperature in [0.0, 1.0] for coordinate (x, z)."""
+    return _cached_temperature_at(int(x), int(z), int(seed))
+
+
+def temperature_grid(xx, zz, seed):
+    """Return a 2D continuous array of temperature values in [0.0, 1.0] for grid (xx, zz)."""
+    wx = xx + fbm_grid(xx * TEMP_WARP_SCALE + 18.3, zz * TEMP_WARP_SCALE - 42.1, 2, seed + TEMP_SEED_OFFSET + 1) * TEMP_WARP_AMP
+    wz = zz + fbm_grid(xx * TEMP_WARP_SCALE - 31.7, zz * TEMP_WARP_SCALE + 57.4, 2, seed + TEMP_SEED_OFFSET + 2) * TEMP_WARP_AMP
+    raw = fbm_grid(wx * TEMP_SCALE, wz * TEMP_SCALE, 3, seed + TEMP_SEED_OFFSET)
+    return np.clip((raw - 0.22) / 0.58, 0.0, 1.0)
+
+
+def can_biomes_touch(b1, b2):
+    """Return True if biomes b1 and b2 are compatible to generate adjacent to each other.
+    
+    Checks both explicit touching/adjacent_to declarations and temperature range compatibility.
+    """
+    if b1.id == b2.id:
+        return True
+    if b1.touching is not None:
+        b2_ids = {b2.id, getattr(b2, "variant_of", None)}
+        if not (b2_ids & set(b1.touching)):
+            return False
+    if b2.touching is not None:
+        b1_ids = {b1.id, getattr(b1, "variant_of", None)}
+        if not (b1_ids & set(b2.touching)):
+            return False
+    if b1.temperature is not None and b2.temperature is not None:
+        t1_min, t1_max = b1.temperature
+        t2_min, t2_max = b2.temperature
+        if t1_max < t2_min or t2_max < t1_min:
+            return False
+    return True
+
 
 class Biome:
     def __init__(
@@ -53,6 +104,8 @@ class Biome:
         variants=(),
         subsoil=None,
         subsoil_depth=0.0,
+        temperature=None,
+        touching=None,
     ):
         self.id = biome_id
         self.name = str(name or biome_id.replace("_", " ").title())
@@ -80,6 +133,8 @@ class Biome:
         self.variants = tuple(variants)
         self.subsoil = subsoil
         self.subsoil_depth = float(subsoil_depth)
+        self.temperature = tuple(temperature) if temperature is not None else None
+        self.touching = tuple(touching) if touching is not None else None
 
         trans_blend = self.transition.get("blend")
         actual_blend = blend if blend is not None else trans_blend
@@ -134,9 +189,29 @@ class Biome:
         ox, oz = float(offset[0]), float(offset[1])
         return fbm(x * scale + ox, z * scale + oz, octaves, seed + seed_offset)
 
+    def matches_temperature(self, temp):
+        if self.temperature is None:
+            return True
+        min_t, max_t = self.temperature
+        if max_t >= 1.0:
+            return min_t <= temp <= 1.0001
+        return min_t <= temp < max_t
+
+    def temperature_mask_grid(self, temp_grid):
+        if self.temperature is None:
+            return np.ones(temp_grid.shape, dtype=bool)
+        min_t, max_t = self.temperature
+        if max_t >= 1.0:
+            return (temp_grid >= min_t) & (temp_grid <= 1.0001)
+        return (temp_grid >= min_t) & (temp_grid < max_t)
+
     def matches(self, x, z, seed):
+        if self.temperature is not None:
+            t = temperature_at(x, z, seed)
+            if not self.matches_temperature(t):
+                return False
         if not self.variant_noise:
-            return False
+            return self.temperature is not None
         value = self._variant_value(x, z, seed)
         threshold = float(self.variant_noise.get("threshold", 0.5))
         if bool(self.variant_noise.get("above", True)):
@@ -144,9 +219,19 @@ class Biome:
         return value <= threshold
 
     def variant_mask_grid(self, x, z, seed):
+        shape = np.broadcast(x, z).shape
+        if self.temperature is not None:
+            temp_grid = temperature_grid(x, z, seed)
+            temp_mask = self.temperature_mask_grid(temp_grid)
+        else:
+            temp_mask = np.ones(shape, dtype=bool)
+
         cfg = self.variant_noise
         if not cfg:
-            return np.zeros(np.broadcast(x, z).shape, dtype=bool)
+            if self.temperature is not None:
+                return temp_mask
+            return np.zeros(shape, dtype=bool)
+
         scale = float(cfg.get("scale", 0.018))
         octaves = int(cfg.get("octaves", 3))
         seed_offset = int(cfg.get("seed_offset", 7331))
@@ -155,8 +240,10 @@ class Biome:
         value = fbm_grid(x * scale + ox, z * scale + oz, octaves, seed + seed_offset)
         threshold = float(cfg.get("threshold", 0.5))
         if bool(cfg.get("above", True)):
-            return value >= threshold
-        return value <= threshold
+            noise_mask = value >= threshold
+        else:
+            noise_mask = value <= threshold
+        return temp_mask & noise_mask
 
     def variant_at(self, x, z, seed):
         for variant in self.variants:
@@ -217,36 +304,41 @@ def load_biomes(folder=None, trees=None, decorations=None):
             raise ValueError(f"{variant.source}: unknown variant_of biome {variant.variant_of}")
         if parent.variant_of is not None:
             raise ValueError(f"{variant.source}: variant_of must point at a base biome")
-        if not variant.variant_noise:
-            raise ValueError(f"{variant.source}: variant biomes need variant_noise")
+        if not variant.variant_noise and variant.temperature is None:
+            raise ValueError(f"{variant.source}: variant biomes need variant_noise or temperature")
         if variant.ceiling != parent.ceiling:
             raise ValueError(f"{variant.source}: variant ceiling must match {parent.id}")
         if (variant.scale, variant.octaves, variant.seed_offset) != (parent.scale, parent.octaves, parent.seed_offset):
             raise ValueError(f"{variant.source}: variants must share their parent's climate noise")
+        if variant.temperature is None and parent.temperature is not None:
+            variant.temperature = parent.temperature
+        if variant.touching is None and parent.touching is not None:
+            variant.touching = parent.touching
         if not variant.coast:
             variant.coast = dict(parent.coast)
-        noise = dict(variant.variant_noise)
-        uses_cliff = bool(noise.pop("coast_cliff", False))
-        parent_noise = parent.coast.get("noise", {}) if parent.coast else {}
-        defaults = {
-            "scale": parent_noise.get("scale", 0.018),
-            "octaves": parent_noise.get("octaves", 3),
-            "seed_offset": parent_noise.get("seed_offset", 7331),
-            "offset": parent_noise.get("offset", (7.3, -11.9)),
-        }
-        for key, value in defaults.items():
-            noise.setdefault(key, value)
-        if uses_cliff:
-            cliff = parent.coast.get("cliff")
-            if not cliff:
-                raise ValueError(f"{variant.source}: coast_cliff requires {parent.id} to define coast.cliff")
-            # Match the boundary where the parent's smoothstep cliff factor
-            # crosses 0.5 so surface and terrain agree.
-            threshold = float(cliff.get("threshold", 0.42))
-            blend = float(cliff.get("blend", 0.10))
-            noise["threshold"] = threshold - 0.5 * blend
-            noise["above"] = False
-        variant.variant_noise = noise
+        if variant.variant_noise:
+            noise = dict(variant.variant_noise)
+            uses_cliff = bool(noise.pop("coast_cliff", False))
+            parent_noise = parent.coast.get("noise", {}) if parent.coast else {}
+            defaults = {
+                "scale": parent_noise.get("scale", 0.018),
+                "octaves": parent_noise.get("octaves", 3),
+                "seed_offset": parent_noise.get("seed_offset", 7331),
+                "offset": parent_noise.get("offset", (7.3, -11.9)),
+            }
+            for key, value in defaults.items():
+                noise.setdefault(key, value)
+            if uses_cliff:
+                cliff = parent.coast.get("cliff")
+                if not cliff:
+                    raise ValueError(f"{variant.source}: coast_cliff requires {parent.id} to define coast.cliff")
+                # Match the boundary where the parent's smoothstep cliff factor
+                # crosses 0.5 so surface and terrain agree.
+                threshold = float(cliff.get("threshold", 0.42))
+                blend = float(cliff.get("blend", 0.10))
+                noise["threshold"] = threshold - 0.5 * blend
+                noise["above"] = False
+            variant.variant_noise = noise
         parent.variants = parent.variants + (variant,)
     for biome in base:
         biome.variants = tuple(sorted(biome.variants, key=lambda item: item.id))
@@ -398,6 +490,28 @@ def biome_from_mapping(fields, source, trees, decorations=None):
         for k, v in raw_colors.items():
             colors[k] = parse_color(v)
 
+    raw_temp = fields.get("temperature", fields.get("temp"))
+    temperature = None
+    if raw_temp is not None:
+        if isinstance(raw_temp, (list, tuple)) and len(raw_temp) == 2:
+            temperature = (_number(raw_temp[0], "temperature[0]", source), _number(raw_temp[1], "temperature[1]", source))
+        elif isinstance(raw_temp, dict):
+            min_t = _number(raw_temp.get("min", 0.0), "temperature.min", source)
+            max_t = _number(raw_temp.get("max", 1.0), "temperature.max", source)
+            temperature = (min_t, max_t)
+        else:
+            raise ValueError(f"{source}: temperature must be [min, max] or an object with min and max")
+
+    raw_touching = fields.get("touching", fields.get("adjacent_to"))
+    touching = None
+    if raw_touching is not None:
+        if isinstance(raw_touching, str):
+            touching = (raw_touching,)
+        elif isinstance(raw_touching, (list, tuple)):
+            touching = tuple(str(x) for x in raw_touching)
+        else:
+            raise ValueError(f"{source}: touching must be a list of biome ids")
+
     return Biome(
         biome_id,
         surface,
@@ -434,6 +548,8 @@ def biome_from_mapping(fields, source, trees, decorations=None):
         coast=coast,
         subsoil=subsoil,
         subsoil_depth=subsoil_depth,
+        temperature=temperature,
+        touching=touching,
     )
 
 
@@ -571,7 +687,17 @@ def climate_at(x, z, seed, biomes):
     return _cached_climate_at(int(x), int(z), int(seed), tuple(biomes))
 
 
-def biome_at(x, z, seed, biomes):
+def biome_at(x, z, seed, biomes, y=None, underground_biomes=None):
+    if y is not None and underground_biomes:
+        from server.underground_biomes import underground_biome_at
+        ub = underground_biome_at(x, y, z, seed, underground_biomes)
+        if ub is not None:
+            return ub
+    if y is not None:
+        from server.rivers import river_biome_at
+        rb = river_biome_at(x, y, z, seed, biomes)
+        if rb is not None:
+            return rb
     sample = climate_at(x, z, seed, biomes)
     return pick_biome(sample, biomes).variant_at(x, z, seed)
 

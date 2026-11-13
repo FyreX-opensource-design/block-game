@@ -1,0 +1,14 @@
+{
+  "id": "acacia_fence_gate",
+  "lang": "item.acacia_fence_gate",
+  "tab": [
+    "building"
+  ],
+  "model": "block",
+  "item_model": "fence_gate_inventory",
+  "block": "acacia_fence_gate",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}

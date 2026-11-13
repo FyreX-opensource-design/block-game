@@ -425,12 +425,13 @@ def _mesh_sub_cell(
     translucent_vert, translucent_ind, translucent_light, translucent_color,
     cursor_opaque, cursor_cutout, cursor_translucent,
 ):
-    from server.sub_cell import OCTANT_COORDS
+    from server.sub_cell import OCTANT_COORDS, full_block_for
 
     for idx, mat_id in enumerate(sub.octants):
         if not mat_id:
             continue
-        mat_block = BLOCKS.get(mat_id)
+        full_id = full_block_for(mat_id)
+        mat_block = (BLOCKS.get(full_id) if full_id else None) or BLOCKS.get(mat_id)
         if mat_block is None:
             continue
 
@@ -873,13 +874,24 @@ def _build_chunk_mesh_inner(world, cx, cy, cz):
                     cursor_translucent,
                 )
             continue
-        from server.blocks import is_fence, get_fence_elements, is_wall, get_wall_elements, is_stairs, get_stair_elements
+        from server.blocks import (
+            is_fence,
+            get_fence_elements,
+            is_wall,
+            get_wall_elements,
+            is_stairs,
+            get_stair_elements,
+            is_dripstone,
+            get_dripstone_elements,
+        )
         if is_fence(block):
             elements = get_fence_elements(world, wx, wy, wz, block)
         elif is_wall(block):
             elements = get_wall_elements(world, wx, wy, wz, block)
         elif is_stairs(block):
             elements = get_stair_elements(world, wx, wy, wz, block)
+        elif is_dripstone(block):
+            elements = get_dripstone_elements(world, wx, wy, wz, block)
         else:
             elements = block.elements
         for element in elements:
@@ -1557,6 +1569,8 @@ def _get_world_elements(world, bx, by, bz):
                         adj_b = BLOCKS.get(adj_mat)
                         if adj_b and not adj_b.cutout and not getattr(adj_b, "translucent", False) and not is_glass(adj_b) and adj_b.opacity >= 1.0:
                             continue
+                        if is_gl and is_glass(adj_b) and _glass_group(adj_b) == _glass_group(mat_blk):
+                            continue
                 else:
                     adj_sub = world.get_sub_cell(bx + nx, by + ny, bz + nz)
                     if adj_sub is not None:
@@ -1565,12 +1579,16 @@ def _get_world_elements(world, bx, by, bz):
                             adj_b = BLOCKS.get(adj_mat)
                             if adj_b and not adj_b.cutout and not getattr(adj_b, "translucent", False) and not is_glass(adj_b) and adj_b.opacity >= 1.0:
                                 continue
+                            if is_gl and is_glass(adj_b) and _glass_group(adj_b) == _glass_group(mat_blk):
+                                continue
                     else:
                         adj_block = world.get_block(bx + nx, by + ny, bz + nz)
                         if adj_block is not None and adj_block != "air":
                             adj_b = BLOCKS.get(adj_block) if isinstance(adj_block, str) else adj_block
                             if adj_b is not None and getattr(adj_b, "full_cube", False):
                                 if not adj_b.cutout and not getattr(adj_b, "translucent", False) and not is_glass(adj_b) and adj_b.opacity >= 1.0:
+                                    continue
+                                if is_gl and is_glass(adj_b) and _glass_group(adj_b) == _glass_group(mat_blk):
                                     continue
                 faces.add(normal_i)
             if faces:
@@ -1773,7 +1791,7 @@ def get_block_face_ctm_mask(world, wx, wy, wz, normal_i, block=None, element=Non
 def _block_face_connects(world, wx, wy, wz, normal_i, d_vec, block=None, element=None):
     if world is None:
         return False
-    if is_glass(block):
+    if getattr(block, "_is_glass", False) or is_glass(block):
         return _glass_face_connects(world, wx, wy, wz, normal_i, d_vec, block, element)
 
     nx = int(NORMALS[normal_i, 0])
@@ -1781,27 +1799,37 @@ def _block_face_connects(world, wx, wy, wz, normal_i, d_vec, block=None, element
     nz = int(NORMALS[normal_i, 2])
     dx, dy, dz = int(d_vec[0]), int(d_vec[1]), int(d_vec[2])
 
-    nbr_b_id = world.get_block(wx + dx, wy + dy, wz + dz)
-    if nbr_b_id is None:
-        return False
-    nbr_b = BLOCKS.get(nbr_b_id) if isinstance(nbr_b_id, str) else nbr_b_id
+    get_obj = getattr(world, "get_block_obj", None)
+    if get_obj is not None:
+        nbr_b = get_obj(wx + dx, wy + dy, wz + dz)
+    else:
+        nbr_b_id = world.get_block(wx + dx, wy + dy, wz + dz)
+        nbr_b = BLOCKS.get(nbr_b_id) if isinstance(nbr_b_id, str) else nbr_b_id
     if nbr_b is None:
         return False
 
-    my_b = block if block else BLOCKS.get(world.get_block(wx, wy, wz))
+    if block is not None:
+        my_b = block
+    elif get_obj is not None:
+        my_b = get_obj(wx, wy, wz)
+    else:
+        my_id = world.get_block(wx, wy, wz)
+        my_b = BLOCKS.get(my_id) if isinstance(my_id, str) else my_id
     if my_b is None:
         return False
 
-    my_group = my_b.properties.get("ctm_group") or my_b.base_id or my_b.id
-    nbr_group = nbr_b.properties.get("ctm_group") or nbr_b.base_id or nbr_b.id
+    my_group = getattr(my_b, "ctm_group", None) or my_b.properties.get("ctm_group") or my_b.base_id or my_b.id
+    nbr_group = getattr(nbr_b, "ctm_group", None) or nbr_b.properties.get("ctm_group") or nbr_b.base_id or nbr_b.id
     if my_group != nbr_group:
         return False
 
-    front_b_id = world.get_block(wx + dx + nx, wy + dy + ny, wz + dz + nz)
-    if front_b_id is not None:
+    if get_obj is not None:
+        fb = get_obj(wx + dx + nx, wy + dy + ny, wz + dz + nz)
+    else:
+        front_b_id = world.get_block(wx + dx + nx, wy + dy + ny, wz + dz + nz)
         fb = BLOCKS.get(front_b_id) if isinstance(front_b_id, str) else front_b_id
-        if fb is not None and getattr(fb, "solid", False) and getattr(fb, "full_cube", False) and not getattr(fb, "cutout", False):
-            return False
+    if fb is not None and getattr(fb, "solid", False) and getattr(fb, "full_cube", False) and not getattr(fb, "cutout", False):
+        return False
 
     return True
 
@@ -1813,7 +1841,7 @@ def _should_cull_glass_element_face(world, wx, wy, wz, block, element, normal_i)
     ny = int(NORMALS[normal_i, 1])
     nz = int(NORMALS[normal_i, 2])
     norm_axis = 0 if nx != 0 else (1 if ny != 0 else 2)
-    opp_normal_i = (1, 0, 3, 2, 5, 4)[normal_i]
+    n_sign = nx + ny + nz
 
     if element is None:
         bounds = [
@@ -1830,7 +1858,7 @@ def _should_cull_glass_element_face(world, wx, wy, wz, block, element, normal_i)
         ]
         my_box = (bounds[0][0], bounds[0][1], bounds[1][0], bounds[1][1], bounds[2][0], bounds[2][1])
 
-    plane = bounds[norm_axis][1] if (nx + ny + nz) > 0 else bounds[norm_axis][0]
+    plane = bounds[norm_axis][1] if n_sign > 0 else bounds[norm_axis][0]
 
     # Two tangent axes
     t1_axis = (norm_axis + 1) % 3
@@ -1840,6 +1868,7 @@ def _should_cull_glass_element_face(world, wx, wy, wz, block, element, normal_i)
 
     t1_probes = (t1_min + 0.25 * (t1_max - t1_min), t1_min + 0.75 * (t1_max - t1_min))
     t2_probes = (t2_min + 0.25 * (t2_max - t2_min), t2_min + 0.75 * (t2_max - t2_min))
+    my_group = _glass_group(block) if block is not None else None
 
     for p1 in t1_probes:
         for p2 in t2_probes:
@@ -1860,24 +1889,33 @@ def _should_cull_glass_element_face(world, wx, wy, wz, block, element, normal_i)
                     continue
                 # Must be matching glass group or opaque solid
                 if nbr["glass"]:
-                    if block is not None and _glass_group(nbr["block"]) != _glass_group(block):
+                    if my_group is not None and nbr["glass_group"] != my_group:
                         continue
                 elif not nbr["opaque"]:
                     continue
-                if opp_normal_i not in nbr["faces"]:
-                    continue
-                opp_nx = -nx
-                opp_ny = -ny
-                opp_nz = -nz
-                nbr_plane = nbr["box"][norm_axis * 2 + 1] if (opp_nx + opp_ny + opp_nz) > 0 else nbr["box"][norm_axis * 2]
-                if abs(nbr_plane - plane) > 1e-3:
-                    continue
+
                 bx0, bx1, by0, by1, bz0, bz1 = nbr["box"]
-                if (bx0 - 1e-3 <= pt[0] <= bx1 + 1e-3 and
-                    by0 - 1e-3 <= pt[1] <= by1 + 1e-3 and
-                    bz0 - 1e-3 <= pt[2] <= bz1 + 1e-3):
-                    covered = True
-                    break
+                b_t1 = (bx0, bx1) if t1_axis == 0 else ((by0, by1) if t1_axis == 1 else (bz0, bz1))
+                b_t2 = (bx0, bx1) if t2_axis == 0 else ((by0, by1) if t2_axis == 1 else (bz0, bz1))
+                if not (b_t1[0] - 1e-3 <= pt[t1_axis] <= b_t1[1] + 1e-3):
+                    continue
+                if not (b_t2[0] - 1e-3 <= pt[t2_axis] <= b_t2[1] + 1e-3):
+                    continue
+
+                b_norm = (bx0, bx1) if norm_axis == 0 else ((by0, by1) if norm_axis == 1 else (bz0, bz1))
+                q_val = pt[norm_axis] + n_sign * 0.01
+                if not (b_norm[0] - 1e-3 <= q_val <= b_norm[1] + 1e-3):
+                    continue
+
+                if n_sign > 0:
+                    if b_norm[0] > plane + 1e-3:
+                        continue
+                else:
+                    if b_norm[1] < plane - 1e-3:
+                        continue
+
+                covered = True
+                break
             if not covered:
                 return False
     return True
@@ -1966,16 +2004,30 @@ def _resolve_glass_face_parts(world, wx, wy, wz, block, element, normal_i):
                     continue
             elif not nbr["opaque"]:
                 continue
-            if opp_normal_i not in nbr["faces"]:
-                continue
-            nbr_plane = nbr["box"][norm_axis * 2 + 1] if (-n_sign) > 0 else nbr["box"][norm_axis * 2]
-            if abs(nbr_plane - plane) > 1e-3:
-                continue
+
             bx0, bx1, by0, by1, bz0, bz1 = nbr["box"]
-            if (bx0 - 1e-3 <= pt[0] <= bx1 + 1e-3 and
-                by0 - 1e-3 <= pt[1] <= by1 + 1e-3 and
-                bz0 - 1e-3 <= pt[2] <= bz1 + 1e-3):
-                return True
+            t1_axis = u_axis
+            t2_axis = v_axis
+            b_t1 = (bx0, bx1) if t1_axis == 0 else ((by0, by1) if t1_axis == 1 else (bz0, bz1))
+            b_t2 = (bx0, bx1) if t2_axis == 0 else ((by0, by1) if t2_axis == 1 else (bz0, bz1))
+            if not (b_t1[0] - 1e-3 <= pt[t1_axis] <= b_t1[1] + 1e-3):
+                continue
+            if not (b_t2[0] - 1e-3 <= pt[t2_axis] <= b_t2[1] + 1e-3):
+                continue
+
+            b_norm = (bx0, bx1) if norm_axis == 0 else ((by0, by1) if norm_axis == 1 else (bz0, bz1))
+            q_val = pt[norm_axis] + n_sign * 0.01
+            if not (b_norm[0] - 1e-3 <= q_val <= b_norm[1] + 1e-3):
+                continue
+
+            if n_sign > 0:
+                if b_norm[0] > plane + 1e-3:
+                    continue
+            else:
+                if b_norm[1] < plane - 1e-3:
+                    continue
+
+            return True
         return False
 
     q00 = _is_covered(0.25, 0.25)
@@ -2057,8 +2109,8 @@ def _resolve_glass_face_parts(world, wx, wy, wz, block, element, normal_i):
     if split_u and split_v:
         quads = (
             ((0.0, 0.5, 0.0, 0.5, None) if not q00 else None),
-            ((0.5, 1.0, 0.0, 0.5, None) if not q10 else None),
             ((0.5, 1.0, 0.5, 1.0, None) if not q11 else None),
+            ((0.5, 1.0, 0.0, 0.5, None) if not q10 else None),
             ((0.0, 0.5, 0.5, 1.0, None) if not q01 else None),
         )
         return tuple(q for q in quads if q is not None)
@@ -2125,7 +2177,12 @@ def _emit_cutout(world, data, faces, total, x0, y0, z0, l_grid=None, grass_grid=
                     sub_quads = []
                     if len(parts) == 1 and parts[0][:4] == (0.0, 1.0, 0.0, 1.0):
                         m = parts[0][4]
-                        sub_quads.append((positions[i], get_block_ctm_uv(block, m) or GLASS_CTM_UVS[m]))
+                        default_uv = (
+                            GLASS_CTM_UVS[m]
+                            if getattr(block, "id", "") in ("glass", "glass_slab", "glass_vertical_slab")
+                            else block.face_uvs[normal_i]
+                        ) if 0 <= m < len(GLASS_CTM_UVS) else block.face_uvs[normal_i]
+                        sub_quads.append((positions[i], get_block_ctm_uv(block, m) or default_uv))
                     else:
                         pos = positions[i]
                         v0, v1, v2, v3 = pos[0], pos[1], pos[2], pos[3]
@@ -2133,7 +2190,12 @@ def _emit_cutout(world, data, faces, total, x0, y0, z0, l_grid=None, grass_grid=
                             sub_el = _get_face_sub_element(normal_i, ua, ub, va, vb)
                             m = pm if pm is not None else _get_glass_face_ctm_mask(world, wx, wy, wz, normal_i, block=block, element=sub_el)
                             spec_uv = _slice_spec_uv((0, 0, 16, 16), ua, ub, va, vb)
-                            uv = get_block_ctm_uv(block, m, [int(round(c)) for c in spec_uv]) or GLASS_CTM_UVS[m]
+                            def_uv = (
+                                GLASS_CTM_UVS[m]
+                                if getattr(block, "id", "") in ("glass", "glass_slab", "glass_vertical_slab")
+                                else block.face_uvs[normal_i]
+                            ) if 0 <= m < len(GLASS_CTM_UVS) else block.face_uvs[normal_i]
+                            uv = get_block_ctm_uv(block, m, [int(round(c)) for c in spec_uv]) or def_uv
                             p0 = (1.0 - ua) * (1.0 - va) * v0 + ua * (1.0 - va) * v1 + ua * va * v2 + (1.0 - ua) * va * v3
                             p1 = (1.0 - ub) * (1.0 - va) * v0 + ub * (1.0 - va) * v1 + ub * va * v2 + (1.0 - ub) * va * v3
                             p2 = (1.0 - ub) * (1.0 - vb) * v0 + ub * (1.0 - vb) * v1 + ub * vb * v2 + (1.0 - ub) * vb * v3

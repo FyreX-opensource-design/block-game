@@ -162,11 +162,13 @@ class InteractionAndFeatureTests(unittest.TestCase):
         self.assertTrue(water_found, "Lakes should contain water")
 
         # Verify lakes only generate exposed to the surface and not underground
+        from server.noise import terrain_height
         for cz in range(-4, 5):
             for cx in range(-4, 5):
                 for z in range(cz * 16, (cz + 1) * 16, 4):
                     for x in range(cx * 16, (cx + 1) * 16, 4):
-                        for y in range(0, 65):
+                        h = terrain_height(x, z, world.seed)
+                        for y in range(0, max(0, h - 5)):
                             b = world.get_block(x, y, z)
                             self.assertNotIn(b, ("mud", "muddy_grass"), f"Lake shores should not generate underground at y={y}")
 

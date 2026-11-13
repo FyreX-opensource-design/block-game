@@ -282,16 +282,23 @@ class Game(pyglet.window.Window):
 
         if self.world is not None:
             pos = self.player.pos if self.player is not None else None
-            for key in self.world.take_dirty(4, player_pos=pos):
+            t_mesh_start = time.perf_counter()
+            max_chunks = 4 if self.mode == "play" else 8
+            dirty_batch = self.world.take_dirty(max_chunks, player_pos=pos)
+            for idx, key in enumerate(dirty_batch):
                 if key in self.world.chunks:
                     self._upload(key)
+                if self.mode == "play" and (time.perf_counter() - t_mesh_start) >= 0.008:
+                    for unproc in dirty_batch[idx + 1:]:
+                        self.world.dirty.add(unproc)
+                    break
 
         if self.world is not None:
             if self.network_client is None:
                 self.world.advance_time(min(dt, 0.05))
             self.world.update_entities(min(dt, 0.05))
             if self.network_client is None:
-                self.world.update_fluids(min(dt, 0.05))
+                self._update_fluids(min(dt, 0.05))
                 self.world.update_leaves(min(dt, 0.05))
                 self.world.update_transformations(min(dt, 0.05))
                 self.world.update_saplings(min(dt, 0.05))
@@ -810,9 +817,12 @@ class Game(pyglet.window.Window):
         cz = math.floor(self.player.pos[2] / CHUNK_SIZE)
         center = (cx, cy, cz)
 
-        removed = self.world.evict_distant([center])
-        for key in removed:
-            self.renderer.drop(key)
+        last_center = getattr(self, "_last_stream_center", None)
+        if center != last_center:
+            self._last_stream_center = center
+            removed = self.world.evict_distant([center])
+            for key in removed:
+                self.renderer.drop(key)
 
         committed = self.world.poll_generated_chunks(max_count=16, centers=[center])
         self.world.request_chunks([center], max_in_flight=16)
@@ -920,6 +930,29 @@ class Game(pyglet.window.Window):
 
     def _upload_block_change(self, x, y, z):
         self._upload_block_changes(((x, y, z),))
+
+    def _update_fluids(self, dt):
+        """Run one fluid tick, then rebuild each touched chunk once.
+
+        ``on_block_set`` rebuilds a chunk immediately. Flowing milk (and the
+        tall grass it breaks) changes many cells in one tick, so collecting
+        those edits and uploading them together keeps the frame from hitching.
+        """
+        if self.world is None:
+            return
+        changed = []
+        previous = self.world.on_block_set
+
+        def _collect(x, y, z, _block):
+            changed.append((x, y, z))
+
+        self.world.on_block_set = _collect
+        try:
+            self.world.update_fluids(dt)
+        finally:
+            self.world.on_block_set = previous
+        if changed:
+            self._upload_block_changes(changed)
 
     def _apply_input(self):
         inp = self.player.input
@@ -1676,6 +1709,8 @@ class Game(pyglet.window.Window):
             self.network_client.send_set_block(x, y, z, next_block)
         if self.world.set_block(x, y, z, next_block):
             self._upload_block_change(x, y, z)
+            if y + 1 < WORLD_HEIGHT:
+                self._upload_block_change(x, y + 1, z)
 
     def _spawn_loose_item(self, item_id, count, pos, vel=None, pickup_delay=0.0):
         """Put a loose item into the world.
@@ -3012,6 +3047,7 @@ class Game(pyglet.window.Window):
             day_time=getattr(info, "day_time", 1000.0),
             spawn_point=getattr(info, "spawn", None),
         )
+        self.world.on_block_set = lambda bx, by, bz, bid: self._upload_block_change(bx, by, bz)
         self.player = Player(self.world)
         self.player.gamemode = self.gamemode
         skin = load_skin_rgba(self.profile["skin"])
@@ -3593,13 +3629,26 @@ class Game(pyglet.window.Window):
             self.ctx.enable(moderngl.BLEND)
             if self.mode == "play" and self.ready and self.player is not None:
                 px, py, pz = self.player.pos
+                ipx, ipy, ipz = int(px), int(py), int(pz)
                 biome_str = ""
                 if self.world is not None and getattr(self.world, "biomes", None):
-                    from server.biomes import biome_at
-                    cur_biome = biome_at(int(px), int(pz), getattr(self.world, "seed", 0), self.world.biomes)
-                    if cur_biome:
-                        biome_title = getattr(cur_biome, "name", None) or cur_biome.id.replace("_", " ").title()
-                        biome_str = f"   {biome_title}"
+                    if getattr(self, "_cached_biome_pos", None) == (ipx, ipy, ipz):
+                        biome_str = getattr(self, "_cached_biome_str", "")
+                    else:
+                        from server.biomes import biome_at
+                        cur_biome = biome_at(
+                            ipx,
+                            ipz,
+                            getattr(self.world, "seed", 0),
+                            self.world.biomes,
+                            y=ipy,
+                            underground_biomes=getattr(self.world, "underground_biomes", None),
+                        )
+                        if cur_biome:
+                            biome_title = getattr(cur_biome, "name", None) or cur_biome.id.replace("_", " ").title()
+                            biome_str = f"   {biome_title}"
+                        self._cached_biome_pos = (ipx, ipy, ipz)
+                        self._cached_biome_str = biome_str
                 name = ""
                 if self.target is not None:
                     from server.sub_cell import is_sub_cell
@@ -4115,6 +4164,15 @@ class Game(pyglet.window.Window):
         held_slot = self.hotbar[self.selected] if self.selected < len(self.hotbar) else empty_stack()
         held_id = stack_id(held_slot)
 
+        if getattr(hit_mob, "mob_type", "") == "cow" and hasattr(hit_mob, "milk"):
+            filled = hit_mob.milk(held_id)
+            if filled:
+                self._swap_held_for(filled)
+                if self.network_client is not None:
+                    self.network_client.send_interact_mob(hit_mob.id, held_id)
+                return True
+            return False
+
         if getattr(hit_mob, "mob_type", "") == "sheep":
             if held_id == "shears":
                 if getattr(hit_mob, "sheared", False):
@@ -4145,6 +4203,22 @@ class Game(pyglet.window.Window):
                                 self.hotbar[self.selected] = make_stack(held_id, cnt - 1)
                     return True
         return False
+
+    def _swap_held_for(self, filled_id):
+        """Replace one of the held stack with filled_id. Extra results go into the inventory."""
+        held_slot = self.hotbar[self.selected]
+        held_id = stack_id(held_slot)
+        if self.gamemode == "creative":
+            self.hotbar[self.selected] = make_stack(filled_id, 1)
+            return
+        cnt = stack_count(held_slot)
+        if cnt <= 1:
+            self.hotbar[self.selected] = make_stack(filled_id, 1)
+            return
+        self.hotbar[self.selected] = make_stack(held_id, cnt - 1)
+        leftover = add_to_inventory([self.hotbar, self.storage], filled_id, 1)
+        if leftover > 0 and self.player is not None:
+            self._spawn_loose_item(filled_id, leftover, list(self.player.pos), pickup_delay=0.2)
 
     def _handle_block_hit_interaction(self, hit):
         if self.player is None or self.world is None or hit is None:

@@ -1,0 +1,10 @@
+{
+  "id": "stalagmite",
+  "name": "Stalagmite",
+  "kind": "fall",
+  "damage": 2.0,
+  "min_distance": 0.8,
+  "per_block": true,
+  "message": "was impaled on a stalagmite"
+}
+

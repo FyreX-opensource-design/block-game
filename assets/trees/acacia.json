@@ -1,0 +1,14 @@
+{
+  "id": "acacia",
+  "shape": "acacia",
+  "trunk": "acacia_log",
+  "leaves": "acacia_leaves",
+  "trunk_min": 5,
+  "trunk_extra": 2,
+  "extra_threshold": 0.5,
+  "radius": 2,
+  "leaf_down": 1,
+  "leaf_up": 1,
+  "valid_blocks": ["grass", "dirt", "muddy_grass", "mud"]
+}
+

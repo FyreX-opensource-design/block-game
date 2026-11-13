@@ -260,7 +260,10 @@ def terrain_grid(x, z, seed, biomes=None):
         t_oc = np.clip((beach_c - climate) / ocean_w, 0.0, 1.0)
         s_oc = apply_curve_grid(t_oc, ocean_curve)
         final_h = np.rint(h_inland + (floor - h_inland) * s_oc)
-    return np.clip(final_h, 50, 122).astype(np.int16)
+    raw_h = np.clip(final_h, 50, 122).astype(np.int16)
+    from server.rivers import carve_river_grid
+
+    return carve_river_grid(x, z, raw_h, seed, climate)
 
 
 def hash3(x, y, z, seed=0):
@@ -433,7 +436,10 @@ def _cached_terrain_height(x, z, seed, biomes_tuple):
         t_oc = min(1.0, max(0.0, (beach_c - climate) / ocean_w))
         s_oc = apply_curve_scalar(t_oc, ocean_curve)
         final_h = round(h_inland + (floor - h_inland) * s_oc)
-    return int(max(50, min(122, final_h)))
+    raw_h = int(max(50, min(122, final_h)))
+    from server.rivers import carve_river_scalar
+
+    return carve_river_scalar(x, z, raw_h, seed, climate)
 
 
 def terrain_height(x, z, seed=0, biomes=None):

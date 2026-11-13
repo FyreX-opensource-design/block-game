@@ -11,6 +11,18 @@
     "oak_wood_z",
     "pine_wood",
     "pine_wood_x",
-    "pine_wood_z"
+    "pine_wood_z",
+    "acacia_log",
+    "acacia_log_x",
+    "acacia_log_z",
+    "acacia_wood",
+    "acacia_wood_x",
+    "acacia_wood_z",
+    "birch_log",
+    "birch_log_x",
+    "birch_log_z",
+    "birch_wood",
+    "birch_wood_x",
+    "birch_wood_z"
   ]
 }

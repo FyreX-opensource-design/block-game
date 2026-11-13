@@ -1,0 +1,24 @@
+{
+  "id": "acacia_fence",
+  "lang": "block.acacia_fence",
+  "tab": [
+    "building"
+  ],
+  "model": "fence_post",
+  "type": "fence",
+  "solid": true,
+  "hardness": 2.0,
+  "tool": "axe",
+  "mining_level": 0,
+  "sound": "wood",
+  "loot_table": "blocks/acacia_fence",
+  "properties": {
+    "fence": true
+  },
+  "textures": {
+    "top": "acacia_planks",
+    "side": "acacia_planks",
+    "texture": "acacia_planks"
+  }
+}
+

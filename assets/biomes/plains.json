@@ -1,6 +1,8 @@
 {
   "id": "plains",
   "name": "Plains",
+  "temperature": [0.0, 0.50],
+  "touching": ["savanna", "highland_plains", "river", "lowland_plains", "forest", "beach", "ocean"],
   "surface": "grass",
   "soil": "dirt",
   "soil_depth": 3,
