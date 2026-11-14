@@ -3103,6 +3103,15 @@ def _block_entries():
         if path.stem != block_id:
             raise ValueError(f"{path.name} must be named {block_id}.json")
         by_id[block_id] = entry
+    from server.crop_data import block_entries
+
+    for entry in block_entries():
+        block_id = str(entry["id"])
+        if block_id in by_id:
+            continue
+        if _ID.fullmatch(block_id) is None:
+            raise ValueError(f"block id {block_id!r} must be a unique lowercase name")
+        by_id[block_id] = entry
     pinned = (GRASS, DIRT, STONE, SAND, LOG, LEAVES, "planks", "cobble")
     ordered = []
     for block_id in pinned:
@@ -3502,7 +3511,7 @@ def _load_registry():
             membership,
             properties=base_props,
             base_id=str(entry["id"]),
-            is_variant=False,
+            is_variant=bool(entry.get("variant", False)),
             hardness=hardness,
             tool=tool,
             mining_level=mining_level,

@@ -97,6 +97,8 @@ class RemoteClient:
         self.yaw = 0.0
         self.pitch = 0.0
         self.held_item = ""
+        self.bow_pull = 0.0
+        self.nocked_arrow = ""
         self.sent_chunks = set()
         self.in_buffer = bytearray()
         self.out_queue = []
@@ -491,6 +493,25 @@ class MultiplayerServer:
                 mobs = [e.to_dict() for e in curr_entities.values() if getattr(e, "is_mob", False)]
                 if mobs and self.clients:
                     self.broadcast({"type": "mobs_update", "mobs": mobs})
+                shots = [e.to_dict() for e in curr_entities.values() if getattr(e, "is_projectile", False)]
+                if shots and self.clients:
+                    self.broadcast({"type": "projectiles_update", "projectiles": shots})
+            for event in list(getattr(self.world, "pending_hurts", ())):
+                target_uuid = str(event.get("uuid", ""))
+                target_client = self.clients.get(target_uuid)
+                target_player = self.world.players.get(target_uuid)
+                if target_client is None or target_player is None:
+                    continue
+                if event.get("vel") is not None:
+                    target_client.vel = list(event["vel"])
+                    target_client.send({"type": "player_knockback", "vel": list(event["vel"])})
+                self._send_player_health(target_client, target_player)
+                self.broadcast({
+                    "type": "player_hurt",
+                    "uuid": target_uuid,
+                    "hurt_time": target_player.hurt_time,
+                })
+            self.world.pending_hurts.clear()
 
             # Track furnace slot and lit state transitions before update
             pre_slots = {}
@@ -548,6 +569,7 @@ class MultiplayerServer:
             self.world.update_leaves(0.02)
             self.world.update_transformations(0.02)
             self.world.update_saplings(0.02)
+            self.world.update_crops(0.02)
             changed = self.world.update_fluids(0.02)
             if getattr(self.world, "on_block_set", None) is None:
                 for x, y, z, block in changed:
@@ -818,6 +840,8 @@ class MultiplayerServer:
             client.yaw = float(packet.get("yaw", client.yaw))
             client.pitch = float(packet.get("pitch", client.pitch))
             client.held_item = str(packet.get("held", client.held_item))
+            client.bow_pull = max(0.0, min(1.0, float(packet.get("pull", 0.0) or 0.0)))
+            client.nocked_arrow = str(packet.get("nock", "") or "")
 
             # Update world player
             player = self.world.players.get(client.uuid)
@@ -860,6 +884,8 @@ class MultiplayerServer:
                 "yaw": client.yaw,
                 "pitch": client.pitch,
                 "held": client.held_item,
+                "pull": client.bow_pull,
+                "nock": client.nocked_arrow,
             }
             self.broadcast(move_msg, exclude=client.uuid)
 
@@ -1007,6 +1033,32 @@ class MultiplayerServer:
                 for c_uuid, pos in list(self.open_furnaces.items()):
                     if pos == (fx, fy, fz) and c_uuid != client.uuid and c_uuid in self.clients:
                         self.clients[c_uuid].send(sync_msg)
+
+        elif p_type == "shoot":
+            from server.ranged import ARROWS, BOWS, MIN_POWER, fire_arrow, shot_origin
+
+            bow = BOWS.get(str(packet.get("bow", "")))
+            arrow = ARROWS.get(str(packet.get("arrow", "")))
+            if bow is None or arrow is None or self.world is None:
+                return
+            try:
+                power = max(0.0, min(1.0, float(packet.get("power", 0))))
+                raw_dir = packet.get("dir") or (0, 0, 0)
+                direction = (float(raw_dir[0]), float(raw_dir[1]), float(raw_dir[2]))
+            except (TypeError, ValueError, IndexError):
+                return
+            if power < MIN_POWER:
+                return
+            origin = shot_origin(client.pos, 1.62, direction)
+            fire_arrow(
+                self.world,
+                bow,
+                arrow,
+                origin,
+                direction,
+                power,
+                owner=str(getattr(client, "uuid", "") or ""),
+            )
 
         elif p_type == "attack_entity":
             entity_id = int(packet.get("id", 0))
@@ -1218,6 +1270,10 @@ class MultiplayerServer:
                     "vel": entity.vel,
                 }
             )
+        elif getattr(entity, "is_projectile", False):
+            pkt = entity.to_dict()
+            pkt["type"] = "spawn_arrow"
+            self.broadcast(pkt)
         elif getattr(entity, "is_mob", False):
             self.broadcast(
                 {

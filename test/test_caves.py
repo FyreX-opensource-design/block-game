@@ -83,7 +83,11 @@ class LuaLibraryTests(unittest.TestCase):
             linux_names = lua.lua_library_names()
         finally:
             lua.sys.platform = saved
-        self.assertEqual(windows_names[0], "lua55.dll")
-        self.assertTrue(all(name.endswith(".dll") for name in windows_names))
-        self.assertNotIn("liblua.so.5.5", windows_names)
-        self.assertEqual(linux_names, ("liblua.so.5.5",))
+        self.assertTrue(windows_names[0].replace("\\", "/").endswith("native/windows/lua55.dll"))
+        self.assertTrue(all(name.replace("\\", "/").endswith(".dll") for name in windows_names))
+        self.assertFalse(any("liblua.so" in name for name in windows_names))
+        self.assertTrue(linux_names[0].endswith("native/linux/liblua.so.5.5"))
+        self.assertIn("liblua.so.5.5", linux_names)
+        if saved == "linux":
+            loaded = str(getattr(lua._LIB, "_name", ""))
+            self.assertTrue(loaded.endswith("native/linux/liblua.so.5.5"))

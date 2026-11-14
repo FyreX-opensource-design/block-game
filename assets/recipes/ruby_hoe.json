@@ -1,0 +1,17 @@
+{
+  "id": "ruby_hoe",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    " X",
+    " X"
+  ],
+  "key": {
+    "#": "ruby",
+    "X": "#sticks"
+  },
+  "result": {
+    "item": "ruby_hoe",
+    "count": 1
+  }
+}

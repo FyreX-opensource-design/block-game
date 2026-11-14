@@ -1,0 +1,18 @@
+{
+  "id": "arrow",
+  "type": "crafting_shaped",
+  "pattern": [
+    "F",
+    "X",
+    "P"
+  ],
+  "key": {
+    "F": "flint",
+    "X": "#sticks",
+    "P": "plant_fiber"
+  },
+  "result": {
+    "item": "arrow",
+    "count": 4
+  }
+}

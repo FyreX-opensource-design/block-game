@@ -1,0 +1,15 @@
+{
+  "id": "arrow",
+  "lang": "item.arrow",
+  "tab": "tools",
+  "model": "flat",
+  "texture": "arrow",
+  "max_stack": 64,
+  "left": "none",
+  "right": "none",
+  "durability": 0,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 1,
+  "food": 0
+}

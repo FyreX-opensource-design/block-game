@@ -1,0 +1,17 @@
+{
+  "id": "bronze_hoe",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    " X",
+    " X"
+  ],
+  "key": {
+    "#": "bronze_ingot",
+    "X": "#sticks"
+  },
+  "result": {
+    "item": "bronze_hoe",
+    "count": 1
+  }
+}

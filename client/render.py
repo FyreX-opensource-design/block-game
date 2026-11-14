@@ -12,11 +12,14 @@ from server.stacks import stack_damage, stack_id
 from client.geom import ortho, write_matrix
 from client.player_render import (
     PlayerMeshes,
+    arrow_flight_matrix,
     dropped_item_matrix,
     falling_block_mesh,
     first_person_pose,
     held_item_mesh,
     item_hold_matrix,
+    nocked_arrow_matrix,
+    third_person_nocked_arrow_matrix,
     selected_item_id,
     third_person_pose,
 )
@@ -1056,8 +1059,27 @@ class Renderer:
             # extrusion pads don't moiré and near terrain can't poke through.
             self.ctx.disable(moderngl.DEPTH_TEST)
         self._draw_entity(vp, camera, vertices, indices, texture, fog=fog, day_time=day_time)
+        self._draw_nocked_arrow(vp, camera, player, item_id, first_person, eye, fog, day_time)
         if first_person and kind != "block":
             self.ctx.enable(moderngl.DEPTH_TEST)
+
+    def _draw_nocked_arrow(self, vp, camera, player, item_id, first_person, eye, fog, day_time):
+        from client.player_render import _bow_pull
+
+        pull = _bow_pull(player, item_id)
+        arrow_id = str(getattr(player, "nocked_arrow", "") or "")
+        if pull <= 0.0 or not arrow_id:
+            return
+        if first_person:
+            matrix = nocked_arrow_matrix(eye, player.yaw, player.pitch, pull)
+        else:
+            matrix = third_person_nocked_arrow_matrix(player.pos, player.yaw, player.pitch, pull)
+        packed = held_item_mesh(arrow_id, matrix)
+        if packed is None:
+            return
+        (vertices, indices), kind = packed
+        texture = self.atlas if kind == "block" else self.items
+        self._draw_entity(vp, camera, vertices, indices, texture, fog=fog, day_time=day_time)
 
     def _init_mob_textures(self):
         cow_path = ASSETS / "textures" / "entity" / "cow.png"
@@ -1228,6 +1250,15 @@ class Renderer:
                         day_time=day_time,
                         hurt_flash=hurt,
                     )
+                continue
+            if getattr(entity, "is_projectile", False):
+                matrix = arrow_flight_matrix(entity.pos, entity.vel)
+                packed = held_item_mesh(getattr(entity, "arrow_id", ""), matrix)
+                if packed is None:
+                    continue
+                (vertices, indices), kind = packed
+                texture = self.atlas if kind == "block" else self.items
+                self._draw_entity(vp, camera, vertices, indices, texture, fog=True, day_time=day_time)
                 continue
             if getattr(entity, "is_falling_block", False) or hasattr(entity, "block_id"):
                 mesh = falling_block_mesh(entity.block_id, entity.pos)

@@ -13,6 +13,7 @@ Every file in ``assets/transformations`` (``.json`` or ``.lua``) describes one r
       "vertical_radius": 1,                # vertical reach of a source block
       "require_clear_above": true,         # the block above must let light through
       "max_above_opacity": 1,              # light opacity (0-15) allowed above the block
+      "without_source": false,             # transform only when NO source is in range
       "enabled": true
     }
 
@@ -47,6 +48,7 @@ class Transformation:
         max_above_opacity=1,
         enabled=True,
         source=None,
+        without_source=False,
     ):
         self.id = rule_id
         self.from_block = from_block
@@ -59,6 +61,7 @@ class Transformation:
         self.require_clear_above = bool(require_clear_above)
         self.max_above_opacity = int(max_above_opacity)
         self.enabled = bool(enabled)
+        self.without_source = bool(without_source)
         self.file = str(source) if source else rule_id
 
     def is_source(self, block_id):
@@ -152,6 +155,7 @@ def transformation_from_mapping(fields, source):
         max_above_opacity=int(values["max_above_opacity"]),
         enabled=bool(fields.get("enabled", True)),
         source=source,
+        without_source=bool(fields.get("without_source", False)),
     )
 
 
@@ -175,12 +179,8 @@ class TransformationSystem:
 
     # --- eligibility -------------------------------------------------------------
 
-    def is_eligible(self, rule, x, y, z):
+    def _source_in_range(self, rule, x, y, z):
         w = self.world
-        if w.get_block(x, y, z) != rule.from_block:
-            return False
-        if rule.require_clear_above and not self._clear_above(rule, x, y, z):
-            return False
         r, vr = rule.radius, rule.vertical_radius
         for dy in range(-vr, vr + 1):
             for dz in range(-r, r + 1):
@@ -190,6 +190,17 @@ class TransformationSystem:
                     if rule.is_source(w.get_block(x + dx, y + dy, z + dz)):
                         return True
         return False
+
+    def is_eligible(self, rule, x, y, z):
+        w = self.world
+        if w.get_block(x, y, z) != rule.from_block:
+            return False
+        if rule.require_clear_above and not self._clear_above(rule, x, y, z):
+            return False
+        found = self._source_in_range(rule, x, y, z)
+        if rule.without_source:
+            return not found
+        return found
 
     def _clear_above(self, rule, x, y, z):
         from server.lighting import get_block_opacity

@@ -1,0 +1,18 @@
+{
+  "id": "blue_potato",
+  "stages": 8,
+  "min_time": 180,
+  "max_time": 340,
+  "needs_water": true,
+  "water_radius": 4,
+  "water_vertical": 1,
+  "seeds": "blue_potato_seeds",
+  "produce": "blue_potato",
+  "food": 3,
+  "wild": {
+    "block": "wild_blue_potato",
+    "chance": 0.01,
+    "surfaces": ["grass"],
+    "biomes": ["pine_forest", "mountains"]
+  }
+}

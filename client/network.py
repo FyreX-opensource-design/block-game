@@ -54,7 +54,7 @@ class NetworkClient:
             self.disconnect()
             return False
 
-    def send_move(self, pos, vel, yaw, pitch, held_item=""):
+    def send_move(self, pos, vel, yaw, pitch, held_item="", pull=0.0, nock=""):
         if not self.connected:
             return
         packet = {
@@ -64,6 +64,8 @@ class NetworkClient:
             "yaw": float(yaw),
             "pitch": float(pitch),
             "held": str(held_item or ""),
+            "pull": max(0.0, min(1.0, float(pull or 0.0))),
+            "nock": str(nock or ""),
         }
         self._enqueue(packet)
 
@@ -131,6 +133,19 @@ class NetworkClient:
         packet = {
             "type": "eat_item",
             "item": str(item_id or ""),
+        }
+        self._enqueue(packet)
+
+    def send_shoot(self, direction, power, bow_id, arrow_id):
+        """Ask the server to spawn an arrow. Ammo is spent on the client."""
+        if not self.connected:
+            return
+        packet = {
+            "type": "shoot",
+            "dir": [float(c) for c in direction],
+            "power": float(power),
+            "bow": str(bow_id or ""),
+            "arrow": str(arrow_id or ""),
         }
         self._enqueue(packet)
 

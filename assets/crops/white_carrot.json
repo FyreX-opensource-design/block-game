@@ -1,0 +1,18 @@
+{
+  "id": "white_carrot",
+  "stages": 8,
+  "min_time": 180,
+  "max_time": 340,
+  "needs_water": true,
+  "water_radius": 4,
+  "water_vertical": 1,
+  "seeds": "white_carrot_seeds",
+  "produce": "white_carrot",
+  "food": 4,
+  "wild": {
+    "block": "wild_white_carrot",
+    "chance": 0.01,
+    "surfaces": ["grass"],
+    "biomes": ["birch_forest", "birch_forest_hills"]
+  }
+}

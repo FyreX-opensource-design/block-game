@@ -356,6 +356,27 @@ def load_biomes(folder=None, trees=None, decorations=None):
     return ordered
 
 
+def _wild_crop_decorations(biome_id):
+    """Wild crop plants whose crop file lists this biome."""
+    from server.crop_data import wild_plants
+
+    features = []
+    for plant in wild_plants():
+        if biome_id not in plant.biomes:
+            continue
+        features.append(
+            DecorationFeature(
+                plant.block,
+                ((plant.block, 1.0),),
+                chance=plant.chance,
+                surfaces=plant.surfaces,
+                seed_offset=plant.seed_offset,
+                source=plant.block,
+            )
+        )
+    return features
+
+
 def biome_from_mapping(fields, source, trees, decorations=None):
     if not isinstance(fields, dict):
         raise ValueError(f"{source}: biome file must be an object")
@@ -511,6 +532,8 @@ def biome_from_mapping(fields, source, trees, decorations=None):
             touching = tuple(str(x) for x in raw_touching)
         else:
             raise ValueError(f"{source}: touching must be a list of biome ids")
+
+    resolved_decs.extend(_wild_crop_decorations(biome_id))
 
     return Biome(
         biome_id,

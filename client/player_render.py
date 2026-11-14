@@ -12,6 +12,8 @@ from server.player_model import (
     first_person_arm_matrix,
     first_person_held_matrix,
     held_item_matrix,
+    nocked_arrow_matrix,
+    third_person_nocked_arrow_matrix,
     limb_pose,
     model_matrix,
     transform_vertices,
@@ -367,10 +369,21 @@ def _extruded_item_mesh(item):
     return mesh
 
 
+def _bow_pull(player, item_id):
+    if not item_id:
+        return 0.0
+    from server.ranged import BOWS
+
+    if item_id not in BOWS:
+        return 0.0
+    return max(0.0, min(1.0, float(getattr(player, "bow_pull", 0.0) or 0.0)))
+
+
 def item_hold_matrix(player, poses, first_person=False, eye=None, item_id=""):
     arm_pitch, arm_roll, _unused = poses.get("arm_r", (0.0, 0.0, 0.0))
     item = ITEMS.get(item_id)
     flat = item is not None and item.model in ("flat", "axes")
+    pull = _bow_pull(player, item_id)
     if first_person:
         return first_person_held_matrix(
             eye,
@@ -381,6 +394,7 @@ def item_hold_matrix(player, poses, first_person=False, eye=None, item_id=""):
             # Flat ~MC firstperson size; block mesh is already 0.5 world units.
             item_scale=0.68 if flat else 0.6,
             flat=flat,
+            pull=pull,
         )
     return held_item_matrix(
         player.pos,
@@ -388,6 +402,7 @@ def item_hold_matrix(player, poses, first_person=False, eye=None, item_id=""):
         arm_pitch,
         item_scale=0.55 if flat else 0.75,
         flat=flat,
+        pull=pull,
     )
 
 
@@ -395,6 +410,32 @@ def selected_item_id(hotbar, selected):
     if selected < 0 or selected >= len(hotbar):
         return ""
     return stack_id(hotbar[selected])
+
+
+def arrow_flight_matrix(pos, direction, scale=0.85):
+    """Point a flat item's +Y along the arrow's flight."""
+    dx, dy, dz = direction
+    length = math.sqrt(dx * dx + dy * dy + dz * dz) or 1.0
+    yx, yy, yz = dx / length, dy / length, dz / length
+    hx, hy, hz = (1.0, 0.0, 0.0) if abs(yy) > 0.9 else (0.0, 1.0, 0.0)
+    xx = yy * hz - yz * hy
+    xy = yz * hx - yx * hz
+    xz = yx * hy - yy * hx
+    xlen = math.sqrt(xx * xx + xy * xy + xz * xz) or 1.0
+    xx, xy, xz = xx / xlen, xy / xlen, xz / xlen
+    zx = xy * yz - xz * yy
+    zy = xz * yx - xx * yz
+    zz = xx * yy - xy * yx
+    s = float(scale)
+    return np.array(
+        [
+            [s * xx, s * yx, s * zx, float(pos[0])],
+            [s * xy, s * yy, s * zy, float(pos[1])],
+            [s * xz, s * yz, s * zz, float(pos[2])],
+            [0.0, 0.0, 0.0, 1.0],
+        ],
+        dtype=np.float32,
+    )
 
 
 def dropped_item_matrix(pos, time_val, scale=0.4):

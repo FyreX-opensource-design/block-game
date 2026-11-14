@@ -1,0 +1,17 @@
+{
+  "id": "diamond_hoe",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    " X",
+    " X"
+  ],
+  "key": {
+    "#": "diamond",
+    "X": "#sticks"
+  },
+  "result": {
+    "item": "diamond_hoe",
+    "count": 1
+  }
+}

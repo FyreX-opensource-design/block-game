@@ -479,6 +479,7 @@ def _load_fuels():
         "crafting_table": 15.0,
         "furnace": 15.0,
         "wood_pickaxe": 10.0,
+        "wood_hoe": 10.0,
         "stick": 5.0,
     }
     for k, v in defaults.items():

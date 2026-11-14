@@ -226,6 +226,24 @@ def get_bucket_empty(bucket_id):
     return None
 
 
+def fresh_water_nearby(world, x, y, z, radius=4, vertical=1):
+    """True when fresh water (not salt, brackish, or milk) is within the box.
+
+    ``radius`` is horizontal and ``vertical`` is up and down, both inclusive.
+    The block at (x, y, z) itself does not count.
+    """
+    radius = int(radius)
+    vertical = int(vertical)
+    for dy in range(-vertical, vertical + 1):
+        for dz in range(-radius, radius + 1):
+            for dx in range(-radius, radius + 1):
+                if dx == 0 and dy == 0 and dz == 0:
+                    continue
+                if get_fluid_type(world.get_block(x + dx, y + dy, z + dz)) == "water":
+                    return True
+    return False
+
+
 def get_fluid_type(block_id):
     """Return the base fluid ID ('water', 'salt_water', 'brackish_water', etc.) for a block, or None."""
     if not block_id:

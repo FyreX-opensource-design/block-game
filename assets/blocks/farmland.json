@@ -1,0 +1,17 @@
+{
+  "id": "farmland",
+  "lang": "block.farmland",
+  "tab": "natural",
+  "model": "cube",
+  "soil": false,
+  "hardness": 0.6,
+  "tool": "shovel",
+  "mining_level": 0,
+  "loot_table": "blocks/farmland",
+  "sound": "dirt",
+  "textures": {
+    "top": "farmland",
+    "side": "dirt",
+    "bottom": "dirt"
+  }
+}

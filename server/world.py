@@ -404,6 +404,7 @@ class World:
         self.column_max = {}
         self.players = {}
         self.entities = []
+        self.pending_hurts = []
         # Optional hook so a host (the multiplayer server) can announce new
         # entities as soon as they are created, regardless of which phase of
         # the tick spawned them.
@@ -430,6 +431,9 @@ class World:
         from server.saplings import SaplingGrowthSystem
 
         self.saplings = SaplingGrowthSystem(self)
+        from server.crops import CropGrowthSystem
+
+        self.crops = CropGrowthSystem(self)
         self._singleplayer_player = None
         if load_entities and self.store is not None:
             self.load_entities()
@@ -540,6 +544,11 @@ class World:
             return self.saplings.update(dt)
         return []
 
+    def update_crops(self, dt):
+        if getattr(self, "crops", None) is not None:
+            return self.crops.update(dt)
+        return []
+
     def _notify_entity_spawn(self, entity):
         callback = getattr(self, "on_entity_spawn", None)
         if callback is not None:
@@ -584,6 +593,24 @@ class World:
         self.entities.append(mob)
         self._notify_entity_spawn(mob)
         return mob
+
+    def spawn_arrow(self, arrow_id, pos=None, vel=None, damage=1.0, power=1.0, gravity=12.0, effects=(), owner="", age=0.0):
+        from server.entity import ArrowEntity
+
+        entity = ArrowEntity(
+            arrow_id,
+            pos=pos,
+            vel=vel,
+            damage=damage,
+            power=power,
+            gravity=gravity,
+            effects=effects,
+            owner=owner,
+            age=age,
+        )
+        self.entities.append(entity)
+        self._notify_entity_spawn(entity)
+        return entity
 
     def hit_block_with_item(self, x, y, z, item_id, rng=None):
         import random
@@ -1140,6 +1167,8 @@ class World:
                 self.leaf_decay.schedule_neighbors(x, y, z, radius=2)
         if getattr(self, "saplings", None) is not None:
             self.saplings.on_block_set(x, y, z, block_id if block_id not in ("", None) else AIR)
+        if getattr(self, "crops", None) is not None:
+            self.crops.on_block_set(x, y, z, block_id if block_id not in ("", None) else AIR)
         if simulate and old_block:
             from server.blocks import get_door_info, get_tall_plant_info
             old_d_info = get_door_info(old_block)
@@ -1612,6 +1641,8 @@ class World:
             self.save_entities()
         if getattr(self, "saplings", None) is not None:
             self.saplings.save()
+        if getattr(self, "crops", None) is not None:
+            self.crops.save()
 
     def commit_chunk(self, chunk):
         if chunk is None:
@@ -2365,6 +2396,8 @@ class World:
                 self.mark_dirty(*b_key)
         if getattr(self, "saplings", None) is not None:
             self.saplings.scan_chunk(key)
+        if getattr(self, "crops", None) is not None:
+            self.crops.scan_chunk(key)
         self._reconcile_tall_plant_seams(chunk)
 
     def _tall_plant_index_maps(self):

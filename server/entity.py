@@ -1512,8 +1512,271 @@ class Spider(Mob):
         return spider
 
 
+class ArrowEntity:
+    """A flying arrow. Bows set its speed; the arrow asset sets damage and effects."""
+
+    def __init__(
+        self,
+        arrow_id,
+        pos=None,
+        vel=None,
+        damage=1.0,
+        power=1.0,
+        gravity=12.0,
+        effects=(),
+        owner="",
+        age=0.0,
+        entity_id=None,
+    ):
+        if entity_id is None:
+            self.id = ItemEntity._next_id
+            ItemEntity._next_id += 1
+        else:
+            self.id = int(entity_id)
+            if self.id >= ItemEntity._next_id:
+                ItemEntity._next_id = self.id + 1
+        self.arrow_id = str(arrow_id)
+        self.type = "arrow"
+        self.pos = list(pos) if pos is not None else [0.0, 0.0, 0.0]
+        self.vel = list(vel) if vel is not None else [0.0, 0.0, 0.0]
+        self.damage = float(damage)
+        self.power = max(0.0, min(1.0, float(power)))
+        self.gravity = float(gravity)
+        self.effects = tuple(dict(effect) for effect in (effects or ()))
+        self.owner = str(owner or "")
+        self.age = float(age)
+        self.lifetime = 8.0
+        self.alive = True
+        self.is_remote = False
+        self.target_pos = None
+        self.target_vel = None
+        self.ignored = set()
+        self.count = 1
+        self.despawn_timer = 999999.0
+        self.radius = 0.12
+        self.height = 0.12
+
+    @property
+    def is_projectile(self):
+        return True
+
+    def update(self, dt, world=None):
+        if not self.alive:
+            return
+        dt = min(float(dt), 0.05)
+        if self.is_remote:
+            self._follow(dt)
+            return
+        self.age += dt
+        if self.age > self.lifetime:
+            self._drop(world)
+            self.alive = False
+            return
+        speed = math.sqrt(self.vel[0] ** 2 + self.vel[1] ** 2 + self.vel[2] ** 2)
+        steps = max(1, int(math.ceil(speed * dt / 0.25)))
+        step_dt = dt / steps
+        for _ in range(steps):
+            if not self.alive:
+                return
+            self.vel[1] -= self.gravity * step_dt
+            origin = (self.pos[0], self.pos[1], self.pos[2])
+            nxt = (
+                origin[0] + self.vel[0] * step_dt,
+                origin[1] + self.vel[1] * step_dt,
+                origin[2] + self.vel[2] * step_dt,
+            )
+            hit = self._hit(world, origin, nxt)
+            if hit is None:
+                self.pos[0], self.pos[1], self.pos[2] = nxt
+                continue
+            kind, target, point = hit
+            self.pos[0], self.pos[1], self.pos[2] = point
+            if kind == "block":
+                self._drop(world)
+                self.alive = False
+            elif kind == "mob":
+                self._strike_mob(target, world)
+            else:
+                self._strike_player(target, world)
+
+    def _follow(self, dt):
+        target = self.target_pos
+        if not target:
+            return
+        blend = min(1.0, 12.0 * dt)
+        self.pos[0] += (target[0] - self.pos[0]) * blend
+        self.pos[1] += (target[1] - self.pos[1]) * blend
+        self.pos[2] += (target[2] - self.pos[2]) * blend
+        if self.target_vel is not None:
+            self.vel = list(self.target_vel)
+
+    def _hit(self, world, origin, nxt):
+        dx = nxt[0] - origin[0]
+        dy = nxt[1] - origin[1]
+        dz = nxt[2] - origin[2]
+        travel = math.sqrt(dx * dx + dy * dy + dz * dz)
+        if travel < 1e-8:
+            return None
+        block_dist = travel
+        block_point = nxt
+        if world is not None and hasattr(world, "raycast"):
+            hit = world.raycast(origin[0], origin[1], origin[2], dx, dy, dz, travel, solid_only=True)
+            if hit is not None and hit.get("dist", travel) <= travel + 1e-4:
+                block_dist = float(hit["dist"])
+                block_point = (float(hit["hit_x"]), float(hit["hit_y"]), float(hit["hit_z"]))
+        body = self._body_along(world, origin, dx, dy, dz, block_dist)
+        if body is not None:
+            return body
+        if block_dist < travel - 1e-4:
+            return ("block", None, block_point)
+        return None
+
+    def _body_along(self, world, origin, dx, dy, dz, limit):
+        if world is None or limit <= 0:
+            return None
+        best = None
+        best_t = limit
+        for entity in getattr(world, "entities", ()):
+            if entity is self or not getattr(entity, "is_mob", False) or not getattr(entity, "alive", True):
+                continue
+            if entity.id in self.ignored:
+                continue
+            found = _segment_hits_body(origin, dx, dy, dz, limit, entity.pos, entity.radius, entity.height)
+            if found is not None and found[0] < best_t:
+                best_t, point = found
+                best = ("mob", entity, point)
+        for player in getattr(world, "players", {}).values():
+            if not getattr(player, "uuid", "") or player.uuid == self.owner or player.uuid in self.ignored:
+                continue
+            if getattr(player, "dead", False):
+                continue
+            found = _segment_hits_body(
+                origin,
+                dx,
+                dy,
+                dz,
+                limit,
+                player.pos,
+                getattr(player, "radius", 0.3),
+                getattr(player, "height", 1.8),
+            )
+            if found is not None and found[0] < best_t:
+                best_t, point = found
+                best = ("player", player, point)
+        return best
+
+    def _strike_mob(self, mob, world):
+        amount = self.damage * self.power
+        knocked = (self.vel[0], self.vel[2])
+        dealt = mob.take_damage(amount, knockback_dir=knocked, world=world)
+        if not dealt:
+            self.ignored.add(mob.id)
+            return
+        from server.ranged import apply_arrow_effects
+
+        apply_arrow_effects(mob, self.effects, self.power, self.vel)
+        self.alive = False
+
+    def _strike_player(self, player, world):
+        if getattr(player, "hurt_time", 0.0) > 0 or not getattr(player, "survival", False):
+            self.ignored.add(player.uuid)
+            return
+        amount = self.damage * self.power
+        dealt = player.take_damage(amount)
+        if dealt <= 0:
+            self.ignored.add(player.uuid)
+            return
+        vx, vz = self.vel[0], self.vel[2]
+        length = math.hypot(vx, vz) or 1.0
+        player.vel[0] = (vx / length) * 5.5
+        player.vel[2] = (vz / length) * 5.5
+        player.vel[1] = 3.5
+        from server.ranged import apply_arrow_effects
+
+        apply_arrow_effects(player, self.effects, self.power, self.vel)
+        pending = getattr(world, "pending_hurts", None)
+        if pending is not None:
+            pending.append({"uuid": player.uuid, "vel": list(player.vel)})
+        self.alive = False
+
+    def _drop(self, world):
+        if world is None or not hasattr(world, "spawn_item"):
+            return
+        world.spawn_item(
+            self.arrow_id,
+            1,
+            pos=[self.pos[0], self.pos[1], self.pos[2]],
+            vel=[0.0, 1.5, 0.0],
+            pickup_delay=0.35,
+        )
+
+    def to_dict(self):
+        return {
+            "type": "arrow",
+            "id": self.id,
+            "arrow": self.arrow_id,
+            "pos": [round(v, 4) for v in self.pos],
+            "vel": [round(v, 4) for v in self.vel],
+            "damage": self.damage,
+            "power": round(self.power, 4),
+            "gravity": self.gravity,
+            "effects": [dict(effect) for effect in self.effects],
+            "owner": self.owner,
+            "age": round(self.age, 3),
+        }
+
+    @classmethod
+    def from_dict(cls, data):
+        arrow = cls(
+            data.get("arrow", "arrow"),
+            pos=data.get("pos"),
+            vel=data.get("vel"),
+            damage=data.get("damage", 1),
+            power=data.get("power", 1),
+            gravity=data.get("gravity", 12),
+            effects=data.get("effects") or (),
+            owner=data.get("owner", ""),
+            age=data.get("age", 0),
+            entity_id=data.get("id"),
+        )
+        return arrow
+
+
+def _segment_hits_body(origin, dx, dy, dz, limit, feet, radius, height):
+    """Closest point on the flight segment that meets a vertical body, or None."""
+    if limit <= 0:
+        return None
+    length = math.sqrt(dx * dx + dy * dy + dz * dz) or 1.0
+    scale = limit / length
+    ax, ay, az = origin
+    bx = ax + dx * scale
+    by = ay + dy * scale
+    bz = az + dz * scale
+    reach = max(0.2, float(radius))
+    best_t = None
+    best_point = None
+    steps = max(2, int(limit / 0.15) + 1)
+    for step in range(steps + 1):
+        t = step / steps
+        x = ax + (bx - ax) * t
+        y = ay + (by - ay) * t
+        z = az + (bz - az) * t
+        if y < feet[1] - 0.05 or y > feet[1] + height + 0.05:
+            continue
+        if (x - feet[0]) ** 2 + (z - feet[2]) ** 2 <= reach * reach:
+            if best_t is None or t < best_t:
+                best_t = t * limit
+                best_point = (x, y, z)
+                break
+    if best_point is None:
+        return None
+    return best_t, best_point
+
+
 def entity_from_dict(data):
     etype = data.get("type")
+    if etype == "arrow":
+        return ArrowEntity.from_dict(data)
     if etype == "falling_block" or "block" in data:
         return FallingBlockEntity.from_dict(data)
     elif etype == "pig" or data.get("mob_type") == "pig":

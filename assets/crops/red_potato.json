@@ -1,0 +1,18 @@
+{
+  "id": "red_potato",
+  "stages": 8,
+  "min_time": 180,
+  "max_time": 340,
+  "needs_water": true,
+  "water_radius": 4,
+  "water_vertical": 1,
+  "seeds": "red_potato_seeds",
+  "produce": "red_potato",
+  "food": 3,
+  "wild": {
+    "block": "wild_red_potato",
+    "chance": 0.01,
+    "surfaces": ["grass"],
+    "biomes": ["savanna", "savanna_hills"]
+  }
+}
