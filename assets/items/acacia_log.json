@@ -1,0 +1,14 @@
+{
+  "id": "acacia_log",
+  "lang": "block.acacia_log",
+  "tab": [
+    "building",
+    "natural"
+  ],
+  "model": "block",
+  "block": "acacia_log",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}

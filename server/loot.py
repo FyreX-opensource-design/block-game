@@ -36,6 +36,12 @@ def load_loot_table(table_id):
         except Exception:
             pass
 
+    from server.crop_data import loot_table_for
+
+    table = loot_table_for(table_id)
+    if table is not None:
+        _LOOT_CACHE[table_id] = table
+        return table
     return None
 
 
@@ -52,6 +58,8 @@ def get_tool_type(item):
         return "axe"
     if "shovel" in item_id:
         return "shovel"
+    if "hoe" in item_id:
+        return "hoe"
     if "shears" in item_id:
         return "shears"
     return None

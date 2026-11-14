@@ -364,12 +364,15 @@ class NetworkChatIntegrationTests(unittest.TestCase):
                 client2 = NetworkClient("127.0.0.1", port, "uuid-2", "Bob")
                 self.assertTrue(client2.connect(timeout=2.0))
 
-                time.sleep(0.15)
-                server.tick()
-
                 # Client 1 should receive Bob joined notice
-                ev1 = client1.poll_events()
-                join_bob = [e for e in ev1 if e.get("type") == "chat" and "Bob joined the game" in e.get("text", "")]
+                join_bob = []
+                for _ in range(10):
+                    time.sleep(0.05)
+                    server.tick()
+                    ev1 = client1.poll_events()
+                    join_bob.extend([e for e in ev1 if e.get("type") == "chat" and "Bob joined the game" in e.get("text", "")])
+                    if join_bob:
+                        break
                 self.assertTrue(len(join_bob) >= 1)
 
                 # Client 1 sends a chat message

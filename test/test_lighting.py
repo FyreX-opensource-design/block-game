@@ -551,6 +551,55 @@ class LightingTests(unittest.TestCase):
         self.assertEqual(get_block_opacity(BLOCKS["planks_stairs_north_top"]), 0)
         self.assertEqual(get_block_opacity(BLOCKS["stone_stairs"]), 0)
 
+    def test_asset_driven_light_opacity(self):
+        from server.lighting import get_block_opacity
+        from server.blocks import Block, BLOCKS
+
+        # 1. Block with direct light_opacity attribute / JSON field
+        custom_block = Block(
+            "test_tinted_glass",
+            "Test Tinted Glass",
+            solid=True,
+            full_cube=True,
+            face_uvs=(),
+            elements=(),
+            light_opacity=7,
+        )
+        self.assertEqual(get_block_opacity(custom_block), 7)
+        self.assertEqual(custom_block.light_opacity, 7)
+        self.assertEqual(custom_block.properties.get("light_opacity"), 7)
+
+        # 2. Block with property light_opacity
+        prop_block = Block(
+            "test_dense_smoke",
+            "Test Dense Smoke",
+            solid=False,
+            full_cube=False,
+            face_uvs=(),
+            elements=(),
+            properties={"light_opacity": 3},
+        )
+        self.assertEqual(get_block_opacity(prop_block), 3)
+
+        # 3. Waterlogged block respects at least water attenuation (2)
+        wl_block = Block(
+            "test_wl_grate",
+            "Test Waterlogged Grate",
+            solid=True,
+            full_cube=False,
+            face_uvs=(),
+            elements=(),
+            waterlogged=True,
+            light_opacity=0,
+        )
+        self.assertEqual(get_block_opacity(wl_block), 2)
+
+        # 4. Asset stalactite/stalagmite with explicit light_opacity in JSON
+        self.assertEqual(BLOCKS["limestone_stalactite"].light_opacity, 0)
+        self.assertEqual(get_block_opacity(BLOCKS["limestone_stalactite"]), 0)
+        self.assertEqual(BLOCKS["limestone_stalagmite"].light_opacity, 0)
+        self.assertEqual(get_block_opacity(BLOCKS["limestone_stalagmite"]), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,20 @@
+{
+  "id": "acacia_log",
+  "lang": "block.acacia_log",
+  "tab": ["building", "natural"],
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "axe",
+  "mining_level": 0,
+  "loot_table": "blocks/acacia_log",
+  "sound": "wood",
+  "properties": {
+    "rotation": "axis"
+  },
+  "textures": {
+    "top": "acacia_log_top",
+    "side": "acacia_log_side",
+    "bottom": "acacia_log_top"
+  }
+}
+

@@ -1,0 +1,14 @@
+{
+  "id": "acacia_sapling",
+  "lang": "block.acacia_sapling",
+  "tab": [
+    "natural"
+  ],
+  "model": "flat",
+  "block": "acacia_sapling",
+  "texture": "acacia_sapling",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}

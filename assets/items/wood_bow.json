@@ -1,0 +1,16 @@
+{
+  "id": "wood_bow",
+  "lang": "item.wood_bow",
+  "tab": "tools",
+  "model": "flat",
+  "texture": "wood_bow",
+  "max_stack": 1,
+  "left": "attack",
+  "right": "none",
+  "durability": 59,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 2,
+  "food": 0,
+  "repair": "stick"
+}

@@ -1,0 +1,18 @@
+{
+  "id": "raw_beef",
+  "name": "Raw Beef",
+  "lang": "item.raw_beef",
+  "tab": [
+    "materials"
+  ],
+  "model": "flat",
+  "texture": "raw_beef",
+  "max_stack": 64,
+  "left": "none",
+  "right": "eat",
+  "durability": 0,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 1,
+  "food": 3
+}

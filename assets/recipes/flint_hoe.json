@@ -1,0 +1,17 @@
+{
+  "id": "flint_hoe",
+  "type": "crafting_shaped",
+  "pattern": [
+    "FF",
+    " X",
+    " X"
+  ],
+  "key": {
+    "F": "knapped_flint",
+    "X": "#sticks"
+  },
+  "result": {
+    "item": "flint_hoe",
+    "count": 1
+  }
+}

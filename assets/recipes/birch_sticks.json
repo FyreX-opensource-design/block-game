@@ -1,0 +1,15 @@
+{
+  "id": "birch_sticks",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "#"
+  ],
+  "key": {
+    "#": "birch_planks"
+  },
+  "result": {
+    "item": "stick",
+    "count": 4
+  }
+}

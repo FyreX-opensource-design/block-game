@@ -12,11 +12,14 @@ from server.stacks import stack_damage, stack_id
 from client.geom import ortho, write_matrix
 from client.player_render import (
     PlayerMeshes,
+    arrow_flight_matrix,
     dropped_item_matrix,
     falling_block_mesh,
     first_person_pose,
     held_item_mesh,
     item_hold_matrix,
+    nocked_arrow_matrix,
+    third_person_nocked_arrow_matrix,
     selected_item_id,
     third_person_pose,
 )
@@ -512,16 +515,22 @@ class Renderer:
         self.skin_key = None
         self.player_skins = {}
         self.player_meshes = PlayerMeshes()
+        from server.cow_model import CowMeshes
         from server.pig_model import PigMeshes
         from server.sheep_model import SheepMeshes
         from server.zombie_model import ZombieMeshes
+        from server.spider_model import SpiderMeshes
 
         self.pig_meshes = PigMeshes()
         self.pig_texture = None
+        self.cow_meshes = CowMeshes()
+        self.cow_texture = None
         self.sheep_meshes = SheepMeshes()
         self.sheep_texture = None
         self.zombie_meshes = ZombieMeshes()
         self.zombie_texture = None
+        self.spider_meshes = SpiderMeshes()
+        self.spider_texture = None
         self._init_mob_textures()
         self.world["atlas"].value = 0
         self.translucent["atlas"].value = 0
@@ -1050,10 +1059,40 @@ class Renderer:
             # extrusion pads don't moiré and near terrain can't poke through.
             self.ctx.disable(moderngl.DEPTH_TEST)
         self._draw_entity(vp, camera, vertices, indices, texture, fog=fog, day_time=day_time)
+        self._draw_nocked_arrow(vp, camera, player, item_id, first_person, eye, fog, day_time)
         if first_person and kind != "block":
             self.ctx.enable(moderngl.DEPTH_TEST)
 
+    def _draw_nocked_arrow(self, vp, camera, player, item_id, first_person, eye, fog, day_time):
+        from client.player_render import _bow_pull
+
+        pull = _bow_pull(player, item_id)
+        arrow_id = str(getattr(player, "nocked_arrow", "") or "")
+        if pull <= 0.0 or not arrow_id:
+            return
+        if first_person:
+            matrix = nocked_arrow_matrix(eye, player.yaw, player.pitch, pull)
+        else:
+            matrix = third_person_nocked_arrow_matrix(player.pos, player.yaw, player.pitch, pull)
+        packed = held_item_mesh(arrow_id, matrix)
+        if packed is None:
+            return
+        (vertices, indices), kind = packed
+        texture = self.atlas if kind == "block" else self.items
+        self._draw_entity(vp, camera, vertices, indices, texture, fog=fog, day_time=day_time)
+
     def _init_mob_textures(self):
+        cow_path = ASSETS / "textures" / "entity" / "cow.png"
+        if not cow_path.is_file():
+            cow_path = ASSETS / "textures" / "cow.png"
+        if cow_path.is_file():
+            try:
+                rgba = read_png(cow_path)
+                image = np.flipud(np.ascontiguousarray(rgba, dtype=np.uint8))
+                self.cow_texture = self._create_skin_texture(image)
+            except Exception:
+                self.cow_texture = None
+
         pig_path = ASSETS / "textures" / "entity" / "pig.png"
         if not pig_path.is_file():
             pig_path = ASSETS / "textures" / "pig.png"
@@ -1087,6 +1126,17 @@ class Renderer:
             except Exception:
                 self.zombie_texture = None
 
+        spider_path = ASSETS / "textures" / "entity" / "spider.png"
+        if not spider_path.is_file():
+            spider_path = ASSETS / "textures" / "spider.png"
+        if spider_path.is_file():
+            try:
+                rgba = read_png(spider_path)
+                image = np.flipud(np.ascontiguousarray(rgba, dtype=np.uint8))
+                self.spider_texture = self._create_skin_texture(image)
+            except Exception:
+                self.spider_texture = None
+
     def draw_item_entities(self, vp, camera, entities, time_val, day_time=1000.0):
         if not entities:
             return
@@ -1101,7 +1151,24 @@ class Renderer:
                 if not getattr(entity, "alive", True):
                     continue
                 mob_type = getattr(entity, "mob_type", "")
-                if mob_type == "pig" and self.pig_texture is not None:
+                if mob_type == "cow" and self.cow_texture is not None:
+                    from server.cow_model import cow_pose
+
+                    hspeed = math.hypot(entity.vel[0], entity.vel[2])
+                    poses = cow_pose(entity.walk_time, hspeed, entity.yaw, pitch=entity.pitch)
+                    vertices, indices = self.cow_meshes.posed_vertices(entity.pos, entity.yaw, poses)
+                    hurt = 1.0 if getattr(entity, "hurt_time", 0.0) > 0 else 0.0
+                    self._draw_entity(
+                        vp,
+                        camera,
+                        vertices,
+                        indices,
+                        self.cow_texture,
+                        fog=True,
+                        day_time=day_time,
+                        hurt_flash=hurt,
+                    )
+                elif mob_type == "pig" and self.pig_texture is not None:
                     from server.pig_model import pig_pose
 
                     hspeed = math.hypot(entity.vel[0], entity.vel[2])
@@ -1155,6 +1222,43 @@ class Renderer:
                         day_time=day_time,
                         hurt_flash=hurt,
                     )
+                elif mob_type == "spider" and self.spider_texture is not None:
+                    from server.spider_model import spider_pose
+
+                    hspeed = math.hypot(entity.vel[0], entity.vel[2])
+                    climbing = bool(getattr(entity, "climbing", False))
+                    on_ceiling = bool(getattr(entity, "on_ceiling", False))
+                    vspeed = abs(entity.vel[1]) if climbing else 0.0
+                    movespeed = max(hspeed, vspeed)
+                    poses = spider_pose(
+                        entity.walk_time,
+                        movespeed,
+                        entity.yaw,
+                        pitch=entity.pitch,
+                        climbing=climbing,
+                        on_ceiling=on_ceiling,
+                    )
+                    vertices, indices = self.spider_meshes.posed_vertices(entity.pos, entity.yaw, poses)
+                    hurt = 1.0 if getattr(entity, "hurt_time", 0.0) > 0 else 0.0
+                    self._draw_entity(
+                        vp,
+                        camera,
+                        vertices,
+                        indices,
+                        self.spider_texture,
+                        fog=True,
+                        day_time=day_time,
+                        hurt_flash=hurt,
+                    )
+                continue
+            if getattr(entity, "is_projectile", False):
+                matrix = arrow_flight_matrix(entity.pos, entity.vel)
+                packed = held_item_mesh(getattr(entity, "arrow_id", ""), matrix)
+                if packed is None:
+                    continue
+                (vertices, indices), kind = packed
+                texture = self.atlas if kind == "block" else self.items
+                self._draw_entity(vp, camera, vertices, indices, texture, fog=True, day_time=day_time)
                 continue
             if getattr(entity, "is_falling_block", False) or hasattr(entity, "block_id"):
                 mesh = falling_block_mesh(entity.block_id, entity.pos)

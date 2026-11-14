@@ -1,0 +1,7 @@
+{
+  "id": "dead_bush",
+  "block": "dead_bush",
+  "chance": 0.03,
+  "surfaces": ["sand"]
+}
+

@@ -1,0 +1,7 @@
+{
+  "id": "arrow",
+  "damage": 5,
+  "speed": 1,
+  "gravity": 12,
+  "effects": []
+}

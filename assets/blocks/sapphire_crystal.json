@@ -1,0 +1,21 @@
+{
+  "id": "sapphire_crystal",
+  "lang": "block.sapphire_crystal",
+  "tab": "natural",
+  "model": "cross",
+  "render": "cutout",
+  "solid": false,
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 4,
+  "loot_table": "blocks/sapphire_crystal",
+  "fluid_breakable": true,
+  "textures": {
+    "cross": "sapphire_crystal"
+  },
+  "emission": [
+    2,
+    4,
+    8
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "id": "wood_hoe",
+  "type": "crafting_shaped",
+  "pattern": [
+    "PP",
+    " X",
+    " X"
+  ],
+  "key": {
+    "P": "#planks",
+    "X": "#sticks"
+  },
+  "result": {
+    "item": "wood_hoe",
+    "count": 1
+  }
+}

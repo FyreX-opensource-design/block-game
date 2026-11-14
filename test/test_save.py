@@ -15,6 +15,7 @@ from server.damage import DEFAULT_MAX_HEALTH
 from server.noise import terrain_height
 from server.storage import ChunkStore, WorldCatalog, default_saves_dir
 from server.world import Chunk, World
+from server.entity import Pig, Sheep, Zombie, Spider, ItemEntity, FallingBlockEntity
 
 
 class SaveTests(unittest.TestCase):
@@ -260,6 +261,81 @@ class MenuTests(unittest.TestCase):
             self.assertEqual(reloaded["uuid"], profile["uuid"])
         finally:
             shutil.rmtree(temp_dir)
+
+    def test_entities_persist_across_save_and_reload(self):
+        with tempfile.TemporaryDirectory() as folder:
+            catalog = WorldCatalog(folder)
+            info = catalog.create("EntityWorld", 123)
+            store = catalog.store_for(info.id)
+            world = World(seed=info.seed, store=store)
+
+            spider = Spider(pos=[10.5, 65.0, 10.5], health=14.0)
+            spider.climbing = True
+            spider.on_ceiling = True
+            world.spawn_mob(spider)
+
+            pig = Pig(pos=[5.0, 64.0, 5.0], health=9.0)
+            world.spawn_mob(pig)
+
+            sheep = Sheep(pos=[8.0, 64.0, 8.0], sheared=True, color="red")
+            world.spawn_mob(sheep)
+
+            zombie = Zombie(pos=[-2.0, 60.0, -3.0], health=18.0)
+            world.spawn_mob(zombie)
+
+            item = world.spawn_item("string", count=3, pos=[1.0, 64.0, 1.0])
+
+            # Dead mob should not be persisted
+            dead_pig = Pig(pos=[0.0, 64.0, 0.0], health=0.0)
+            dead_pig.alive = False
+            world.spawn_mob(dead_pig)
+
+            world.flush()
+            self.assertTrue(store.meta_path("entities.json").is_file())
+
+            # Load into a new world instance
+            restored_world = World(seed=info.seed, store=store)
+            self.assertEqual(len(restored_world.entities), 5)
+
+            # Check spider
+            restored_spider = next((e for e in restored_world.entities if isinstance(e, Spider)), None)
+            self.assertIsNotNone(restored_spider)
+            self.assertEqual(restored_spider.uuid, spider.uuid)
+            self.assertEqual(restored_spider.pos, [10.5, 65.0, 10.5])
+            self.assertEqual(restored_spider.health, 14.0)
+            self.assertTrue(restored_spider.climbing)
+            self.assertTrue(restored_spider.on_ceiling)
+
+            # Check pig
+            restored_pig = next((e for e in restored_world.entities if isinstance(e, Pig)), None)
+            self.assertIsNotNone(restored_pig)
+            self.assertEqual(restored_pig.uuid, pig.uuid)
+            self.assertEqual(restored_pig.pos, [5.0, 64.0, 5.0])
+            self.assertEqual(restored_pig.health, 9.0)
+
+            # Check sheep
+            restored_sheep = next((e for e in restored_world.entities if isinstance(e, Sheep)), None)
+            self.assertIsNotNone(restored_sheep)
+            self.assertEqual(restored_sheep.uuid, sheep.uuid)
+            self.assertTrue(restored_sheep.sheared)
+            self.assertEqual(restored_sheep.color, "red")
+
+            # Check zombie
+            restored_zombie = next((e for e in restored_world.entities if isinstance(e, Zombie)), None)
+            self.assertIsNotNone(restored_zombie)
+            self.assertEqual(restored_zombie.uuid, zombie.uuid)
+            self.assertEqual(restored_zombie.health, 18.0)
+
+            # Check item
+            restored_item = next((e for e in restored_world.entities if isinstance(e, ItemEntity)), None)
+            self.assertIsNotNone(restored_item)
+            self.assertEqual(restored_item.item, "string")
+            self.assertEqual(restored_item.count, 3)
+
+            # Newly spawned entities should have distinct IDs
+            new_pig = restored_world.spawn_mob("pig", pos=[0.0, 64.0, 0.0])
+            all_ids = [e.id for e in restored_world.entities]
+            self.assertEqual(len(all_ids), len(set(all_ids)))
 
 
 class _FakeWorld:

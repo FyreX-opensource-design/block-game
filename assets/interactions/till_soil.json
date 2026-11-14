@@ -1,0 +1,8 @@
+{
+  "id": "till_soil",
+  "tool": "hoe",
+  "blocks": ["dirt", "grass", "mud", "muddy_grass"],
+  "result": "farmland",
+  "damage": 1,
+  "require_clear_above": true
+}

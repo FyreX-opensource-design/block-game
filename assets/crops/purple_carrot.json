@@ -1,0 +1,18 @@
+{
+  "id": "purple_carrot",
+  "stages": 8,
+  "min_time": 180,
+  "max_time": 340,
+  "needs_water": true,
+  "water_radius": 4,
+  "water_vertical": 1,
+  "seeds": "purple_carrot_seeds",
+  "produce": "purple_carrot",
+  "food": 4,
+  "wild": {
+    "block": "wild_purple_carrot",
+    "chance": 0.01,
+    "surfaces": ["grass"],
+    "biomes": ["highland_plains", "mountain_meadow"]
+  }
+}

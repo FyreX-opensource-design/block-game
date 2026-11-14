@@ -1,0 +1,19 @@
+{
+  "id": "cactus",
+  "lang": "block.cactus",
+  "tab": "natural",
+  "model": "cube",
+  "solid": true,
+  "hardness": 0.4,
+  "tool": "none",
+  "mining_level": 0,
+  "sound": "grass",
+  "loot_table": "blocks/cactus",
+  "valid_ground": ["sand", "cactus"],
+  "textures": {
+    "top": "cactus_top",
+    "side": "cactus_side",
+    "bottom": "cactus_bottom"
+  }
+}
+

@@ -1,0 +1,17 @@
+{
+  "id": "birch_planks",
+  "lang": "block.birch_planks",
+  "tab": "building",
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "axe",
+  "mining_level": 0,
+  "loot_table": "blocks/birch_planks",
+  "sound": "wood",
+  "textures": {
+    "top": "birch_planks",
+    "side": "birch_planks",
+    "bottom": "birch_planks"
+  }
+}
+

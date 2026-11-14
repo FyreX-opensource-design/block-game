@@ -1,0 +1,18 @@
+{
+  "id": "string",
+  "name": "String",
+  "tab": [
+    "materials"
+  ],
+  "model": "flat",
+  "texture": "string",
+  "max_stack": 64,
+  "left": "none",
+  "right": "none",
+  "durability": 0,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 1,
+  "lang": "item.string"
+}
+

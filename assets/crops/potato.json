@@ -1,0 +1,18 @@
+{
+  "id": "potato",
+  "stages": 8,
+  "min_time": 180,
+  "max_time": 340,
+  "needs_water": true,
+  "water_radius": 4,
+  "water_vertical": 1,
+  "seeds": "potato_seeds",
+  "produce": "potato",
+  "food": 3,
+  "wild": {
+    "block": "wild_potato",
+    "chance": 0.01,
+    "surfaces": ["grass"],
+    "biomes": ["forest", "wooded_mountains"]
+  }
+}

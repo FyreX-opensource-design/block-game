@@ -1,0 +1,12 @@
+{
+  "id": "wheat",
+  "stages": 8,
+  "min_time": 180,
+  "max_time": 340,
+  "needs_water": true,
+  "water_radius": 4,
+  "water_vertical": 1,
+  "seeds": "wheat_seeds",
+  "produce": "wheat",
+  "food": 5
+}

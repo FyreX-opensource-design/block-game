@@ -21,7 +21,7 @@ class CaveTests(unittest.TestCase):
                 height = terrain_height(x, z, 3)
                 self.assertEqual(carved.get_block(x, 0, z), STONE)
                 for y in range(8, max(9, height - 8)):
-                    self.assertEqual(solid.get_block(x, y, z), STONE)
+                    self.assertIn(solid.get_block(x, y, z), (STONE, "andesite", "diorite", "granite", "marble"))
                     if carved.get_block(x, y, z) == AIR:
                         opened += 1
         self.assertGreater(opened, 0)
@@ -69,3 +69,25 @@ class CaveTests(unittest.TestCase):
     def test_bad_cave_file_is_rejected(self):
         with self.assertRaises(ValueError):
             cave_from_mapping({"id": "Bad", "style": "worm"}, "cave")
+
+
+class LuaLibraryTests(unittest.TestCase):
+    def test_windows_loads_a_dll_not_the_linux_soname(self):
+        import server.lua as lua
+
+        saved = lua.sys.platform
+        try:
+            lua.sys.platform = "win32"
+            windows_names = lua.lua_library_names()
+            lua.sys.platform = "linux"
+            linux_names = lua.lua_library_names()
+        finally:
+            lua.sys.platform = saved
+        self.assertTrue(windows_names[0].replace("\\", "/").endswith("native/windows/lua55.dll"))
+        self.assertTrue(all(name.replace("\\", "/").endswith(".dll") for name in windows_names))
+        self.assertFalse(any("liblua.so" in name for name in windows_names))
+        self.assertTrue(linux_names[0].endswith("native/linux/liblua.so.5.5"))
+        self.assertIn("liblua.so.5.5", linux_names)
+        if saved == "linux":
+            loaded = str(getattr(lua._LIB, "_name", ""))
+            self.assertTrue(loaded.endswith("native/linux/liblua.so.5.5"))

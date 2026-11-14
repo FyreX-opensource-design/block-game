@@ -1,0 +1,15 @@
+{
+  "id": "birch_wood",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "##"
+  ],
+  "key": {
+    "#": "birch_log"
+  },
+  "result": {
+    "item": "birch_wood",
+    "count": 3
+  }
+}

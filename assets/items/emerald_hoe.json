@@ -1,0 +1,17 @@
+{
+  "id": "emerald_hoe",
+  "lang": "item.emerald_hoe",
+  "tab": "tools",
+  "model": "flat",
+  "texture": "emerald_hoe",
+  "tool": "hoe",
+  "max_stack": 1,
+  "left": "mine",
+  "right": "none",
+  "durability": 520,
+  "mining_level": 5,
+  "mining_speed": 9.5,
+  "attack": 6.5,
+  "food": 0,
+  "repair": "emerald"
+}

@@ -1,0 +1,16 @@
+{
+  "id": "birch_planks_stairs",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#  ",
+    "## ",
+    "###"
+  ],
+  "key": {
+    "#": "birch_planks"
+  },
+  "result": {
+    "item": "birch_planks_stairs",
+    "count": 4
+  }
+}

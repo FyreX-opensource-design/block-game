@@ -167,6 +167,10 @@ BUCKET_FLUID_MAP = {
     ("clay_bucket", "brackish_water"): "clay_brackish_water_bucket",
     ("iron_bucket", "brackish_water"): "brackish_water_bucket",
     ("bucket", "brackish_water"): "brackish_water_bucket",
+    ("wood_bucket", "milk"): "wood_milk_bucket",
+    ("clay_bucket", "milk"): "clay_milk_bucket",
+    ("iron_bucket", "milk"): "milk_bucket",
+    ("bucket", "milk"): "milk_bucket",
 }
 
 FILLED_BUCKETS = {
@@ -188,6 +192,12 @@ FILLED_BUCKETS = {
     "brackish_water_clay_bucket": ("brackish_water", "clay_bucket"),
     "iron_brackish_water_bucket": ("brackish_water", "iron_bucket"),
     "brackish_water_bucket": ("brackish_water", "iron_bucket"),
+    "wood_milk_bucket": ("milk", "wood_bucket"),
+    "milk_wood_bucket": ("milk", "wood_bucket"),
+    "clay_milk_bucket": ("milk", "clay_bucket"),
+    "milk_clay_bucket": ("milk", "clay_bucket"),
+    "iron_milk_bucket": ("milk", "iron_bucket"),
+    "milk_bucket": ("milk", "iron_bucket"),
 }
 
 
@@ -214,6 +224,24 @@ def get_bucket_empty(bucket_id):
     if bucket_id in FILLED_BUCKETS:
         return FILLED_BUCKETS[bucket_id][1]
     return None
+
+
+def fresh_water_nearby(world, x, y, z, radius=4, vertical=1):
+    """True when fresh water (not salt, brackish, or milk) is within the box.
+
+    ``radius`` is horizontal and ``vertical`` is up and down, both inclusive.
+    The block at (x, y, z) itself does not count.
+    """
+    radius = int(radius)
+    vertical = int(vertical)
+    for dy in range(-vertical, vertical + 1):
+        for dz in range(-radius, radius + 1):
+            for dx in range(-radius, radius + 1):
+                if dx == 0 and dy == 0 and dz == 0:
+                    continue
+                if get_fluid_type(world.get_block(x + dx, y + dy, z + dz)) == "water":
+                    return True
+    return False
 
 
 def get_fluid_type(block_id):

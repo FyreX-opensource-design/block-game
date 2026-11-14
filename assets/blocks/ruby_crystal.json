@@ -1,0 +1,21 @@
+{
+  "id": "ruby_crystal",
+  "lang": "block.ruby_crystal",
+  "tab": "natural",
+  "model": "cross",
+  "render": "cutout",
+  "solid": false,
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 4,
+  "loot_table": "blocks/ruby_crystal",
+  "fluid_breakable": true,
+  "textures": {
+    "cross": "ruby_crystal"
+  },
+  "emission": [
+    8,
+    2,
+    3
+  ]
+}

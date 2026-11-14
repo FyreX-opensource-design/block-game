@@ -751,6 +751,59 @@ def test_glass_full_block_adjacent_to_east_west_vertical_slabs():
     assert top_quads.get((5.5, 6.0, 6.0)) == expected_east_uv0, f"Full glass east half top face should connect down+left (mask 6), got {top_quads.get((5.5, 6.0, 6.0))}"
 
 
+def test_stained_glass_offset_and_vertical_slab_culling_and_colors():
+    world = World(seed=123)
+    world.load_chunk(0, 0, 0)
+    world.chunks[(0, 0, 0)].data.fill(0)
+
+    # 1. Vertical slab below offset stained glass block
+    world.set_block(5, 10, 5, "yellow_stained_glass_vertical_slab_south")
+    world.set_block(5, 11, 5, "yellow_stained_glass_offset")
+
+    mesh = build_chunk_mesh(world, 0, 0, 0)
+    assert mesh is not None and mesh.translucent is not None
+    verts, inds = mesh.translucent
+
+    # Top face of vertical slab at Y=11.0 inside offset block must be culled
+    has_vs_top_face = False
+    # Bottom face of offset block at Y=10.5 over the vertical slab (Z in [5.5, 6.0]) must be culled
+    has_shelf_over_vs = False
+    # Bottom face of offset block at Y=10.5 over air (Z in [5.0, 5.5]) must be rendered
+    has_ceiling_over_air = False
+
+    for q in range(len(inds) // 6):
+        i0 = inds[q * 6]
+        v = verts[i0]
+        norm = (round(float(v[3]), 2), round(float(v[4]), 2), round(float(v[5]), 2))
+        pos = (round(float(v[0]), 2), round(float(v[1]), 2), round(float(v[2]), 2))
+        u, v_coord = float(v[6]), float(v[7])
+
+        # Verify no stained glass quad ever renders with clear glass UV (V in [0.20, 0.25])
+        assert not (0.20 < v_coord < 0.25), f"Stained glass rendered with clear glass UV: {v_coord} at {pos}"
+
+        if norm == (0.0, 1.0, 0.0) and pos[1] == 11.0 and pos[0] == 5.0 and pos[2] >= 5.5:
+            has_vs_top_face = True
+        elif norm == (0.0, -1.0, 0.0) and pos[1] == 10.5 and pos[0] == 5.0:
+            if pos[2] >= 5.5:
+                has_shelf_over_vs = True
+            else:
+                has_ceiling_over_air = True
+                assert v_coord > 0.9, f"Ceiling over air must have yellow stained glass UV (V > 0.9), got {v_coord}"
+
+    assert not has_vs_top_face, "VS top face inside offset glass volume must be culled"
+    assert not has_shelf_over_vs, "Offset block bottom face over VS solid volume must be culled"
+    assert has_ceiling_over_air, "Offset block bottom face over open air must be rendered"
+
+
+def test_mixed_double_slab_and_double_vertical_slab_translucent():
+    d_slab = BLOCKS["double_slab_yellow_stained_glass_slab_stone_brick_slab"]
+    assert d_slab.translucent, "Mixed double slab with stained glass must have translucent=True"
+
+    d_vs = BLOCKS["double_vertical_slab_z_stone_brick_vertical_slab_yellow_stained_glass_vertical_slab"]
+    assert d_vs.translucent, "Mixed double vertical slab with stained glass must have translucent=True"
+
+
+
 
 
 

@@ -55,66 +55,63 @@ def parse_light_levels(val):
 
 
 def get_block_opacity(block_obj):
-    """Return opacity 0..15 of a block."""
+    """Return opacity 0..15 of a block, driven by asset metadata and properties."""
     if block_obj is None:
         return 0
-    if hasattr(block_obj, "properties") and "light_opacity" in block_obj.properties:
-        return int(block_obj.properties["light_opacity"])
+    if isinstance(block_obj, str):
+        from server.blocks import BLOCKS
+
+        block_obj = BLOCKS.get(block_obj)
+        if block_obj is None:
+            return 0
+
+    # 1. Direct block attribute or property light_opacity (asset-driven first)
+    lo = getattr(block_obj, "light_opacity", None)
+    if lo is None:
+        lo = getattr(block_obj, "properties", {}).get("light_opacity")
+    if lo is not None:
+        if getattr(block_obj, "waterlogged", False) or getattr(block_obj, "properties", {}).get("waterlogged"):
+            return max(int(lo), 2)
+        return int(lo)
+
+    props = getattr(block_obj, "properties", None) or {}
+    if props.get("waterlogged") or getattr(block_obj, "waterlogged", False):
+        return 2
+
     bid = getattr(block_obj, "id", "")
     base = getattr(block_obj, "base_id", bid)
-    if bid == "air":
-        return 0
-    if bid == "leaves" or base == "leaves" or "leaves" in bid or (hasattr(block_obj, "properties") and block_obj.properties.get("leaf")):
-        return 1
-    if bid.startswith("water") or (hasattr(block_obj, "properties") and block_obj.properties.get("fluid")):
+
+    # 2. Fluids attenuate light by 2
+    if props.get("fluid") or bid.startswith("water") or "water" in bid:
         return 2
+
+    # 3. Non-solid blocks never block light (air, plants, torches, crystals, etc.)
     if not getattr(block_obj, "solid", True):
         return 0
-    props = getattr(block_obj, "properties", None) or {}
-    if props.get("glass") or getattr(block_obj, "glass", False) or "glass" in bid or "glass" in str(base):
+
+    # 4. Leaves attenuate light slightly by 1
+    if props.get("leaf") or bid == "leaves" or base == "leaves" or "leaves" in bid:
+        return 1
+
+    # 5. Glass and translucent blocks let light pass freely
+    if getattr(block_obj, "glass", False) or props.get("glass") or getattr(block_obj, "translucent", False) or "glass" in bid:
         return 0
-    if (
-        (
-            getattr(block_obj, "vertical_slab", False)
-            or props.get("vertical_slab")
-            or base == "vertical_slab"
-            or "_vertical_slab" in str(base)
-        )
-        and not props.get("double_vertical_slab")
-    ):
-        # Vertical slabs only occupy half of a block, so (like horizontal
-        # half slabs) they must not extinguish light in the whole cell.
-        if props.get("waterlogged") or getattr(block_obj, "waterlogged", False):
-            return 2
+
+    # 6. Non-full-cube blocks (slabs, stairs, fences, walls, doors, trapdoors, dripstones, sub-cells, etc.)
+    # never extinguish light across the entire cell unless explicitly capped
+    if not getattr(block_obj, "full_cube", False):
+        if props.get("offset_block") and props.get("capped"):
+            return 15
         return 0
-    if props.get("offset_block"):
-        if not props.get("capped"):
-            return 0
-        return 15
-    if props.get("slab") and not props.get("double_slab"):
-        if props.get("waterlogged") or getattr(block_obj, "waterlogged", False):
-            return 2
+
+    # 7. Cutout on full cube (e.g. decorative transparent panels)
+    if getattr(block_obj, "cutout", False):
         return 0
-    if bid == "sub_cell" or props.get("sub_cell") or base == "sub_cell":
-        # Sub-cells contain open octants (full sub-cells collapse to their full block).
-        # Like horizontal slabs and vertical slabs, they must not extinguish light in the whole cell.
-        return 0
-    if props.get("door") or getattr(block_obj, "door", False) or ("door" in bid and "trapdoor" not in bid):
-        return 0
-    if props.get("trapdoor") or getattr(block_obj, "trapdoor", False) or "trapdoor" in bid or "trapdoor" in str(base):
-        return 0
-    if props.get("fence") or getattr(block_obj, "fence", False) or "fence" in bid:
-        return 0
-    if props.get("wall") or getattr(block_obj, "wall", False) or ("wall" in bid and "torch" not in bid):
-        return 0
-    if props.get("stairs") or getattr(block_obj, "stairs", False) or "stairs" in bid or "stairs" in str(base):
-        return 0
-    if props.get("grate") or getattr(block_obj, "grate", False) or "grate" in bid or "grate" in str(base):
-        if props.get("waterlogged") or getattr(block_obj, "waterlogged", False):
-            return 2
-        return 0
+
+    # 8. Full opaque cube
     if getattr(block_obj, "full_cube", False):
         return 15
+
     opacity = getattr(block_obj, "opacity", 1.0)
     return int(round(opacity * 15))
 
@@ -171,6 +168,48 @@ class LightingSystem:
         self.world = world
         self.light_sources = {}  # (x, y, z) -> (r, g, b, uv, ir)
         self._executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="lighting")
+        self._batch_depth = 0
+        self._batch_keys = set()
+        self._batch_emitters = set()
+
+    def begin_batch(self):
+        """Mark light dirty without recomputing until :meth:`end_batch`.
+
+        A fluid tick can replace dozens of cells (and the plants in them).
+        Recomputing a chunk section on every cell is what hitches the frame.
+        """
+        self._batch_depth += 1
+
+    def end_batch(self):
+        self._batch_depth = max(0, self._batch_depth - 1)
+        if self._batch_depth > 0:
+            return
+        keys = self._batch_keys
+        emitters = self._batch_emitters
+        self._batch_keys = set()
+        self._batch_emitters = set()
+        if not keys and not emitters:
+            return
+        ordered = sorted(keys, key=lambda k: -k[1])
+        for ckey in ordered:
+            chunk = self.world.chunks.get(ckey)
+            if chunk is not None and not getattr(chunk, "light_valid", False):
+                self.compute_chunk_lighting(*ckey)
+        origins = ordered or list(emitters)
+        for _ in range(3 if emitters else 2):
+            re_invalidated = [
+                ckey
+                for ckey, chunk in self.world.chunks.items()
+                if not getattr(chunk, "light_valid", False)
+                and any(
+                    abs(ckey[0] - cx) <= 1 and abs(ckey[1] - cy) <= 1 and abs(ckey[2] - cz) <= 1
+                    for cx, cy, cz in origins
+                )
+            ]
+            if not re_invalidated:
+                break
+            for ckey in sorted(re_invalidated, key=lambda k: -k[1]):
+                self.compute_chunk_lighting(*ckey)
 
     def close(self):
         self._executor.shutdown(wait=False)
@@ -300,6 +339,16 @@ class LightingSystem:
         if not hasattr(chunk, "blocklight"):
             chunk.blocklight = np.zeros((CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE, 5), dtype=np.uint8)
 
+        # Save boundary blocklight faces before recomputation to detect light decreases
+        old_bl_faces = {
+            (cx + 1, cy, cz): chunk.blocklight[:, :, -1].copy(),
+            (cx - 1, cy, cz): chunk.blocklight[:, :, 0].copy(),
+            (cx, cy, cz + 1): chunk.blocklight[:, -1, :].copy(),
+            (cx, cy, cz - 1): chunk.blocklight[:, 0, :].copy(),
+            (cx, cy - 1, cz): chunk.blocklight[0, :, :].copy(),
+            (cx, cy + 1, cz): chunk.blocklight[-1, :, :].copy(),
+        }
+
         x0 = cx * CHUNK_SIZE
         y0 = cy * CHUNK_SIZE
         z0 = cz * CHUNK_SIZE
@@ -358,15 +407,15 @@ class LightingSystem:
             sky_grid[-1, 1:-1, 1:-1] = col_sky
 
         # Copy boundary skylight from neighbors
-        if below is not None and getattr(below, "light_valid", False):
+        if below is not None and hasattr(below, "skylight"):
             sky_grid[0, 1:-1, 1:-1] = below.skylight[-1, :, :]
-        if left is not None and getattr(left, "light_valid", False):
+        if left is not None and hasattr(left, "skylight"):
             sky_grid[1:-1, 1:-1, 0] = left.skylight[:, :, -1]
-        if right is not None and getattr(right, "light_valid", False):
+        if right is not None and hasattr(right, "skylight"):
             sky_grid[1:-1, 1:-1, -1] = right.skylight[:, :, 0]
-        if near is not None and getattr(near, "light_valid", False):
+        if near is not None and hasattr(near, "skylight"):
             sky_grid[1:-1, 0, 1:-1] = near.skylight[:, -1, :]
-        if far is not None and getattr(far, "light_valid", False):
+        if far is not None and hasattr(far, "skylight"):
             sky_grid[1:-1, -1, 1:-1] = far.skylight[:, 0, :]
 
         # Vertical rays downwards
@@ -377,21 +426,22 @@ class LightingSystem:
             sky_grid[ly, 1:-1, 1:-1] = np.maximum(0, above_val - atten)
 
         # Vectorized skylight relaxation (diffuse into shadows/caves)
-        sky_step = np.maximum(1, op_grid[1:-1, 1:-1, 1:-1])
-        for _ in range(15):
-            prev = sky_grid[1:-1, 1:-1, 1:-1].copy()
-            cands = [
-                sky_grid[1:-1, 1:-1, 1:-1],
-                sky_grid[2:, 1:-1, 1:-1] - sky_step,
-                sky_grid[:-2, 1:-1, 1:-1] - sky_step,
-                sky_grid[1:-1, 2:, 1:-1] - sky_step,
-                sky_grid[1:-1, :-2, 1:-1] - sky_step,
-                sky_grid[1:-1, 1:-1, 2:] - sky_step,
-                sky_grid[1:-1, 1:-1, :-2] - sky_step,
-            ]
-            sky_grid[1:-1, 1:-1, 1:-1] = np.maximum(0, np.maximum.reduce(cands))
-            if np.array_equal(sky_grid[1:-1, 1:-1, 1:-1], prev):
-                break
+        if np.any(sky_grid > 0):
+            sky_step = np.maximum(1, op_grid[1:-1, 1:-1, 1:-1])
+            for _ in range(15):
+                prev = sky_grid[1:-1, 1:-1, 1:-1].copy()
+                cands = [
+                    sky_grid[1:-1, 1:-1, 1:-1],
+                    sky_grid[2:, 1:-1, 1:-1] - sky_step,
+                    sky_grid[:-2, 1:-1, 1:-1] - sky_step,
+                    sky_grid[1:-1, 2:, 1:-1] - sky_step,
+                    sky_grid[1:-1, :-2, 1:-1] - sky_step,
+                    sky_grid[1:-1, 1:-1, 2:] - sky_step,
+                    sky_grid[1:-1, 1:-1, :-2] - sky_step,
+                ]
+                sky_grid[1:-1, 1:-1, 1:-1] = np.maximum(0, np.maximum.reduce(cands))
+                if np.array_equal(sky_grid[1:-1, 1:-1, 1:-1], prev):
+                    break
 
         chunk.skylight = sky_grid[1:-1, 1:-1, 1:-1].astype(np.uint8)
 
@@ -444,27 +494,27 @@ class LightingSystem:
                     has_emit = True
 
         # Copy boundary blocklight from neighbors if present
-        if below is not None and getattr(below, "light_valid", False):
+        if below is not None and hasattr(below, "blocklight"):
             if np.any(below.blocklight[-1, :, :] > 0):
                 bl_grid[0, 1:-1, 1:-1] = below.blocklight[-1, :, :]
                 has_emit = True
-        if above is not None and getattr(above, "light_valid", False):
+        if above is not None and hasattr(above, "blocklight"):
             if np.any(above.blocklight[0, :, :] > 0):
                 bl_grid[-1, 1:-1, 1:-1] = above.blocklight[0, :, :]
                 has_emit = True
-        if left is not None and getattr(left, "light_valid", False):
+        if left is not None and hasattr(left, "blocklight"):
             if np.any(left.blocklight[:, :, -1] > 0):
                 bl_grid[1:-1, 1:-1, 0] = left.blocklight[:, :, -1]
                 has_emit = True
-        if right is not None and getattr(right, "light_valid", False):
+        if right is not None and hasattr(right, "blocklight"):
             if np.any(right.blocklight[:, :, 0] > 0):
                 bl_grid[1:-1, 1:-1, -1] = right.blocklight[:, :, 0]
                 has_emit = True
-        if near is not None and getattr(near, "light_valid", False):
+        if near is not None and hasattr(near, "blocklight"):
             if np.any(near.blocklight[:, -1, :] > 0):
                 bl_grid[1:-1, 0, 1:-1] = near.blocklight[:, -1, :]
                 has_emit = True
-        if far is not None and getattr(far, "light_valid", False):
+        if far is not None and hasattr(far, "blocklight"):
             if np.any(far.blocklight[:, 0, :] > 0):
                 bl_grid[1:-1, -1, 1:-1] = far.blocklight[:, 0, :]
                 has_emit = True
@@ -491,35 +541,26 @@ class LightingSystem:
 
         chunk.light_valid = True
 
-        # Save boundary blocklight faces before update to detect any decreases
-        old_bl_faces = {
-            (cx + 1, cy, cz): chunk.blocklight[:, :, -1].copy() if hasattr(chunk, "blocklight") else None,
-            (cx - 1, cy, cz): chunk.blocklight[:, :, 0].copy() if hasattr(chunk, "blocklight") else None,
-            (cx, cy, cz + 1): chunk.blocklight[:, -1, :].copy() if hasattr(chunk, "blocklight") else None,
-            (cx, cy, cz - 1): chunk.blocklight[:, 0, :].copy() if hasattr(chunk, "blocklight") else None,
-            (cx, cy - 1, cz): chunk.blocklight[0, :, :].copy() if hasattr(chunk, "blocklight") else None,
-            (cx, cy + 1, cz): chunk.blocklight[-1, :, :].copy() if hasattr(chunk, "blocklight") else None,
-        }
-
         # Propagate boundary skylight spillover into neighbors
-        sky_spill = (
-            (cx + 1, cy, cz, chunk.skylight[:, :, -1], lambda ch: ch.skylight[:, :, 0], lambda ch: ch.data[:, :, 0]),
-            (cx - 1, cy, cz, chunk.skylight[:, :, 0], lambda ch: ch.skylight[:, :, -1], lambda ch: ch.data[:, :, -1]),
-            (cx, cy, cz + 1, chunk.skylight[:, -1, :], lambda ch: ch.skylight[:, 0, :], lambda ch: ch.data[:, 0, :]),
-            (cx, cy, cz - 1, chunk.skylight[:, 0, :], lambda ch: ch.skylight[:, -1, :], lambda ch: ch.data[:, -1, :]),
-            (cx, cy - 1, cz, chunk.skylight[0, :, :], lambda ch: ch.skylight[-1, :, :], lambda ch: ch.data[-1, :, :]),
-            (cx, cy + 1, cz, chunk.skylight[-1, :, :], lambda ch: ch.skylight[0, :, :], lambda ch: ch.data[0, :, :]),
-        )
-        for ncx, ncy, ncz, edge, n_fn, n_data_fn in sky_spill:
-            if 0 <= ncy < SECTION_COUNT:
-                nch = self.world.chunks.get((ncx, ncy, ncz))
-                if nch is not None and getattr(nch, "light_valid", False):
-                    n_step = np.maximum(1, op_lut[n_data_fn(nch)])
-                    potential = np.maximum(0, edge.astype(np.int16) - n_step)
-                    diff = potential - n_fn(nch).astype(np.int16)
-                    if np.any(diff > 0):
-                        nch.light_valid = False
-                        self.world.mark_dirty(ncx, ncy, ncz)
+        if np.any(chunk.skylight > 0):
+            sky_spill = (
+                (cx + 1, cy, cz, chunk.skylight[:, :, -1], lambda ch: ch.skylight[:, :, 0], lambda ch: ch.data[:, :, 0]),
+                (cx - 1, cy, cz, chunk.skylight[:, :, 0], lambda ch: ch.skylight[:, :, -1], lambda ch: ch.data[:, :, -1]),
+                (cx, cy, cz + 1, chunk.skylight[:, -1, :], lambda ch: ch.skylight[:, 0, :], lambda ch: ch.data[:, 0, :]),
+                (cx, cy, cz - 1, chunk.skylight[:, 0, :], lambda ch: ch.skylight[:, -1, :], lambda ch: ch.data[:, -1, :]),
+                (cx, cy - 1, cz, chunk.skylight[0, :, :], lambda ch: ch.skylight[-1, :, :], lambda ch: ch.data[-1, :, :]),
+                (cx, cy + 1, cz, chunk.skylight[-1, :, :], lambda ch: ch.skylight[0, :, :], lambda ch: ch.data[0, :, :]),
+            )
+            for ncx, ncy, ncz, edge, n_fn, n_data_fn in sky_spill:
+                if 0 <= ncy < SECTION_COUNT:
+                    nch = self.world.chunks.get((ncx, ncy, ncz))
+                    if nch is not None and getattr(nch, "light_valid", False):
+                        n_step = np.maximum(1, op_lut[n_data_fn(nch)])
+                        potential = np.maximum(0, edge.astype(np.int16) - n_step)
+                        diff = potential - n_fn(nch).astype(np.int16)
+                        if np.any(diff > 0):
+                            nch.light_valid = False
+                            self.world.mark_dirty(ncx, ncy, ncz)
 
         # Propagate boundary blocklight spillover into neighbors
         if has_emit or any(v is not None and np.any(v > 0) for v in old_bl_faces.values()):
@@ -607,6 +648,12 @@ class LightingSystem:
             if is_emitter and hasattr(ch, "blocklight"):
                 ch.blocklight.fill(0)
             self.world.mark_dirty(*ckey)
+
+        if self._batch_depth > 0:
+            self._batch_keys.update(valid_keys)
+            if is_emitter:
+                self._batch_emitters.add((cx, cy, cz))
+            return
 
         # Immediately recompute lighting for affected chunks so no chunk is left with stale or zero light.
         for ckey in valid_keys:

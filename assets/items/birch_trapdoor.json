@@ -1,0 +1,13 @@
+{
+  "id": "birch_trapdoor",
+  "lang": "item.birch_trapdoor",
+  "tab": "building",
+  "model": "flat",
+  "texture": "birch_trapdoor",
+  "block": "birch_trapdoor",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}
+

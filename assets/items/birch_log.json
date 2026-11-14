@@ -1,0 +1,14 @@
+{
+  "id": "birch_log",
+  "lang": "block.birch_log",
+  "tab": [
+    "building",
+    "natural"
+  ],
+  "model": "block",
+  "block": "birch_log",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}

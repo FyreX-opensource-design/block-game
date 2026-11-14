@@ -381,6 +381,34 @@ class TestFluidMeshing(unittest.TestCase):
         self.assertEqual(self.world.get_block(5, 81, 5), "water")
         self.assertEqual(self.world.entities[-1].item, "dandelion")
 
+    def test_a_fluid_tick_relights_each_chunk_once(self):
+        for x in range(8):
+            self.world.set_block(x, 80, 5, STONE)
+            self.world.set_block(x, 81, 4, STONE)
+            self.world.set_block(x, 81, 6, STONE)
+            self.world.set_block(x, 81, 5, "tall_grass")
+        self.world.set_block(1, 81, 5, "milk")
+        calls = []
+        original = self.world.lighting.compute_chunk_lighting
+
+        def _count(cx, cy, cz):
+            calls.append((cx, cy, cz))
+            return original(cx, cy, cz)
+
+        self.world.lighting.compute_chunk_lighting = _count
+        self.world.update_fluids(0.25)
+        flowed = [
+            self.world.get_block(x, 81, 5)
+            for x in range(8)
+            if str(self.world.get_block(x, 81, 5)).startswith("milk")
+        ]
+        self.assertGreaterEqual(len(flowed), 4)
+        self.assertGreaterEqual(len(calls), 1)
+        # One relight of the touched sections, not one full relight per cell
+        # (and per plant the milk breaks).
+        self.assertLess(len(calls), len(flowed) * 2)
+        self.assertTrue(self.world.chunks[(self.cx, self.cy, self.cz)].light_valid)
+
     def test_bucket_replaces_plant_and_drops_loot(self):
         from server.player import Player
         from server.stacks import make_stack, stack_id

@@ -1,0 +1,14 @@
+{
+  "id": "dead_bush",
+  "lang": "block.dead_bush",
+  "tab": [
+    "natural"
+  ],
+  "model": "flat",
+  "block": "dead_bush",
+  "texture": "dead_bush",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}

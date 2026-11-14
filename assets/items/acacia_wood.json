@@ -1,0 +1,14 @@
+{
+  "id": "acacia_wood",
+  "lang": "block.acacia_wood",
+  "tab": [
+    "building",
+    "natural"
+  ],
+  "model": "block",
+  "block": "acacia_wood",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}

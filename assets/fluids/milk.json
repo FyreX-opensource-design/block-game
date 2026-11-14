@@ -1,0 +1,9 @@
+{
+  "id": "milk",
+  "block": "milk",
+  "flow_distance": 4,
+  "speed": 0.7,
+  "dropoff_distance": 3,
+  "infinite_source": false,
+  "push_strength": 0.6
+}

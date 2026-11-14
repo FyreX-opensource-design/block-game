@@ -1,0 +1,21 @@
+{
+  "id": "acacia_planks_vertical_slab",
+  "lang": "block.acacia_planks_vertical_slab",
+  "type": "vertical_slab",
+  "tab": [
+    "building"
+  ],
+  "model": "vertical_slab",
+  "hardness": 1.0,
+  "tool": "axe",
+  "mining_level": 0,
+  "sound": "wood",
+  "loot_table": "blocks/acacia_planks_vertical_slab",
+  "full_block": "acacia_planks",
+  "textures": {
+    "top": "acacia_planks",
+    "side": "acacia_planks",
+    "bottom": "acacia_planks"
+  }
+}
+

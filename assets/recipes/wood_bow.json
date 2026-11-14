@@ -1,0 +1,17 @@
+{
+  "id": "wood_bow",
+  "type": "crafting_shaped",
+  "pattern": [
+    " #X",
+    "# X",
+    " #X"
+  ],
+  "key": {
+    "#": "#sticks",
+    "X": "string"
+  },
+  "result": {
+    "item": "wood_bow",
+    "count": 1
+  }
+}

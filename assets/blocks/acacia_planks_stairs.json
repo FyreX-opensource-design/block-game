@@ -1,0 +1,20 @@
+{
+  "id": "acacia_planks_stairs",
+  "lang": "block.acacia_planks_stairs",
+  "type": "stairs",
+  "tab": [
+    "building"
+  ],
+  "model": "stairs",
+  "hardness": 2.0,
+  "tool": "axe",
+  "mining_level": 0,
+  "sound": "wood",
+  "loot_table": "blocks/acacia_planks_stairs",
+  "textures": {
+    "top": "acacia_planks",
+    "side": "acacia_planks",
+    "bottom": "acacia_planks"
+  }
+}
+

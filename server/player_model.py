@@ -227,10 +227,12 @@ def _rotation_xyz(pitch, roll, yaw):
     return matrix
 
 
-def held_item_matrix(position, yaw, arm_pitch, item_scale=None, flat=False):
+def held_item_matrix(position, yaw, arm_pitch, item_scale=None, flat=False, pull=0.0):
     if item_scale is None:
         item_scale = 0.55 if flat else 0.75
-    arm = model_matrix(position, yaw, "arm_r", pitch=arm_pitch)
+    pull = max(0.0, min(1.0, float(pull or 0.0)))
+    # A drawn bow swings the arm forward and then hauls the bow back toward the body.
+    arm = model_matrix(position, yaw, "arm_r", pitch=arm_pitch + 0.35 * pull)
     tip = np.array([*hand_anchor(), 1.0], dtype=np.float32)
     world = arm @ tip
     matrix = np.eye(4, dtype=np.float32)
@@ -252,6 +254,11 @@ def held_item_matrix(position, yaw, arm_pitch, item_scale=None, flat=False):
     matrix[0, 3] = float(world[0])
     matrix[1, 3] = float(world[1])
     matrix[2, 3] = float(world[2])
+    if pull > 0.0:
+        look = _dir(yaw, 0.0)
+        matrix[0, 3] -= look[0] * 0.55 * pull
+        matrix[1, 3] += 0.28 * pull
+        matrix[2, 3] -= look[2] * 0.55 * pull
     return matrix
 
 
@@ -315,7 +322,24 @@ def first_person_arm_matrix(eye, yaw, pitch, arm_pitch=0.0, arm_roll=0.0):
     return matrix
 
 
-def first_person_held_matrix(eye, yaw, pitch, arm_pitch=0.0, arm_roll=0.0, item_scale=0.35, flat=False):
+def _unit(vector):
+    length = float(np.linalg.norm(vector))
+    if length < 1e-8:
+        return np.array(vector, dtype=np.float32)
+    return np.asarray(vector, dtype=np.float32) / length
+
+
+def _blend_basis(idle, aim, pose):
+    """Orthonormal blend so a drawn bow stands upright without squashing."""
+    y_axis = _unit(idle[:, 1] * (1.0 - pose) + aim[:, 1] * pose)
+    z_axis = np.asarray(idle[:, 2] * (1.0 - pose) + aim[:, 2] * pose, dtype=np.float32)
+    z_axis = z_axis - y_axis * float(np.dot(z_axis, y_axis))
+    z_axis = _unit(z_axis)
+    x_axis = np.cross(y_axis, z_axis)
+    return np.column_stack((x_axis, y_axis, z_axis)).astype(np.float32)
+
+
+def first_person_held_matrix(eye, yaw, pitch, arm_pitch=0.0, arm_roll=0.0, item_scale=0.35, flat=False, pull=0.0):
     """Place the held item in camera space (arm is hidden while holding)."""
     del arm_pitch, arm_roll  # bob reserved for a later swing anim
     eye = np.array(eye, dtype=np.float32)
@@ -323,11 +347,12 @@ def first_person_held_matrix(eye, yaw, pitch, arm_pitch=0.0, arm_roll=0.0, item_
     forward = np.array(forward, dtype=np.float32)
     right = np.array(right, dtype=np.float32)
     up = np.array(up, dtype=np.float32)
+    pull = max(0.0, min(1.0, float(pull or 0.0)))
 
     if flat:
         # Minecraft FP: origin in the BR screen corner; item extends steeply upward (~72-75 deg)
         # with face turned inward ~38 deg towards center to show 3D extrusion thickness.
-        hold = _view_to_world(eye, yaw, pitch, 0.96, -0.74, 0.84)
+        hold_view = (0.96, -0.74, 0.84)
         base = np.column_stack((right, up, -forward))
         ry = _rotation_y(math.radians(-38))[:3, :3]
         rx = np.array(
@@ -348,6 +373,14 @@ def first_person_held_matrix(eye, yaw, pitch, arm_pitch=0.0, arm_roll=0.0, item_
         )
         mc = ry @ rx @ rz
         basis = base @ mc
+        if pull > 0.0:
+            # Come up into an aim quickly, then keep hauling the bow back.
+            pose = min(1.0, pull / 0.35)
+            aim_view = (0.22, -0.18, 0.70 - 0.36 * pull)
+            hold_view = tuple(a + (b - a) * pose for a, b in zip(hold_view, aim_view))
+            aim = np.column_stack((right, up, -forward)).astype(np.float32)
+            basis = _blend_basis(basis, aim, pose)
+        hold = _view_to_world(eye, yaw, pitch, *hold_view)
         matrix = np.eye(4, dtype=np.float32)
         matrix[:3, :3] = basis * item_scale
         matrix[0, 3] = float(hold[0])
@@ -365,6 +398,47 @@ def first_person_held_matrix(eye, yaw, pitch, arm_pitch=0.0, arm_roll=0.0, item_
     matrix[0, 3] = float(hold[0])
     matrix[1, 3] = float(hold[1])
     matrix[2, 3] = float(hold[2])
+    return matrix
+
+
+def _arrow_basis(tip, face):
+    tip = _unit(tip)
+    face = np.asarray(face, dtype=np.float32) - tip * float(np.dot(face, tip))
+    face = _unit(face)
+    side = np.cross(tip, face)
+    return np.column_stack((side, tip, face)).astype(np.float32)
+
+
+def nocked_arrow_matrix(eye, yaw, pitch, pull, item_scale=0.5):
+    """Arrow on the string. It slides back toward the camera as the bow is drawn."""
+    pull = max(0.0, min(1.0, float(pull or 0.0)))
+    forward, right, up = _camera_basis(yaw, pitch)
+    forward = np.array(forward, dtype=np.float32)
+    right = np.array(right, dtype=np.float32)
+    up = np.array(up, dtype=np.float32)
+    hold = _view_to_world(eye, yaw, pitch, 0.06, -0.10, 0.82 - 0.46 * pull)
+    basis = _arrow_basis(forward * 0.96 + up * 0.12, -forward * 0.45 + right)
+    matrix = np.eye(4, dtype=np.float32)
+    matrix[:3, :3] = basis * float(item_scale)
+    matrix[0, 3] = float(hold[0])
+    matrix[1, 3] = float(hold[1])
+    matrix[2, 3] = float(hold[2])
+    return matrix
+
+
+def third_person_nocked_arrow_matrix(position, yaw, pitch, pull, item_scale=0.45):
+    """Arrow nocked in front of the player, hauled back with the bow."""
+    pull = max(0.0, min(1.0, float(pull or 0.0)))
+    bow = held_item_matrix(position, yaw, 0.0, flat=True, pull=pull)
+    look = np.array(_dir(yaw, pitch), dtype=np.float32)
+    origin = bow[:3, 3] + look * (0.25 - 0.30 * pull)
+    up = np.array((0.0, 1.0, 0.0), dtype=np.float32)
+    basis = _arrow_basis(look, up)
+    matrix = np.eye(4, dtype=np.float32)
+    matrix[:3, :3] = basis * float(item_scale)
+    matrix[0, 3] = float(origin[0])
+    matrix[1, 3] = float(origin[1])
+    matrix[2, 3] = float(origin[2])
     return matrix
 
 

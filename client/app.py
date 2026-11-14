@@ -55,9 +55,10 @@ from server.stacks import (
     normalize_stack,
     pack_stack,
     stack_count,
+    stack_damage,
     stack_id,
 )
-from server.entity import FallingBlockEntity, ItemEntity, entity_from_dict, Mob, Pig, Sheep
+from server.entity import ArrowEntity, FallingBlockEntity, ItemEntity, entity_from_dict, Mob, Pig, Sheep
 from server.loot import calculate_break_time, get_block_drops
 from server.mesh import build_chunk_mesh
 from server.player import Player, look_direction
@@ -220,6 +221,8 @@ class Game(pyglet.window.Window):
         self._nametag_labels = []
         self._gamemode = "survival"
         self._mouse_held_left = False
+        self._bow_drawing = False
+        self._bow_draw = 0.0
         self._breaking_block = None
         self._breaking_target_block = None
         self._break_time = 0.0
@@ -282,19 +285,30 @@ class Game(pyglet.window.Window):
 
         if self.world is not None:
             pos = self.player.pos if self.player is not None else None
-            for key in self.world.take_dirty(4, player_pos=pos):
+            t_mesh_start = time.perf_counter()
+            max_chunks = 4 if self.mode == "play" else 8
+            dirty_batch = self.world.take_dirty(max_chunks, player_pos=pos)
+            for idx, key in enumerate(dirty_batch):
                 if key in self.world.chunks:
                     self._upload(key)
+                if self.mode == "play" and (time.perf_counter() - t_mesh_start) >= 0.008:
+                    for unproc in dirty_batch[idx + 1:]:
+                        self.world.dirty.add(unproc)
+                    break
 
         if self.world is not None:
             if self.network_client is None:
                 self.world.advance_time(min(dt, 0.05))
             self.world.update_entities(min(dt, 0.05))
+            if self.network_client is None and getattr(self.world, "pending_hurts", None) is not None:
+                self.world.pending_hurts.clear()
+            self._update_bow_draw(min(dt, 0.05))
             if self.network_client is None:
-                self.world.update_fluids(min(dt, 0.05))
+                self._update_fluids(min(dt, 0.05))
                 self.world.update_leaves(min(dt, 0.05))
                 self.world.update_transformations(min(dt, 0.05))
                 self.world.update_saplings(min(dt, 0.05))
+                self.world.update_crops(min(dt, 0.05))
                 self.world.update_furnaces(min(dt, 0.05))
             self._update_item_pickups(min(dt, 0.05))
 
@@ -526,6 +540,8 @@ class Game(pyglet.window.Window):
                     other.yaw = float(pkt.get("yaw", other.yaw))
                     other.pitch = float(pkt.get("pitch", other.pitch))
                     other.held_item = str(pkt.get("held", other.held_item))
+                    other.bow_pull = max(0.0, min(1.0, float(pkt.get("pull", 0.0) or 0.0)))
+                    other.nocked_arrow = str(pkt.get("nock", "") or "")
                     hspeed = math.hypot(other.vel[0], other.vel[2])
                     if dist > 0.02 and hspeed >= 0.1:
                         other._move_speed = dist / dt_move
@@ -565,6 +581,30 @@ class Game(pyglet.window.Window):
                 if self.world is not None:
                     if not any(e.id == pkt["id"] for e in self.world.entities):
                         self.world.entities.append(FallingBlockEntity.from_dict(pkt))
+            elif p_type == "spawn_arrow":
+                if self.world is not None and not any(e.id == pkt.get("id") for e in self.world.entities):
+                    data = dict(pkt)
+                    data["type"] = "arrow"
+                    arrow = ArrowEntity.from_dict(data)
+                    arrow.is_remote = True
+                    arrow.target_pos = list(arrow.pos)
+                    arrow.target_vel = list(arrow.vel)
+                    self.world.entities.append(arrow)
+            elif p_type == "projectiles_update":
+                if self.world is not None:
+                    by_id = {e.id: e for e in self.world.entities if getattr(e, "is_projectile", False)}
+                    for data in pkt.get("projectiles", []):
+                        arrow = by_id.get(data.get("id"))
+                        if arrow is None:
+                            arrow = entity_from_dict(data)
+                            if getattr(arrow, "is_projectile", False):
+                                arrow.is_remote = True
+                                self.world.entities.append(arrow)
+                        if arrow is None or not getattr(arrow, "is_projectile", False):
+                            continue
+                        arrow.is_remote = True
+                        arrow.target_pos = list(data.get("pos", arrow.pos))
+                        arrow.target_vel = list(data.get("vel", arrow.vel))
             elif p_type == "spawn_mob":
                 if self.world is not None:
                     if not any(e.id == pkt["id"] for e in self.world.entities):
@@ -716,6 +756,8 @@ class Game(pyglet.window.Window):
                     self.player.yaw,
                     self.player.pitch,
                     held,
+                    pull=float(getattr(self.player, "bow_pull", 0.0) or 0.0),
+                    nock=str(getattr(self.player, "nocked_arrow", "") or ""),
                 )
 
     def _handle_server_disconnect(self, message="Connection lost"):
@@ -810,9 +852,12 @@ class Game(pyglet.window.Window):
         cz = math.floor(self.player.pos[2] / CHUNK_SIZE)
         center = (cx, cy, cz)
 
-        removed = self.world.evict_distant([center])
-        for key in removed:
-            self.renderer.drop(key)
+        last_center = getattr(self, "_last_stream_center", None)
+        if center != last_center:
+            self._last_stream_center = center
+            removed = self.world.evict_distant([center])
+            for key in removed:
+                self.renderer.drop(key)
 
         committed = self.world.poll_generated_chunks(max_count=16, centers=[center])
         self.world.request_chunks([center], max_in_flight=16)
@@ -920,6 +965,29 @@ class Game(pyglet.window.Window):
 
     def _upload_block_change(self, x, y, z):
         self._upload_block_changes(((x, y, z),))
+
+    def _update_fluids(self, dt):
+        """Run one fluid tick, then rebuild each touched chunk once.
+
+        ``on_block_set`` rebuilds a chunk immediately. Flowing milk (and the
+        tall grass it breaks) changes many cells in one tick, so collecting
+        those edits and uploading them together keeps the frame from hitching.
+        """
+        if self.world is None:
+            return
+        changed = []
+        previous = self.world.on_block_set
+
+        def _collect(x, y, z, _block):
+            changed.append((x, y, z))
+
+        self.world.on_block_set = _collect
+        try:
+            self.world.update_fluids(dt)
+        finally:
+            self.world.on_block_set = previous
+        if changed:
+            self._upload_block_changes(changed)
 
     def _apply_input(self):
         inp = self.player.input
@@ -1676,6 +1744,8 @@ class Game(pyglet.window.Window):
             self.network_client.send_set_block(x, y, z, next_block)
         if self.world.set_block(x, y, z, next_block):
             self._upload_block_change(x, y, z)
+            if y + 1 < WORLD_HEIGHT:
+                self._upload_block_change(x, y + 1, z)
 
     def _spawn_loose_item(self, item_id, count, pos, vel=None, pickup_delay=0.0):
         """Put a loose item into the world.
@@ -3012,6 +3082,7 @@ class Game(pyglet.window.Window):
             day_time=getattr(info, "day_time", 1000.0),
             spawn_point=getattr(info, "spawn", None),
         )
+        self.world.on_block_set = lambda bx, by, bz, bid: self._upload_block_change(bx, by, bz)
         self.player = Player(self.world)
         self.player.gamemode = self.gamemode
         skin = load_skin_rgba(self.profile["skin"])
@@ -3593,13 +3664,26 @@ class Game(pyglet.window.Window):
             self.ctx.enable(moderngl.BLEND)
             if self.mode == "play" and self.ready and self.player is not None:
                 px, py, pz = self.player.pos
+                ipx, ipy, ipz = int(px), int(py), int(pz)
                 biome_str = ""
                 if self.world is not None and getattr(self.world, "biomes", None):
-                    from server.biomes import biome_at
-                    cur_biome = biome_at(int(px), int(pz), getattr(self.world, "seed", 0), self.world.biomes)
-                    if cur_biome:
-                        biome_title = getattr(cur_biome, "name", None) or cur_biome.id.replace("_", " ").title()
-                        biome_str = f"   {biome_title}"
+                    if getattr(self, "_cached_biome_pos", None) == (ipx, ipy, ipz):
+                        biome_str = getattr(self, "_cached_biome_str", "")
+                    else:
+                        from server.biomes import biome_at
+                        cur_biome = biome_at(
+                            ipx,
+                            ipz,
+                            getattr(self.world, "seed", 0),
+                            self.world.biomes,
+                            y=ipy,
+                            underground_biomes=getattr(self.world, "underground_biomes", None),
+                        )
+                        if cur_biome:
+                            biome_title = getattr(cur_biome, "name", None) or cur_biome.id.replace("_", " ").title()
+                            biome_str = f"   {biome_title}"
+                        self._cached_biome_pos = (ipx, ipy, ipz)
+                        self._cached_biome_str = biome_str
                 name = ""
                 if self.target is not None:
                     from server.sub_cell import is_sub_cell
@@ -4019,7 +4103,127 @@ class Game(pyglet.window.Window):
         if getattr(self, "sound_manager", None):
             self.sound_manager.play_walk_sound("planks")
 
+    def _update_bow_draw(self, dt):
+        if not getattr(self, "_bow_drawing", False):
+            self._sync_bow_pose()
+            return
+        if self.mode != "play":
+            self._bow_drawing = False
+            self._bow_draw = 0.0
+            self._sync_bow_pose()
+            return
+        held_id = stack_id(self.hotbar[self.selected]) if self.selected < len(self.hotbar) else ""
+        from server.ranged import BOWS
+
+        if held_id not in BOWS:
+            self._bow_drawing = False
+            self._bow_draw = 0.0
+            self._sync_bow_pose()
+            return
+        self._bow_draw += dt
+        self._sync_bow_pose()
+
+    def _sync_bow_pose(self):
+        """Publish draw progress so the viewmodel, and other players, can pull the bow back."""
+        pull = 0.0
+        nock = ""
+        if getattr(self, "_bow_drawing", False) and self.player is not None and self.mode == "play":
+            held_id = stack_id(self.hotbar[self.selected]) if self.selected < len(self.hotbar) else ""
+            from server.ranged import ARROWS, BOWS
+
+            bow = BOWS.get(held_id)
+            if bow is not None:
+                pull = min(1.0, self._bow_draw / bow.draw_time) if bow.draw_time else 1.0
+                nock = self._find_arrow() or ""
+                if not nock and self.gamemode == "creative" and ARROWS:
+                    nock = "arrow" if "arrow" in ARROWS else next(iter(ARROWS))
+        if self.player is not None:
+            self.player.bow_pull = pull
+            self.player.nocked_arrow = nock
+
+    def _begin_bow_draw(self):
+        """Start drawing when the held item is a bow. Swallow the click either way."""
+        if self.player is None or self.world is None or self.mode != "play":
+            return False
+        held_id = stack_id(self.hotbar[self.selected]) if self.selected < len(self.hotbar) else ""
+        from server.ranged import BOWS
+
+        if held_id not in BOWS:
+            return False
+        if self.gamemode != "creative" and self._find_arrow() is None:
+            return True
+        self._bow_drawing = True
+        return True
+
+    def _find_arrow(self):
+        from server.ranged import ARROWS
+
+        for group in (self.hotbar, getattr(self, "storage", ()) or ()):
+            for slot in group:
+                item_id = stack_id(slot)
+                if item_id in ARROWS and stack_count(slot) > 0:
+                    return item_id
+        return None
+
+    def _consume_arrow(self, arrow_id):
+        if self.gamemode == "creative":
+            return True
+        for group in (self.hotbar, getattr(self, "storage", ()) or ()):
+            for index, slot in enumerate(group):
+                if stack_id(slot) != arrow_id or stack_count(slot) <= 0:
+                    continue
+                count = stack_count(slot)
+                if count <= 1:
+                    group[index] = empty_stack()
+                else:
+                    group[index] = make_stack(arrow_id, count - 1, damage=stack_damage(slot))
+                return True
+        return False
+
+    def _release_bow(self):
+        drawing = getattr(self, "_bow_drawing", False)
+        draw = getattr(self, "_bow_draw", 0.0)
+        self._bow_drawing = False
+        self._bow_draw = 0.0
+        self._sync_bow_pose()
+        if not drawing or self.mode != "play" or self.player is None or self.world is None:
+            return False
+        held_id = stack_id(self.hotbar[self.selected]) if self.selected < len(self.hotbar) else ""
+        from server.ranged import ARROWS, BOWS, MIN_POWER, aim_direction, fire_arrow, shot_origin
+
+        bow = BOWS.get(held_id)
+        if bow is None:
+            return False
+        power = min(1.0, draw / bow.draw_time) if bow.draw_time else 1.0
+        if power < MIN_POWER:
+            return False
+        arrow_id = self._find_arrow()
+        if arrow_id is None:
+            if self.gamemode != "creative" or not ARROWS:
+                return False
+            arrow_id = "arrow" if "arrow" in ARROWS else next(iter(ARROWS))
+        if not self._consume_arrow(arrow_id):
+            return False
+        self._use_held_tool(1)
+        direction = aim_direction(bow, power, look_direction(self.player.yaw, self.player.pitch))
+        if self.network_client is not None:
+            self.network_client.send_shoot(direction, power, held_id, arrow_id)
+            return True
+        origin = shot_origin(self.player.pos, self.player.eye, direction)
+        fire_arrow(
+            self.world,
+            bow,
+            ARROWS[arrow_id],
+            origin,
+            direction,
+            power,
+            owner=str(getattr(self.player, "uuid", "") or ""),
+        )
+        return True
+
     def _on_right_click(self, modifiers=0):
+        if self._begin_bow_draw():
+            return
         if self._handle_mob_interaction():
             return
         self._aim()
@@ -4100,6 +4304,9 @@ class Game(pyglet.window.Window):
         if self._handle_food_interaction():
             return
 
+        if self._handle_tool_interaction(hit):
+            return
+
         self._place_block()
 
     def _handle_mob_interaction(self):
@@ -4114,6 +4321,15 @@ class Game(pyglet.window.Window):
 
         held_slot = self.hotbar[self.selected] if self.selected < len(self.hotbar) else empty_stack()
         held_id = stack_id(held_slot)
+
+        if getattr(hit_mob, "mob_type", "") == "cow" and hasattr(hit_mob, "milk"):
+            filled = hit_mob.milk(held_id)
+            if filled:
+                self._swap_held_for(filled)
+                if self.network_client is not None:
+                    self.network_client.send_interact_mob(hit_mob.id, held_id)
+                return True
+            return False
 
         if getattr(hit_mob, "mob_type", "") == "sheep":
             if held_id == "shears":
@@ -4145,6 +4361,22 @@ class Game(pyglet.window.Window):
                                 self.hotbar[self.selected] = make_stack(held_id, cnt - 1)
                     return True
         return False
+
+    def _swap_held_for(self, filled_id):
+        """Replace one of the held stack with filled_id. Extra results go into the inventory."""
+        held_slot = self.hotbar[self.selected]
+        held_id = stack_id(held_slot)
+        if self.gamemode == "creative":
+            self.hotbar[self.selected] = make_stack(filled_id, 1)
+            return
+        cnt = stack_count(held_slot)
+        if cnt <= 1:
+            self.hotbar[self.selected] = make_stack(filled_id, 1)
+            return
+        self.hotbar[self.selected] = make_stack(held_id, cnt - 1)
+        leftover = add_to_inventory([self.hotbar, self.storage], filled_id, 1)
+        if leftover > 0 and self.player is not None:
+            self._spawn_loose_item(filled_id, leftover, list(self.player.pos), pickup_delay=0.2)
 
     def _handle_block_hit_interaction(self, hit):
         if self.player is None or self.world is None or hit is None:
@@ -4202,6 +4434,29 @@ class Game(pyglet.window.Window):
                         self.hotbar[self.selected] = empty_stack()
                     else:
                         self.hotbar[self.selected] = make_stack(held_id, cnt - 1)
+        return True
+
+    def _handle_tool_interaction(self, hit):
+        """Apply an asset-defined tool right-click to the targeted block."""
+        if hit is None or self.world is None or self.player is None:
+            return False
+        if self.selected >= len(self.hotbar):
+            return False
+        held_id = stack_id(self.hotbar[self.selected])
+        if not held_id:
+            return False
+        from server.interactions import tool_interaction_at
+
+        found = tool_interaction_at(self.world, ITEMS.get(held_id), hit["x"], hit["y"], hit["z"])
+        if found is None:
+            return False
+        x, y, z, interaction = found
+        if self.network_client is not None:
+            self.network_client.send_set_block(x, y, z, interaction.result)
+        if not self.world.set_block(x, y, z, interaction.result):
+            return False
+        if interaction.damage:
+            self._use_held_tool(interaction.damage)
         return True
 
     def _handle_food_interaction(self):
@@ -4661,6 +4916,8 @@ class Game(pyglet.window.Window):
         if button == mouse.LEFT:
             self._mouse_held_left = False
             self._reset_breaking()
+        elif button == mouse.RIGHT and self.mode == "play":
+            self._release_bow()
 
     def on_mouse_scroll(self, x, y, scroll_x, scroll_y):
         if scroll_y == 0:

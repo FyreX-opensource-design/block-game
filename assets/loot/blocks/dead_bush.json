@@ -1,0 +1,18 @@
+{
+  "type": "block",
+  "pools": [
+    {
+      "rolls": 1,
+      "entries": [
+        {
+          "type": "item",
+          "name": "stick",
+          "count": [
+            0,
+            2
+          ]
+        }
+      ]
+    }
+  ]
+}

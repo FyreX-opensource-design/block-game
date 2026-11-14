@@ -68,10 +68,12 @@ class BiomeTests(unittest.TestCase):
         for z in range(-160, 161, 4):
             for x in range(-160, 161, 4):
                 biome = biome_at(x, z, 2, BIOMES)
-                if biome.id in counts:
-                    counts[biome.id][0] += 1
+                # Cool forest climate is birch forest; it should be as wooded as oak forest.
+                key = "forest" if biome.id in ("forest", "birch_forest") else biome.id
+                if key in counts:
+                    counts[key][0] += 1
                     if tree_at(x, z, 2):
-                        counts[biome.id][1] += 1
+                        counts[key][1] += 1
         plains_rate = counts["plains"][1] / counts["plains"][0]
         forest_rate = counts["forest"][1] / counts["forest"][0]
         self.assertGreater(forest_rate, plains_rate)

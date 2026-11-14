@@ -1,0 +1,14 @@
+{
+  "id": "birch_sapling",
+  "lang": "block.birch_sapling",
+  "tab": [
+    "natural"
+  ],
+  "model": "flat",
+  "block": "birch_sapling",
+  "texture": "birch_sapling",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}

@@ -2,7 +2,7 @@ import math
 import random
 
 
-def is_position_hazardous(world, px: float, py: float, pz: float, max_fall: int = 4, already_in_water: bool = False) -> bool:
+def is_position_hazardous(world, px: float, py: float, pz: float, max_fall: int = 4, already_in_water: bool = False, mob=None) -> bool:
     """Check if stepping to (px, py, pz) would result in a fall > max_fall blocks or entering fluid."""
     if world is None:
         return False
@@ -14,6 +14,20 @@ def is_position_hazardous(world, px: float, py: float, pz: float, max_fall: int 
 
     blocks = getattr(world, "blocks_movement", world.is_solid)
 
+    # For climbing mobs (e.g. spiders), navigating ceilings and scaling walls is permitted
+    if mob is not None and getattr(mob, "can_climb", False):
+        if not already_in_water and (is_water(world.get_block(bx, by, bz)) or is_water(world.get_block(bx, by + 1, bz))):
+            return True
+        from server.blocks import is_stalagmite
+        if is_stalagmite(world.get_block(bx, by, bz)):
+            return True
+        if getattr(mob, "on_ceiling", False):
+            # Ceiling crawl: safe as long as the ceiling above is solid
+            check_ceil_y = math.floor(py + getattr(mob, "height", 0.9) + 0.3)
+            return not blocks(bx, check_ceil_y, bz)
+        # On walls or ground: climbing mobs do not avoid drop falls because they can climb walls
+        return False
+
     # If the target cell itself is solid (a 1-block step up), check 1 block higher
     check_y = by
     if blocks(bx, by, bz):
@@ -22,10 +36,14 @@ def is_position_hazardous(world, px: float, py: float, pz: float, max_fall: int 
             return False
         check_y = by + 1
 
-    # Check if the air/body space at check_y has fluid
+    # Check if the air/body space at check_y has fluid or sharp stalagmites
     if not already_in_water:
         if is_water(world.get_block(bx, check_y, bz)) or is_water(world.get_block(bx, check_y + 1, bz)):
             return True
+
+    from server.blocks import is_stalagmite
+    if is_stalagmite(world.get_block(bx, check_y, bz)):
+        return True
 
     # Trace downward from check_y - 1 down to check_y - 1 - max_fall
     # A drop of 0 blocks means ground is at check_y - 1.
@@ -36,6 +54,8 @@ def is_position_hazardous(world, px: float, py: float, pz: float, max_fall: int 
         gy = check_y - 1 - drop
         blk = world.get_block(bx, gy, bz)
         if not already_in_water and is_water(blk):
+            return True
+        if is_stalagmite(blk):
             return True
         if blocks(bx, gy, bz):
             found_ground = True
@@ -65,7 +85,7 @@ def is_direction_safe(mob, yaw: float, world=None, lookahead: float = 1.0, max_f
     for dist in steps:
         tx = mob.pos[0] + fx * dist
         tz = mob.pos[2] + fz * dist
-        if is_position_hazardous(world, tx, py, tz, max_fall=max_fall, already_in_water=already_in_water):
+        if is_position_hazardous(world, tx, py, tz, max_fall=max_fall, already_in_water=already_in_water, mob=mob):
             return False
     return True
 
@@ -552,4 +572,166 @@ class ZombieAttackGoal(Goal):
                 })
                 if getattr(target, "dead", False):
                     server._respawn_client_player(target_client, target, cause="slain by Zombie")
+
+
+class SpiderAttackGoal(Goal):
+    """Hostile attack goal for Spider:
+    - Only targets the player in low skylight (<= 10) and low infrared light (<= 10).
+    - If either skylight or infrared light is > 10, the spider does not target the player.
+    - Chases the player at mob.run_speed, climbing walls and ceilings to pursue.
+    - Attacks when within melee reach, applying damage, knockback, and hurt_time.
+    """
+
+    def __init__(self, mob, target_range=16.0, reach=1.8, damage=2.5, cooldown=1.0):
+        super().__init__(mob)
+        self.target_range = float(target_range)
+        self.reach = float(reach)
+        self.damage = float(damage)
+        self.cooldown = float(cooldown)
+        self.attack_timer = 0.0
+        self.target = None
+        self.repath_timer = 0.0
+
+    def _get_target_candidates(self):
+        world = getattr(self.mob, "world", None)
+        if world is None:
+            return []
+        players = []
+        if hasattr(world, "players") and world.players:
+            players.extend(world.players.values())
+        single = getattr(world, "_singleplayer_player", None)
+        if single is not None and single not in players:
+            players.append(single)
+        return players
+
+    def _find_closest_player(self):
+        if hasattr(self.mob, "can_target_player") and not self.mob.can_target_player():
+            return None
+        candidates = self._get_target_candidates()
+        best_p = None
+        best_dist_sq = self.target_range * self.target_range
+        mx, my, mz = self.mob.pos
+        for p in candidates:
+            if not getattr(p, "alive", True) or getattr(p, "dead", False):
+                continue
+            if not getattr(p, "survival", True):
+                continue
+            if hasattr(self.mob, "can_target_player") and not self.mob.can_target_player(player=p):
+                continue
+            px, py, pz = p.pos
+            dx = px - mx
+            dy = py - my
+            dz = pz - mz
+            dist_sq = dx * dx + dy * dy + dz * dz
+            if dist_sq <= best_dist_sq:
+                best_dist_sq = dist_sq
+                best_p = p
+        return best_p
+
+    def can_start(self) -> bool:
+        if hasattr(self.mob, "can_target_player") and not self.mob.can_target_player():
+            return False
+        self.target = self._find_closest_player()
+        return self.target is not None
+
+    def can_continue(self) -> bool:
+        if self.target is None:
+            return False
+        if hasattr(self.mob, "can_target_player") and not self.mob.can_target_player(player=self.target):
+            return False
+        if not getattr(self.target, "alive", True) or getattr(self.target, "dead", False):
+            return False
+        if not getattr(self.target, "survival", True):
+            return False
+        mx, my, mz = self.mob.pos
+        px, py, pz = self.target.pos
+        dist_sq = (px - mx) ** 2 + (py - my) ** 2 + (pz - mz) ** 2
+        return dist_sq <= (self.target_range * self.target_range)
+
+    def start(self):
+        self.repath_timer = 0.0
+
+    def stop(self):
+        self.target = None
+        self.mob.desired_speed = 0.0
+
+    def tick(self, dt: float):
+        if self.attack_timer > 0:
+            self.attack_timer = max(0.0, self.attack_timer - dt)
+
+        if self.target is None or not getattr(self.target, "alive", True):
+            self.target = self._find_closest_player()
+            if self.target is None:
+                self.mob.desired_speed = 0.0
+                return
+
+        if hasattr(self.mob, "can_target_player") and not self.mob.can_target_player(player=self.target):
+            self.stop()
+            return
+
+        mx, my, mz = self.mob.pos
+        px, py, pz = self.target.pos
+        dx = px - mx
+        dy = py - my
+        dz = pz - mz
+        dist_xz = math.hypot(dx, dz)
+        dist_3d = math.sqrt(dx * dx + dy * dy + dz * dz)
+
+        # Repath towards target
+        self.repath_timer -= dt
+        if self.repath_timer <= 0:
+            self.repath_timer = 0.1
+            if dist_xz > 0.05:
+                desired_yaw = math.atan2(-dx, -dz)
+                self.mob.target_yaw = desired_yaw
+                self.mob.desired_speed = getattr(self.mob, "run_speed", 3.0)
+
+        # If on ceiling and target is below, can descend/drop
+        if getattr(self.mob, "on_ceiling", False) and dy < -2.0 and dist_xz < 2.0:
+            self.mob.on_ceiling = False
+            self.mob.vel[1] = -2.0
+
+        # Melee attack
+        if dist_3d <= self.reach or (dist_xz <= self.reach and abs(dy) <= 2.0):
+            if self.attack_timer <= 0:
+                self.attack_timer = self.cooldown
+                self._execute_attack(self.target)
+
+    def _execute_attack(self, target):
+        target.take_damage(self.damage)
+        mx, my, mz = self.mob.pos
+        px, py, pz = target.pos
+        dx = px - mx
+        dz = pz - mz
+        klen = math.hypot(dx, dz) or 1.0
+        kdx = dx / klen
+        kdz = dz / klen
+        kb_speed = 4.0
+        new_vel = [kdx * kb_speed, 2.5, kdz * kb_speed]
+
+        if hasattr(target, "vel"):
+            target.vel = list(new_vel)
+        target.hurt_time = 0.4
+
+        # Multiplayer sync if running on server
+        world = getattr(self.mob, "world", None)
+        server = getattr(world, "server", None)
+        if server is not None:
+            target_uuid = getattr(target, "uuid", None)
+            target_client = server.clients.get(target_uuid)
+            if target_client is not None:
+                target_client.vel = list(new_vel)
+                target_client.send({
+                    "type": "player_knockback",
+                    "vel": new_vel,
+                })
+                server._send_player_health(target_client, target)
+                server.broadcast({
+                    "type": "player_hurt",
+                    "uuid": target_uuid,
+                    "hurt_time": target.hurt_time,
+                })
+                if getattr(target, "dead", False):
+                    server._respawn_client_player(target_client, target, cause="slain by Spider")
+
 

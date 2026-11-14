@@ -1,0 +1,13 @@
+{
+  "id": "acacia_planks_stairs",
+  "lang": "block.acacia_planks_stairs",
+  "tab": [
+    "building"
+  ],
+  "model": "block",
+  "block": "acacia_planks_stairs",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}

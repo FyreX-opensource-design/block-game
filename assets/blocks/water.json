@@ -9,7 +9,7 @@
   "hardness": 100.0,
   "tool": "none",
   "mining_level": 0,
-  "properties": {"fluid": "water", "level": 8},
+  "properties": {"fluid": "water", "level": 8, "tags": ["fresh_water"]},
   "textures": {"top": "water", "side": "water", "bottom": "water"}
 }
 

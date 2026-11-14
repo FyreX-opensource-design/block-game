@@ -1,0 +1,17 @@
+{
+  "id": "stone_hoe",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    " X",
+    " X"
+  ],
+  "key": {
+    "#": "stone",
+    "X": "#sticks"
+  },
+  "result": {
+    "item": "stone_hoe",
+    "count": 1
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "id": "emerald_crystal",
+  "lang": "block.emerald_crystal",
+  "tab": "natural",
+  "model": "cross",
+  "render": "cutout",
+  "solid": false,
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 3,
+  "loot_table": "blocks/emerald_crystal",
+  "fluid_breakable": true,
+  "textures": {
+    "cross": "emerald_crystal"
+  },
+  "emission": [
+    2,
+    8,
+    3
+  ]
+}

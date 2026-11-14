@@ -1,0 +1,28 @@
+{
+  "id": "birch_door",
+  "lang": "block.birch_door",
+  "tab": [
+    "building"
+  ],
+  "model": "door_lower",
+  "type": "door",
+  "render": "cutout",
+  "solid": true,
+  "hardness": 3.0,
+  "tool": "axe",
+  "mining_level": 0,
+  "sound": "wood",
+  "loot_table": "blocks/birch_door",
+  "properties": {
+    "door": true,
+    "half": "lower",
+    "facing": "south",
+    "open": false
+  },
+  "textures": {
+    "lower": "birch_door_bottom",
+    "upper": "birch_door_top",
+    "edge": "birch_doors_side"
+  }
+}
+

@@ -1,0 +1,13 @@
+{
+  "id": "birch_planks_slab",
+  "lang": "block.birch_planks_slab",
+  "tab": [
+    "building"
+  ],
+  "model": "block",
+  "block": "birch_planks_slab",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}

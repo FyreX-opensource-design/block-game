@@ -93,7 +93,13 @@ def creative_items(tab_id):
         for item in ITEMS.values()
         if not item.block and tab_id in item.tabs and item.id not in seen
     )
-    return tuple(ordered + extras)
+    # Seeds and other items that place a block under a different id.
+    placed = sorted(
+        item.id
+        for item in ITEMS.values()
+        if item.block and item.id != item.block and tab_id in item.tabs and item.id not in seen
+    )
+    return tuple(ordered + extras + placed)
 
 
 def _load_items():
@@ -112,6 +118,16 @@ def _load_items():
             raise ValueError(f"{path.name} must be named {item_id}.json")
         if item_id in seen:
             raise ValueError(f"duplicate item {item_id}")
+        seen.add(item_id)
+        prepared.append((entry, _block_name(entry, lang)))
+    from server.crop_data import item_entries
+
+    for entry in item_entries():
+        item_id = str(entry.get("id", ""))
+        if item_id in seen:
+            continue
+        if _ID.fullmatch(item_id) is None:
+            raise ValueError(f"item id {item_id!r} must be a lowercase name")
         seen.add(item_id)
         prepared.append((entry, _block_name(entry, lang)))
     items = {}
@@ -184,6 +200,8 @@ def _item_from_entry(entry, name, tab_ids):
             tool = "axe"
         elif "shovel" in item_id:
             tool = "shovel"
+        elif "hoe" in item_id:
+            tool = "hoe"
     return Item(
         item_id,
         name,

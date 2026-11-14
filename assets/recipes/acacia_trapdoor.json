@@ -1,0 +1,15 @@
+{
+  "id": "acacia_trapdoor",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "###"
+  ],
+  "key": {
+    "#": "acacia_planks"
+  },
+  "result": {
+    "item": "acacia_trapdoor",
+    "count": 2
+  }
+}

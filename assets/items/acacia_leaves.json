@@ -1,0 +1,13 @@
+{
+  "id": "acacia_leaves",
+  "lang": "block.acacia_leaves",
+  "tab": [
+    "natural"
+  ],
+  "model": "block",
+  "block": "acacia_leaves",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}

@@ -3,6 +3,10 @@
     "leaves",
     "leaves_persistent",
     "pine_leaves",
-    "pine_leaves_persistent"
+    "pine_leaves_persistent",
+    "acacia_leaves",
+    "acacia_leaves_persistent",
+    "birch_leaves",
+    "birch_leaves_persistent"
   ]
 }

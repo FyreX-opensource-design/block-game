@@ -674,3 +674,35 @@ class SlabsStairsWallsTests(unittest.TestCase):
         game._upload = MagicMock()
         game._toggle_door(5, 4, 5)
         self.assertEqual(game._upload.call_count, 1)
+
+    def test_dynamic_composite_glass_ctm_and_color_preservation(self):
+        from server.blocks import (
+            GLASS_CTM_UVS,
+            get_block_ctm_uv,
+            get_capped_offset_block,
+            get_capped_vertical_slab_offset,
+            get_offset_block,
+            get_vertical_slab_offset_block,
+        )
+
+        fb_off = get_offset_block("yellow_stained_glass")
+        cap = BLOCKS[get_capped_offset_block(fb_off, "stone_brick_slab_top")]
+        self.assertTrue(cap.translucent)
+        self.assertIsNotNone(cap.palette_ctm_rects)
+        self.assertIsNotNone(cap.palette_ctm_uvs)
+
+        v_off = get_vertical_slab_offset_block("yellow_stained_glass_vertical_slab")
+        v_cap = BLOCKS[get_capped_vertical_slab_offset(v_off, "stone_brick_slab_top")]
+        self.assertTrue(v_cap.translucent)
+        self.assertIsNotNone(v_cap.palette_ctm_rects)
+        self.assertIsNotNone(v_cap.palette_ctm_uvs)
+
+        # Dynamic composite glass blocks must never return clear glass CTM
+        yellow_base_uv = BLOCKS["yellow_stained_glass"].palette_ctm_uvs[0][0]
+        clear_glass_uv = GLASS_CTM_UVS[0]
+        self.assertNotEqual(yellow_base_uv, clear_glass_uv)
+
+        for b in (cap, v_cap, BLOCKS[fb_off], BLOCKS[v_off]):
+            uv = get_block_ctm_uv(b, 0)
+            self.assertNotEqual(uv, clear_glass_uv, f"{b.id} returned clear glass UV")
+            self.assertEqual(uv, yellow_base_uv, f"{b.id} did not preserve yellow stained glass CTM")

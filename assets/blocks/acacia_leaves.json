@@ -1,0 +1,21 @@
+{
+  "id": "acacia_leaves",
+  "lang": "block.acacia_leaves",
+  "tab": "natural",
+  "model": "cube",
+  "render": "cutout",
+  "hardness": 0.2,
+  "tool": "none",
+  "mining_level": 0,
+  "loot_table": "blocks/acacia_leaves",
+  "textures": {
+    "top": "acacia_leaves",
+    "side": "acacia_leaves",
+    "bottom": "acacia_leaves"
+  },
+  "properties": {
+    "leaf": true,
+    "decayable": true
+  }
+}
+

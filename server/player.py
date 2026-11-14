@@ -71,6 +71,7 @@ class Player:
         self.dead = False
         self._fall_peak = None
         self._suffocation_timer = 0.0
+        self._cactus_timer = 0.0
         # Hunger system (survival only)
         self.max_hunger = 20.0
         self.hunger = 20.0
@@ -216,6 +217,7 @@ class Player:
     def reset_damage_state(self):
         self._fall_peak = None
         self._suffocation_timer = 0.0
+        self._cactus_timer = 0.0
         self._starve_timer = 0.0
         self._regen_timer = 0.0
 
@@ -236,6 +238,27 @@ class Player:
             return False
         block = BLOCKS.get(block_id)
         return block is not None and bool(getattr(block, "solid", False))
+
+    def is_touching_cactus(self, margin=0.08):
+        """Return True when player bounding box touches or intersects a cactus block."""
+        if self.world is None:
+            return False
+        min_x = math.floor(self.pos[0] - self.radius - margin)
+        max_x = math.floor(self.pos[0] + self.radius + margin - 1e-6)
+        min_y = math.floor(self.pos[1] - margin)
+        max_y = math.floor(self.pos[1] + self.height + margin - 1e-6)
+        min_z = math.floor(self.pos[2] - self.radius - margin)
+        max_z = math.floor(self.pos[2] + self.radius + margin - 1e-6)
+        for x in range(min_x, max_x + 1):
+            for y in range(min_y, max_y + 1):
+                for z in range(min_z, max_z + 1):
+                    try:
+                        blk = self.world.get_block(x, y, z)
+                    except Exception:
+                        continue
+                    if blk == "cactus":
+                        return True
+        return False
 
     def take_damage(self, amount, damage_type=None):
         """Apply damage to a survival player. Returns the amount dealt."""
@@ -288,15 +311,16 @@ class Player:
             self._fall_peak = None
             if peak is not None:
                 distance = peak - float(self.pos[1])
-                fall = get_damage_type("fall")
-                if fall is not None and distance > fall.min_distance:
-                    if fall.per_block:
-                        amount = fall.damage * math.floor(distance - fall.min_distance)
+                on_stalagmite = self.is_landing_on_stalagmite()
+                dmg_type = (get_damage_type("stalagmite") if on_stalagmite else None) or get_damage_type("fall")
+                if dmg_type is not None and distance > dmg_type.min_distance:
+                    if dmg_type.per_block:
+                        amount = dmg_type.damage * math.floor(distance - dmg_type.min_distance + (1.0 if on_stalagmite else 0.0))
                     else:
-                        amount = fall.damage
-                    dealt = self.take_damage(amount, fall)
+                        amount = dmg_type.damage
+                    dealt = self.take_damage(amount, dmg_type)
                     if dealt > 0:
-                        events.append(DamageEvent(fall, dealt, self.dead))
+                        events.append(DamageEvent(dmg_type, dealt, self.dead))
 
         # Suffocation: the head being inside a solid block deals damage once
         # every `interval` seconds.
@@ -311,6 +335,25 @@ class Player:
                     events.append(DamageEvent(suffocation, dealt, self.dead))
         else:
             self._suffocation_timer = 0.0
+
+        # Cactus contact damage
+        cactus = get_damage_type("cactus")
+        if cactus is not None and self.is_touching_cactus():
+            interval = max(0.05, cactus.interval)
+            if self._cactus_timer <= 0.0:
+                dealt = self.take_damage(cactus.damage, cactus)
+                if dealt > 0:
+                    events.append(DamageEvent(cactus, dealt, self.dead))
+                self._cactus_timer = interval
+            else:
+                self._cactus_timer -= max(0.0, float(dt))
+                while self._cactus_timer <= 0.0 and not self.dead:
+                    dealt = self.take_damage(cactus.damage, cactus)
+                    if dealt > 0:
+                        events.append(DamageEvent(cactus, dealt, self.dead))
+                    self._cactus_timer += interval
+        else:
+            self._cactus_timer = 0.0
 
         # Natural health regeneration when well-fed (hunger >= 18)
         if self.hunger >= 18.0 and self.health < self.max_health:
@@ -465,6 +508,24 @@ class Player:
             for z in range(min_z, max_z + 1):
                 for x in range(min_x, max_x + 1):
                     if is_water(self.world.get_block(x, y, z)):
+                        return True
+        return False
+
+    def is_landing_on_stalagmite(self):
+        if self.world is None:
+            return False
+        from server.blocks import is_stalagmite
+        min_x = math.floor(self.pos[0] - self.radius)
+        max_x = math.floor(self.pos[0] + self.radius - 1e-6)
+        min_z = math.floor(self.pos[2] - self.radius)
+        max_z = math.floor(self.pos[2] + self.radius - 1e-6)
+        py = float(self.pos[1])
+        check_ys = {math.floor(py), math.floor(py - 0.05), math.floor(py - 0.2)}
+        for y in check_ys:
+            for z in range(min_z, max_z + 1):
+                for x in range(min_x, max_x + 1):
+                    blk = self.world.get_block(x, y, z)
+                    if is_stalagmite(blk):
                         return True
         return False
 

@@ -1,0 +1,60 @@
+{
+  "id": "crystal_caverns",
+  "name": "Crystal Caverns",
+  "enabled": true,
+  "min_y": 1,
+  "max_y": 32,
+  "scale": 0.025,
+  "octaves": 2,
+  "seed_offset": 819,
+  "threshold": 0.6,
+  "default_stone": "marble",
+  "stone_types": ["marble", "smooth_marble"],
+  "stone_layers": [
+    {
+      "min_y": 1,
+      "max_y": 32,
+      "stone": "marble"
+    }
+  ],
+  "cave_fill": {
+    "floor": "smooth_marble",
+    "ceiling": "marble",
+    "wall": "marble"
+  },
+  "cave_generation": {
+    "style": "cavern",
+    "scale": 0.03,
+    "octaves": 2,
+    "threshold": 0.52,
+    "seed_offset": 331
+  },
+  "features": [
+    {
+      "type": "crystal",
+      "blocks": [
+        "amethyst_crystal",
+        "ruby_crystal",
+        "sapphire_crystal",
+        "emerald_crystal",
+        "diamond_crystal"
+      ],
+      "chance": 0.1
+    }
+  ],
+  "ores": [
+    "marble_diamond_ore",
+    "marble_ruby_ore",
+    "marble_sapphire_ore",
+    "marble_emerald_ore",
+    "marble_malachite_ore"
+  ],
+  "mob_spawns": [
+    {
+      "mob": "zombie",
+      "weight": 5,
+      "group_size": [1, 2],
+      "max_light": 7
+    }
+  ]
+}

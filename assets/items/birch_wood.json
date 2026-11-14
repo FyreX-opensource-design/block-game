@@ -1,0 +1,14 @@
+{
+  "id": "birch_wood",
+  "lang": "block.birch_wood",
+  "tab": [
+    "building",
+    "natural"
+  ],
+  "model": "block",
+  "block": "birch_wood",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}

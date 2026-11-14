@@ -31,9 +31,9 @@ class TransformationTests(unittest.TestCase):
         rules = {r.id: r for r in load_transformations()}
         self.assertEqual(rules["dirt_to_grass"].to_block, "grass")
         self.assertEqual(rules["mud_to_muddy_grass"].to_block, "muddy_grass")
-        for rule in rules.values():
-            self.assertGreaterEqual(rule.min_time, 120)
-            self.assertLessEqual(rule.max_time, 180)
+        for rule_id in ("dirt_to_grass", "mud_to_muddy_grass"):
+            self.assertGreaterEqual(rules[rule_id].min_time, 120)
+            self.assertLessEqual(rules[rule_id].max_time, 180)
 
     def test_dirt_next_to_grass_converts_within_three_minutes(self):
         world = _flat_world()

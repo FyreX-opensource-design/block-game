@@ -1,7 +1,47 @@
 import ctypes
+import sys
+from pathlib import Path
+
+_NATIVE = Path(__file__).resolve().parent.parent / "native"
 
 
-_LIB = ctypes.CDLL("liblua.so.5.5")
+def bundled_lua_library():
+    """Lua 5.5 shipped with the game, so Windows does not need a system install."""
+    if sys.platform == "win32":
+        return _NATIVE / "windows" / "lua55.dll"
+    if sys.platform == "darwin":
+        return _NATIVE / "macos" / "liblua.5.5.dylib"
+    return _NATIVE / "linux" / "liblua.so.5.5"
+
+
+def lua_library_names():
+    """Libraries to try, bundled file first.
+
+    Windows loads ``native/windows/lua55.dll``. Linux loads
+    ``native/linux/liblua.so.5.5``. A system copy is only a fallback when the
+    bundled file is missing. The Linux soname is never tried on Windows.
+    """
+    bundled = str(bundled_lua_library())
+    if sys.platform == "win32":
+        return (bundled, "lua55.dll", "lua5.5.dll", "liblua-5.5.dll", "liblua.dll")
+    if sys.platform == "darwin":
+        return (bundled, "liblua.5.5.dylib", "liblua.dylib")
+    return (bundled, "liblua.so.5.5")
+
+
+def _load_lua():
+    errors = []
+    for name in lua_library_names():
+        try:
+            return ctypes.CDLL(name)
+        except OSError as exc:
+            errors.append(f"{name}: {exc}")
+    tried = ", ".join(lua_library_names())
+    detail = "; ".join(errors)
+    raise OSError(f"could not load Lua 5.5 ({tried}): {detail}")
+
+
+_LIB = _load_lua()
 _STATE = ctypes.c_void_p
 _LIB.luaL_newstate.restype = _STATE
 _LIB.luaL_openselectedlibs.argtypes = [_STATE, ctypes.c_int, ctypes.c_int]

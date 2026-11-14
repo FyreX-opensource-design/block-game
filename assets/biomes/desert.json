@@ -1,0 +1,30 @@
+{
+  "id": "desert",
+  "name": "Desert",
+  "variant_of": "plains",
+  "temperature": [0.75, 1.0],
+  "touching": ["savanna", "desert_hills", "desert_river", "beach", "ocean"],
+  "surface": "sand",
+  "soil": "sand",
+  "soil_depth": 3,
+  "subsoil": "sandstone",
+  "subsoil_depth": 3,
+  "scale": 0.006,
+  "octaves": 2,
+  "seed_offset": 90,
+  "ceiling": 0.49,
+  "min_size": 22,
+  "tree_chance": 0.0,
+  "height_offset": -4.0,
+  "height_scale": 0.85,
+  "cliff": false,
+  "transition": {
+    "blend": 0.08,
+    "curve": "smoothstep"
+  },
+  "trees": [],
+  "decorations": ["dead_bush", "cactus"],
+  "grass_color": "#cfc862",
+  "foliage_color": "#a8a244"
+}
+

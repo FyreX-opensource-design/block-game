@@ -1,0 +1,18 @@
+{
+  "id": "cow_leather",
+  "name": "Cow Leather",
+  "lang": "item.cow_leather",
+  "tab": [
+    "materials"
+  ],
+  "model": "flat",
+  "texture": "cow_leather",
+  "max_stack": 64,
+  "left": "none",
+  "right": "none",
+  "durability": 0,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 1,
+  "food": 0
+}

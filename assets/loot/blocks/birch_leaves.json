@@ -1,0 +1,22 @@
+{
+  "type": "block",
+  "pools": [
+    {
+      "rolls": 1,
+      "entries": [
+        {
+          "type": "item",
+          "name": "stick",
+          "count": 1,
+          "chance": 0.2
+        },
+        {
+          "type": "item",
+          "name": "birch_sapling",
+          "count": 1,
+          "chance": 0.05
+        }
+      ]
+    }
+  ]
+}

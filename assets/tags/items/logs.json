@@ -3,6 +3,10 @@
     "log",
     "pine_log",
     "oak_wood",
-    "pine_wood"
+    "pine_wood",
+    "acacia_log",
+    "acacia_wood",
+    "birch_log",
+    "birch_wood"
   ]
 }

@@ -1,0 +1,45 @@
+{
+  "id": "birch_forest_hills",
+  "name": "Birch Forest Hills",
+  "variant_of": "pine_forest",
+  "temperature": [
+    0.0,
+    0.5
+  ],
+  "touching": [
+    "birch_forest",
+    "forest",
+    "pine_forest",
+    "mountains",
+    "wooded_mountains",
+    "river"
+  ],
+  "surface": "grass",
+  "soil": "dirt",
+  "soil_depth": 3,
+  "scale": 0.006,
+  "octaves": 2,
+  "seed_offset": 90,
+  "ceiling": 0.65,
+  "min_size": 40,
+  "tree_chance": 0.014,
+  "height_offset": 6.0,
+  "height_scale": 1.1,
+  "cliff": false,
+  "transition": {
+    "blend": 0.08,
+    "curve": "smoothstep"
+  },
+  "trees": [
+    "tall_birch",
+    "birch"
+  ],
+  "decorations": [
+    "tall_grass",
+    "fern",
+    "dandelion",
+    "rose"
+  ],
+  "grass_color": "#7db53f",
+  "foliage_color": "#96c64e"
+}
