@@ -2,9 +2,9 @@ import math
 import unittest
 from unittest.mock import MagicMock
 
-from server.ai import EatGrassGoal, Goal, GoalSelector, PanicGoal, WanderGoal, is_direction_safe, is_position_hazardous
+from server.ai import EatGrassGoal, Goal, GoalSelector, PanicGoal, WanderGoal, is_direction_safe, is_penned, is_position_hazardous
 from server.blocks import AIR, DIRT, GRASS, STONE
-from server.entity import Mob, Pig, Sheep, entity_from_dict
+from server.entity import Mob, Pig, Sheep, Zombie, entity_from_dict
 from server.loot import get_mob_drops
 from server.pig_model import PigMeshes, build_pig_meshes, pig_pose
 from server.sheep_model import SheepMeshes, build_sheep_meshes, sheep_pose
@@ -237,6 +237,63 @@ class TestMobSpawner(unittest.TestCase):
         self.world.update_entities(0.05)
         self.assertIn(near_pig, self.world.entities)
         self.assertNotIn(far_pig, self.world.entities)
+
+    def _blank(self, cx, cy, cz):
+        chunk = Chunk(cx, cy, cz)
+        chunk.data.fill(0)
+        self.world.chunks[(cx, cy, cz)] = chunk
+
+    def test_penned_livestock_do_not_despawn(self):
+        self._blank(0, 0, 0)
+        for x in range(1, 6):
+            for z in range(1, 6):
+                self.world.set_block(x, 4, z, STONE)
+                if x in (1, 5) or z in (1, 5):
+                    self.world.set_block(x, 5, z, "wooden_fence")
+        pig = self.world.spawn_mob("pig", pos=[3.2, 5.0, 3.2])
+        self.world.players["p1"] = MagicMock(pos=[200.0, 5.0, 3.2])
+
+        self.assertTrue(is_penned(self.world, pig, limit=16.0))
+        self.spawner.update(0.1)
+        self.assertTrue(pig.alive)
+
+        zombie = self.world.spawn_mob("zombie", pos=[3.2, 5.0, 3.2])
+        self.spawner.update(0.1)
+        self.assertFalse(zombie.alive)
+
+    def test_livestock_that_can_walk_out_still_despawn(self):
+        self._blank(0, 0, 0)
+        self._blank(1, 0, 0)
+        for x in range(0, 31):
+            for z in range(2, 5):
+                self.world.set_block(x, 4, z, STONE)
+        pig = self.world.spawn_mob("pig", pos=[2.5, 5.0, 3.5])
+        self.world.players["p1"] = MagicMock(pos=[200.0, 5.0, 3.5])
+
+        self.assertFalse(is_penned(self.world, pig, limit=16.0))
+        self.spawner.update(0.1)
+        self.assertFalse(pig.alive)
+
+    def test_a_herd_is_not_searched_on_one_frame(self):
+        self._blank(0, 0, 0)
+        for x in range(1, 6):
+            for z in range(1, 6):
+                self.world.set_block(x, 4, z, STONE)
+                if x in (1, 5) or z in (1, 5):
+                    self.world.set_block(x, 5, z, "wooden_fence")
+        first = self.world.spawn_mob("pig", pos=[3.2, 5.0, 3.2])
+        second = self.world.spawn_mob("cow", pos=[3.6, 5.0, 3.6])
+        self.world.players["p1"] = MagicMock(pos=[200.0, 5.0, 3.2])
+
+        self.spawner.update(0.1)
+        self.assertTrue(first.alive)
+        self.assertTrue(second.alive)
+        self.assertTrue(getattr(first, "_penned", False))
+        self.assertFalse(hasattr(second, "_penned"))
+
+        self.spawner.update(0.1)
+        self.assertTrue(second.alive)
+        self.assertTrue(second._penned)
 
     def test_can_spawn_at_with_lighting(self):
         self.world.load_chunk(0, 0, 0)
@@ -530,6 +587,7 @@ class TestPathfindingHazardAvoidance(unittest.TestCase):
                 self.world.set_block(x, 4, z, STONE)
 
         for mob_cls in (Pig, Sheep):
+            self.world.entities.clear()
             mob = mob_cls(pos=[5.2, 11.0, 5.0], yaw=-math.pi / 2)  # Facing +X toward the 6-block cliff
             mob.on_ground = True
             self.world.spawn_mob(mob)
@@ -567,6 +625,7 @@ class TestPathfindingHazardAvoidance(unittest.TestCase):
                     self.world.set_block(x, 5, z, "water")
 
         for mob_cls in (Pig, Sheep):
+            self.world.entities.clear()
             mob = mob_cls(pos=[5.2, 6.0, 5.0], yaw=-math.pi / 2)  # Facing +X toward water
             mob.on_ground = True
             self.world.spawn_mob(mob)

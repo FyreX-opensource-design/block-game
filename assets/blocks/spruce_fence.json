@@ -1,0 +1,23 @@
+{
+  "id": "spruce_fence",
+  "lang": "block.spruce_fence",
+  "tab": [
+    "building"
+  ],
+  "model": "fence_post",
+  "type": "fence",
+  "solid": true,
+  "hardness": 2.0,
+  "tool": "axe",
+  "mining_level": 0,
+  "sound": "wood",
+  "loot_table": "blocks/spruce_fence",
+  "properties": {
+    "fence": true
+  },
+  "textures": {
+    "top": "spruce_planks",
+    "side": "spruce_planks",
+    "texture": "spruce_planks"
+  }
+}

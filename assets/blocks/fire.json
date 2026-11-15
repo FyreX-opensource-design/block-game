@@ -1,0 +1,16 @@
+{
+  "id": "fire",
+  "lang": "block.fire",
+  "tab": "natural",
+  "model": "cross",
+  "render": "cutout",
+  "solid": false,
+  "hardness": 0.0,
+  "tool": "none",
+  "mining_level": 0,
+  "fluid_breakable": true,
+  "light": {"r": 14, "g": 8, "b": 2, "uv": 0, "ir": 10},
+  "properties": {"fire": "fire"},
+  "animation": ["fire", "fire_2", "fire_3", "fire_4"],
+  "textures": {"cross": "fire"}
+}

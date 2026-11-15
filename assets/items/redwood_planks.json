@@ -1,0 +1,13 @@
+{
+  "id": "redwood_planks",
+  "lang": "block.redwood_planks",
+  "tab": [
+    "building"
+  ],
+  "model": "block",
+  "block": "redwood_planks",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}

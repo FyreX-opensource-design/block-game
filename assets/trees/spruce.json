@@ -1,0 +1,13 @@
+{
+  "id": "spruce",
+  "shape": "spruce",
+  "trunk": "spruce_log",
+  "leaves": "spruce_leaves",
+  "trunk_min": 6,
+  "trunk_extra": 3,
+  "extra_threshold": 0.5,
+  "radius": 3,
+  "leaf_down": 6,
+  "leaf_up": 1,
+  "valid_blocks": ["grass", "dirt", "muddy_grass", "mud", "podzol"]
+}

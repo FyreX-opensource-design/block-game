@@ -1,0 +1,30 @@
+return {
+  id = "desert_spider",
+  name = "Desert Spider",
+  health = 16,
+  radius = 0.6,
+  height = 0.8,
+  walk_speed = 1.4,
+  run_speed = 3.0,
+  climb_speed = 2.4,
+  loot = "entities/desert_spider",
+  model = { type = "builtin", id = "spider", texture = "entity/desert_spider.png" },
+  goals = {
+    { priority = 1, type = "spider", damage = 2.5, reach = 1.8, range = 16 },
+    { priority = 2, type = "wander" },
+  },
+  spawn = {
+    group = "hostile",
+    order = 2,
+    weight = 1,
+    headroom = 1,
+    group_size = { 1, 2 },
+    biomes = { "desert", "desert_hills" },
+    light = {
+      sky = { max = 7 },
+      green = { max = 7 },
+      blue = { max = 7 },
+      uv = { max = 7 },
+    },
+  },
+}

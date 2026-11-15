@@ -57,3 +57,23 @@ def zombie_pose(time, speed, yaw, pitch=0.0):
         "leg_l": (leg_swing, 0.0, 0.0),
     }
 
+
+def skeleton_pose(time, speed, yaw, pitch=0.0, pull=0.0):
+    """Arms hang while walking and rise into a bow draw."""
+    pull = max(0.0, min(1.0, float(pull or 0.0)))
+    if speed < 0.08:
+        leg_swing = 0.0
+    else:
+        leg_swing = math.sin(time * 10.0) * min(1.0, speed * 1.6) * 0.7
+    aim = 1.15 * pull
+    walk_arm = 0.0 if pull > 0.05 else leg_swing
+    return {
+        "head": (pitch, 0.0, 0.0),
+        "hat": (pitch, 0.0, 0.0),
+        "body": (0.0, 0.0, 0.0),
+        "arm_r": (aim - walk_arm, 0.0, 0.0),
+        "arm_l": (aim * 0.85 + walk_arm, 0.2 * pull, 0.0),
+        "leg_r": (-leg_swing, 0.0, 0.0),
+        "leg_l": (leg_swing, 0.0, 0.0),
+    }
+

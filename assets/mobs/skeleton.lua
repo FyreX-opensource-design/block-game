@@ -1,0 +1,30 @@
+return {
+  id = "skeleton",
+  name = "Skeleton",
+  health = 20,
+  radius = 0.35,
+  height = 1.95,
+  eye = 1.62,
+  walk_speed = 1.1,
+  run_speed = 2.1,
+  loot = "entities/skeleton",
+  model = { type = "builtin", id = "skeleton", texture = "entity/skeleton.png" },
+  goals = {
+    { priority = 1, type = "shoot", range = 16, preferred = 14, bow = "wood_bow", arrow = "arrow" },
+    { priority = 2, type = "wander" },
+  },
+  spawn = {
+    group = "hostile",
+    order = 1,
+    weight = 1,
+    headroom = 2,
+    group_size = { 1, 2 },
+    exclude_biomes = { "desert", "desert_hills" },
+    light = {
+      sky = { max = 7 },
+      green = { max = 7 },
+      blue = { max = 7 },
+      uv = { max = 7 },
+    },
+  },
+}

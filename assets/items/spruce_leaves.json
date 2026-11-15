@@ -1,0 +1,13 @@
+{
+  "id": "spruce_leaves",
+  "lang": "block.spruce_leaves",
+  "tab": [
+    "natural"
+  ],
+  "model": "block",
+  "block": "spruce_leaves",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}

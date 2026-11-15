@@ -1,0 +1,16 @@
+{
+  "id": "spruce_fence",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#S#",
+    "#S#"
+  ],
+  "key": {
+    "#": "spruce_planks",
+    "S": "#sticks"
+  },
+  "result": {
+    "item": "spruce_fence",
+    "count": 3
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "id": "blue_fire",
+  "lang": "block.blue_fire",
+  "tab": "natural",
+  "model": "block",
+  "block": "blue_fire",
+  "max_stack": 64,
+  "left": "none",
+  "right": "place",
+  "durability": 0
+}

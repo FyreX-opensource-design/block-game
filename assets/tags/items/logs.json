@@ -7,6 +7,10 @@
     "acacia_log",
     "acacia_wood",
     "birch_log",
-    "birch_wood"
+    "birch_wood",
+    "spruce_log",
+    "spruce_wood",
+    "redwood_log",
+    "redwood_wood"
   ]
 }

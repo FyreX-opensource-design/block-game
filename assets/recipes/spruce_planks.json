@@ -1,0 +1,11 @@
+{
+  "id": "spruce_planks",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "spruce_log"
+  ],
+  "result": {
+    "item": "spruce_planks",
+    "count": 4
+  }
+}

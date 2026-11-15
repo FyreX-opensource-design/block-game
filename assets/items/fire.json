@@ -1,0 +1,11 @@
+{
+  "id": "fire",
+  "lang": "block.fire",
+  "tab": "natural",
+  "model": "block",
+  "block": "fire",
+  "max_stack": 64,
+  "left": "none",
+  "right": "place",
+  "durability": 0
+}

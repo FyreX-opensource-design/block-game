@@ -1,0 +1,14 @@
+{
+  "id": "redwood_sapling",
+  "lang": "block.redwood_sapling",
+  "tab": [
+    "natural"
+  ],
+  "model": "flat",
+  "block": "redwood_sapling",
+  "texture": "redwood_sapling",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}

@@ -1,0 +1,14 @@
+{
+  "id": "spruce_sapling",
+  "lang": "block.spruce_sapling",
+  "tab": [
+    "natural"
+  ],
+  "model": "flat",
+  "block": "spruce_sapling",
+  "texture": "spruce_sapling",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}

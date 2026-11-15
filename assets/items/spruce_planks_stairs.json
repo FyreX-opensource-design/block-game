@@ -1,0 +1,13 @@
+{
+  "id": "spruce_planks_stairs",
+  "lang": "block.spruce_planks_stairs",
+  "tab": [
+    "building"
+  ],
+  "model": "block",
+  "block": "spruce_planks_stairs",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}

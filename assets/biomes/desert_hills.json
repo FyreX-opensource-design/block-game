@@ -25,6 +25,7 @@
   "trees": [],
   "decorations": ["dead_bush", "cactus"],
   "grass_color": "#c7be58",
-  "foliage_color": "#9e983b"
+  "foliage_color": "#9e983b",
+  "rainfall": 0.18
 }
 

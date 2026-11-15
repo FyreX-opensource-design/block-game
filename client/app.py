@@ -198,6 +198,9 @@ class Game(pyglet.window.Window):
         self.forward = look_direction(0.0, 0.0)
         self.view_mode = VIEW_FIRST
         self._play_time = 0.0
+        from server.particles import ParticleSystem
+
+        self.particles = ParticleSystem()
         self._mouse = (self.width / 2, self.height / 2)
         self._center = (0, 0, 0)
         self._gen_left = None
@@ -210,6 +213,11 @@ class Game(pyglet.window.Window):
         self._autosave = 0.0
         self._text_ok = True
         self.network_client = None
+        self.weather_port = None
+        self.weather_proc = None
+        self.spawn_weather = False
+        self.weather_enabled = False
+        self.weather_bind_port = 0
         self.other_players = {}
         self._net_timer = 0.0
         self._closing = False
@@ -297,9 +305,26 @@ class Game(pyglet.window.Window):
                     break
 
         if self.world is not None:
+            if self.player is not None and self.network_client is None and self.mode == "play":
+                self.player.held_item = selected_item_id(self.hotbar, self.selected)
             if self.network_client is None:
                 self.world.advance_time(min(dt, 0.05))
+                if self.weather_port is not None:
+                    self.weather_port.poll(min(dt, 0.05))
             self.world.update_entities(min(dt, 0.05))
+            if getattr(self, "particles", None) is not None:
+                step = min(dt, 0.05)
+                self.particles.emit_mob_effects(self.world.entities, step)
+                self.particles.update(step)
+            if (
+                self.network_client is None
+                and self.mode == "play"
+                and self.player is not None
+                and self.player.dead
+                and self.gamemode == "survival"
+            ):
+                # The killing hit lands in the entity step, after the health tick.
+                self._handle_local_death([])
             if self.network_client is None and getattr(self.world, "pending_hurts", None) is not None:
                 self.world.pending_hurts.clear()
             self._update_bow_draw(min(dt, 0.05))
@@ -416,8 +441,7 @@ class Game(pyglet.window.Window):
         if self.player is None or self.gamemode != "survival":
             return
         events = self.player.update_health(dt)
-        if not events:
-            return
+        # A mob or arrow can empty health outside this step. That still kills.
         if self.player.dead:
             self._handle_local_death(events)
 
@@ -426,6 +450,8 @@ class Game(pyglet.window.Window):
         for event in events:
             if event.fatal and event.message:
                 cause = event.message
+        if not cause:
+            cause = str(getattr(self.player, "death_cause", "") or "")
         had_spawn = self.player.get_spawn_point() is not None
         pos = self.player.respawn()
         self.eye = (pos[0], pos[1] + self.player.eye, pos[2])
@@ -451,6 +477,7 @@ class Game(pyglet.window.Window):
                 self.gamemode = pkt.get("gamemode", "survival")
                 self._reset_breaking()
                 self.world = World(seed=pkt.get("seed", 0), day_time=pkt.get("day_time", 1000.0))
+                self.world.remote_players = self.other_players
                 self.world.spawner = None
                 # The server is authoritative in multiplayer. Applying its
                 # block changes must not re-run world simulation locally, or
@@ -633,6 +660,14 @@ class Game(pyglet.window.Window):
                                 mob.sheared = bool(md["sheared"])
                             if "color" in md:
                                 mob.color = str(md["color"])
+                            if "bow_pull" in md:
+                                mob.bow_pull = float(md["bow_pull"] or 0.0)
+                            if "age" in md:
+                                mob.age = float(md["age"] or 0.0)
+                                if hasattr(mob, "_apply_growth_size"):
+                                    mob._apply_growth_size()
+                            if "love" in md:
+                                mob.love_time = float(md["love"] or 0.0)
                         else:
                             mob = entity_from_dict(md)
                             if getattr(mob, "is_mob", False):
@@ -739,6 +774,10 @@ class Game(pyglet.window.Window):
             elif p_type == "time_update":
                 if self.world is not None and "day_time" in pkt:
                     self.world.day_time = float(pkt["day_time"])
+            elif p_type == "weather":
+                if self.world is not None:
+                    self.world.weather = pkt
+                    self.world.weather_at = time.perf_counter()
 
         if not self.network_client.connected:
             err = self.network_client.error or "Server closed connection"
@@ -984,6 +1023,7 @@ class Game(pyglet.window.Window):
         self.world.on_block_set = _collect
         try:
             self.world.update_fluids(dt)
+            self.world.update_fire(dt)
         finally:
             self.world.on_block_set = previous
         if changed:
@@ -3082,6 +3122,7 @@ class Game(pyglet.window.Window):
             day_time=getattr(info, "day_time", 1000.0),
             spawn_point=getattr(info, "spawn", None),
         )
+        self.world.remote_players = self.other_players
         self.world.on_block_set = lambda bx, by, bz, bid: self._upload_block_change(bx, by, bz)
         self.player = Player(self.world)
         self.player.gamemode = self.gamemode
@@ -3147,6 +3188,7 @@ class Game(pyglet.window.Window):
         self.keys.clear()
         self.mode = "loading"
         self._status = "Generating terrain"
+        self._start_weather()
 
     def _persist_world(self):
         if self.world is None or self.info is None or self.player is None:
@@ -3199,7 +3241,38 @@ class Game(pyglet.window.Window):
             else:
                 self.chat.add_message(line, sender=self.profile.get("username", "Player"))
 
+    def _start_weather(self):
+        if self.network_client is not None or self.world is None or not self.weather_enabled:
+            return
+        self._stop_weather()
+        from server.weather_link import WeatherPort
+        from server.weather_server import spawn_weather_process
+
+        host = "0.0.0.0" if self.weather_bind_port else "127.0.0.1"
+        self.weather_port = WeatherPort(self.world, host, self.weather_bind_port or 0)
+        address = f"127.0.0.1:{self.weather_port.port}"
+        print(f"Weather link on {self.weather_port.host}:{self.weather_port.port}")
+        print(f"  python -m server.weather_server --world {address}")
+        print("  The weather process is separate, so it can run under its own cgroup.")
+        if self.spawn_weather:
+            self.weather_proc = spawn_weather_process(address)
+
+    def _stop_weather(self):
+        proc = self.weather_proc
+        self.weather_proc = None
+        if proc is not None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=1.0)
+            except Exception:
+                pass
+        port = self.weather_port
+        self.weather_port = None
+        if port is not None:
+            port.close()
+
     def _drop_view(self):
+        self._stop_weather()
         for key in list(self.renderer.chunks):
             self.renderer.drop(key)
         if self.world is not None:
@@ -3513,21 +3586,35 @@ class Game(pyglet.window.Window):
         self.ctx.viewport = (0, 0, max(fw, 1), max(fh, 1))
         day_time = float(getattr(self.world, "day_time", 1000.0)) if self.world is not None else 1000.0
         sky_color = self.renderer.get_sky_color(day_time) if hasattr(self.renderer, "get_sky_color") else SKY
-        self.ctx.clear(*sky_color, 1.0, depth=1.0)
         self._aim()
+        if self.world is not None and self.camera is not None:
+            from server.weather import rain_at
+
+            wet = rain_at(getattr(self.world, "weather", None), self.camera[0], self.camera[2])
+            if wet > 0.0:
+                dim = 1.0 - 0.35 * wet
+                sky_color = tuple(channel * dim for channel in sky_color)
+        fluid_fog = None
+        if hasattr(self.renderer, "set_view_fog"):
+            fluid_fog = self.renderer.set_view_fog(self.world, self.camera, sky_color)
+            if fluid_fog is not None:
+                sky_color = fluid_fog
+        self.ctx.clear(*sky_color, 1.0, depth=1.0)
         vp = None
         if self.mode in ("play", "pause", "loading", "inventory", "options") and self.world is not None:
             aspect = max(fw, 1) / max(fh, 1)
             # Near plane stays short for world detail; the FP hand is placed past 0.2.
-            projection = perspective(75, aspect, 0.05, 220)
+            projection = perspective(75, aspect, 0.05, 480)
             if self.view_mode == VIEW_THIRD_FRONT:
                 view = look_at(self.camera, self.eye)
             else:
                 lx, ly, lz = self.forward
                 view = look_at(self.camera, (self.camera[0] + lx, self.camera[1] + ly, self.camera[2] + lz))
             vp = projection @ view
-            if hasattr(self.renderer, "draw_sky"):
+            if fluid_fog is None and hasattr(self.renderer, "draw_sky"):
                 self.renderer.draw_sky(vp, self.camera, day_time)
+            if fluid_fog is None and hasattr(self.renderer, "draw_clouds"):
+                self.renderer.draw_clouds(vp, self.world, self.camera, self._play_time)
             self.renderer.draw_world(vp, self.camera, cutout=True, day_time=day_time)
             if self.mode in ("play", "pause", "inventory", "options") and self.player is not None and self.ready:
                 if self.other_players:
@@ -3546,6 +3633,8 @@ class Game(pyglet.window.Window):
                         self._play_time,
                         day_time=day_time,
                     )
+                    if getattr(self, "particles", None) is not None and self.particles.particles:
+                        self.renderer.draw_particles(vp, self.camera, self.particles)
             if self.mode == "play" and self.target is not None:
                 target_coords = (self.target["x"], self.target["y"], self.target["z"])
                 target_box = self.target.get("box")
@@ -3567,6 +3656,8 @@ class Game(pyglet.window.Window):
                         day_time=day_time,
                     )
             self.renderer.draw_translucent(vp, self.camera, day_time=day_time)
+            if hasattr(self.renderer, "draw_rain"):
+                self.renderer.draw_rain(vp, self.world, self.camera, self._play_time)
             if (
                 self.mode in ("play", "pause", "inventory", "options")
                 and self.player is not None
@@ -4329,7 +4420,10 @@ class Game(pyglet.window.Window):
                 if self.network_client is not None:
                     self.network_client.send_interact_mob(hit_mob.id, held_id)
                 return True
-            return False
+            from server.fluid import is_empty_bucket
+
+            if is_empty_bucket(held_id):
+                return True
 
         if getattr(hit_mob, "mob_type", "") == "sheep":
             if held_id == "shears":
@@ -4360,7 +4454,23 @@ class Game(pyglet.window.Window):
                             else:
                                 self.hotbar[self.selected] = make_stack(held_id, cnt - 1)
                     return True
+
+        if hasattr(hit_mob, "accepts_food") and hit_mob.accepts_food(held_id):
+            return self._feed_mob(hit_mob, held_id)
         return False
+
+    def _feed_mob(self, mob, item_id):
+        result = mob.feed(item_id) if hasattr(mob, "feed") else ""
+        if result and self.network_client is not None:
+            self.network_client.send_interact_mob(mob.id, item_id)
+        if result and self.gamemode != "creative":
+            slot = self.hotbar[self.selected]
+            count = stack_count(slot)
+            if count <= 1:
+                self.hotbar[self.selected] = empty_stack()
+            else:
+                self.hotbar[self.selected] = make_stack(item_id, count - 1)
+        return True
 
     def _swap_held_for(self, filled_id):
         """Replace one of the held stack with filled_id. Extra results go into the inventory."""
@@ -4514,6 +4624,7 @@ class Game(pyglet.window.Window):
             get_filled_bucket,
             is_empty_bucket,
             is_filled_bucket,
+            is_lava,
             is_water,
             is_water_source,
         )
@@ -4622,7 +4733,8 @@ class Game(pyglet.window.Window):
 
             s_info = get_slab_info(cur_target)
             vs_info = get_vertical_slab_info(cur_target)
-            if s_info is not None and not s_info["double"] and not is_water_source(cur_target):
+            placing_lava = is_lava(fluid_id)
+            if not placing_lava and s_info is not None and not s_info["double"] and not is_water_source(cur_target):
                 logged_id = (
                     f"{s_info['base_id']}_waterlogged"
                     if s_info["half"] == "bottom"
@@ -4643,7 +4755,7 @@ class Game(pyglet.window.Window):
                         if leftover > 0:
                             self._spawn_loose_item(empty_id, leftover, list(self.player.pos), pickup_delay=0.5)
                 return True
-            elif vs_info is not None and not is_water_source(cur_target):
+            elif not placing_lava and vs_info is not None and not is_water_source(cur_target):
                 logged_id = get_waterlogged_vertical_slab(cur_target, level=8)
                 if logged_id:
                     if self.network_client is not None:
@@ -4952,6 +5064,7 @@ class Game(pyglet.window.Window):
         self._closing = True
         if self.world is not None:
             self.world.stop_background_generator()
+        self._stop_weather()
         self._stop_web_companion()
         if self.network_client is not None:
             self.network_client.disconnect()
@@ -5100,6 +5213,18 @@ def main(argv=None):
     parser.add_argument("--width", type=int, default=1280, help="Window width")
     parser.add_argument("--height", type=int, default=720, help="Window height")
     parser.add_argument("--pos", default=None, help="Window position X,Y (e.g. 50,50)")
+    parser.add_argument("--no-weather", action="store_true", help="Do not run weather")
+    parser.add_argument(
+        "--no-spawn-weather",
+        action="store_true",
+        help="Listen for a weather server instead of starting one",
+    )
+    parser.add_argument(
+        "--weather-port",
+        type=int,
+        default=0,
+        help="Port for the weather server to connect to (0 picks one)",
+    )
 
     parsed = parser.parse_args(raw_args)
 
@@ -5126,6 +5251,9 @@ def main(argv=None):
         window_pos=window_pos,
         connect=connect_addr,
     )
+    game.weather_enabled = not parsed.no_weather and not parsed.smoke
+    game.spawn_weather = game.weather_enabled and not parsed.no_spawn_weather
+    game.weather_bind_port = int(parsed.weather_port or 0)
     if parsed.smoke:
         return game.run_smoke()
     pyglet.app.run()

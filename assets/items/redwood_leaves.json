@@ -1,0 +1,13 @@
+{
+  "id": "redwood_leaves",
+  "lang": "block.redwood_leaves",
+  "tab": [
+    "natural"
+  ],
+  "model": "block",
+  "block": "redwood_leaves",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}

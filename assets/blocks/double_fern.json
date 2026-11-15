@@ -1,0 +1,21 @@
+{
+  "id": "double_fern",
+  "lang": "block.double_fern",
+  "tab": "natural",
+  "type": "tall_plant",
+  "model": "cross",
+  "render": "cutout",
+  "solid": false,
+  "hardness": 0.0,
+  "tool": "none",
+  "mining_level": 0,
+  "loot_table": "blocks/double_fern",
+  "fluid_breakable": true,
+  "plant": true,
+  "requires_soil": true,
+  "tint": "grass",
+  "textures": {
+    "cross": "double_fern_bottom",
+    "upper": "double_fern_top"
+  }
+}

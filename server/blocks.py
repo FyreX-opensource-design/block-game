@@ -30,7 +30,10 @@ COAL_ORE = "coal_ore"
 COPPER_ORE = "copper_ore"
 IRON_ORE = "iron_ore"
 CHUNK_SIZE = 16
-WORLD_HEIGHT = 128
+WORLD_HEIGHT = 256
+# Terrain stops short of the ceiling so a peak can meet the clouds
+# without filling the top of the world.
+TERRAIN_LIMIT = WORLD_HEIGHT - 8
 SECTION_COUNT = WORLD_HEIGHT // CHUNK_SIZE
 LOAD_RADIUS = 3
 UNLOAD_RADIUS = 5
@@ -3228,6 +3231,9 @@ def _load_registry():
         for texture_name in textures.values():
             if texture_name not in texture_names:
                 texture_names.append(texture_name)
+        for texture_name in entry.get("animation") or []:
+            if texture_name not in texture_names:
+                texture_names.append(texture_name)
         palettes_raw = entry.get("palettes")
         if palettes_raw and isinstance(palettes_raw, list):
             for pal in palettes_raw:
@@ -3546,6 +3552,9 @@ def _load_registry():
             by_index.append(b_obj)
             index_of[b_id] = len(by_index) - 1
 
+        anim_names = [str(name) for name in (entry.get("animation") or [])]
+        if anim_names:
+            block.anim_rects = tuple(rects[name] for name in anim_names if name in rects)
         _register_block(block.id, block)
         if creative_tab:
             creative.append(block.id)
@@ -5791,7 +5800,7 @@ def atlas_bytes():
     return image.tobytes(), (image.shape[1], image.shape[0])
 
 
-SOIL_BLOCKS = ("dirt", "grass", "mud", "muddy_grass")
+SOIL_BLOCKS = ("dirt", "grass", "mud", "muddy_grass", "podzol")
 
 
 def is_soil(block):

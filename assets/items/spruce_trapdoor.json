@@ -1,0 +1,12 @@
+{
+  "id": "spruce_trapdoor",
+  "lang": "item.spruce_trapdoor",
+  "tab": "building",
+  "model": "flat",
+  "texture": "spruce_trapdoor",
+  "block": "spruce_trapdoor",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}

@@ -171,6 +171,12 @@ BUCKET_FLUID_MAP = {
     ("clay_bucket", "milk"): "clay_milk_bucket",
     ("iron_bucket", "milk"): "milk_bucket",
     ("bucket", "milk"): "milk_bucket",
+    ("iron_bucket", "lava"): "lava_bucket",
+    ("bucket", "lava"): "lava_bucket",
+    ("iron_bucket", "blue_lava"): "blue_lava_bucket",
+    ("bucket", "blue_lava"): "blue_lava_bucket",
+    ("iron_bucket", "black_lava"): "black_lava_bucket",
+    ("bucket", "black_lava"): "black_lava_bucket",
 }
 
 FILLED_BUCKETS = {
@@ -198,6 +204,9 @@ FILLED_BUCKETS = {
     "milk_clay_bucket": ("milk", "clay_bucket"),
     "iron_milk_bucket": ("milk", "iron_bucket"),
     "milk_bucket": ("milk", "iron_bucket"),
+    "lava_bucket": ("lava", "iron_bucket"),
+    "blue_lava_bucket": ("blue_lava", "iron_bucket"),
+    "black_lava_bucket": ("black_lava", "iron_bucket"),
 }
 
 
@@ -293,8 +302,39 @@ def is_fluid(block_id):
     return is_waterlogged_slab(block_id) or is_waterlogged_vertical_slab(block_id)
 
 
+def is_lava(block_id):
+    """True for every flowing level of a lava fluid."""
+    if not block_id:
+        return False
+    block = BLOCKS.get(block_id)
+    if block is None:
+        return False
+    return bool((getattr(block, "properties", None) or {}).get("lava"))
+
+
 def is_water(block_id):
-    return is_fluid(block_id)
+    return is_fluid(block_id) and not is_lava(block_id)
+
+
+# Color, then how soon the view fades, then where it is solid.
+# Lava is a short, thick fog. Water and milk let you see a little farther.
+_SUBMERGED_FOG = {
+    "water": ((0.05, 0.22, 0.45), 0.4, 12.0),
+    "salt_water": ((0.04, 0.24, 0.38), 0.4, 11.0),
+    "brackish_water": ((0.14, 0.28, 0.22), 0.4, 9.0),
+    "milk": ((0.94, 0.93, 0.88), 0.3, 5.5),
+    "lava": ((0.90, 0.32, 0.02), 0.15, 3.0),
+    "blue_lava": ((0.05, 0.28, 0.85), 0.15, 3.4),
+    "black_lava": ((0.08, 0.02, 0.03), 0.1, 2.0),
+}
+
+
+def submerged_fog(block_id):
+    """Fog for a camera sitting inside a fluid, or None in open air."""
+    kind = get_fluid_type(block_id)
+    if not kind:
+        return None
+    return _SUBMERGED_FOG.get(kind, ((0.05, 0.20, 0.40), 0.4, 10.0))
 
 
 def is_fluid_source(block_id):

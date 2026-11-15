@@ -3,7 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 
 CHUNK_SIZE = 16
-WORLD_HEIGHT = 128
+WORLD_HEIGHT = 256
 SECTION_COUNT = WORLD_HEIGHT // CHUNK_SIZE
 
 LIGHT_MIN = 0

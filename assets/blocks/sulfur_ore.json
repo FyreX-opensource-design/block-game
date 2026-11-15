@@ -1,0 +1,12 @@
+{
+  "id": "sulfur_ore",
+  "lang": "block.sulfur_ore",
+  "tab": "natural",
+  "model": "cube",
+  "hardness": 3.0,
+  "tool": "pickaxe",
+  "mining_level": 1,
+  "loot_table": "blocks/sulfur_ore",
+  "sound": "stone",
+  "textures": {"top": "sulfur_ore", "side": "sulfur_ore", "bottom": "sulfur_ore"}
+}

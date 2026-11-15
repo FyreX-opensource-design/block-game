@@ -1,0 +1,11 @@
+{
+  "id": "sulfur_ore",
+  "lang": "block.sulfur_ore",
+  "tab": "natural",
+  "model": "block",
+  "block": "sulfur_ore",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}

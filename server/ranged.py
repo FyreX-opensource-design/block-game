@@ -160,7 +160,7 @@ def shot_origin(pos, eye, direction):
     ]
 
 
-def fire_arrow(world, bow, arrow, origin, direction, power, owner=""):
+def fire_arrow(world, bow, arrow, origin, direction, power, owner="", recoverable=True):
     """Spawn an arrow flying along ``direction``. Speed comes from the bow and arrow."""
     unit = _unit(direction)
     if unit is None or world is None or bow is None or arrow is None:
@@ -177,6 +177,7 @@ def fire_arrow(world, bow, arrow, origin, direction, power, owner=""):
         gravity=arrow.gravity,
         effects=arrow.effects,
         owner=owner,
+        recoverable=recoverable,
     )
 
 

@@ -1,0 +1,43 @@
+{
+  "id": "spruce_forest",
+  "name": "Spruce Forest",
+  "variant_of": "forest",
+  "temperature": [0.0, 0.5],
+  "touching": [
+    "forest",
+    "pine_forest",
+    "birch_forest",
+    "birch_forest_hills",
+    "redwood_forest",
+    "river",
+    "mountains"
+  ],
+  "variant_noise": {
+    "scale": 0.004,
+    "octaves": 2,
+    "seed_offset": 4100,
+    "offset": [3.0, 9.0],
+    "threshold": 0.48,
+    "above": false
+  },
+  "surface": "grass",
+  "soil": "dirt",
+  "soil_depth": 3,
+  "scale": 0.006,
+  "octaves": 2,
+  "seed_offset": 90,
+  "ceiling": 0.6,
+  "min_size": 80,
+  "tree_chance": 0.018,
+  "height_offset": 1.0,
+  "height_scale": 1.0,
+  "cliff": false,
+  "transition": {
+    "blend": 0.08,
+    "curve": "smoothstep"
+  },
+  "trees": ["spruce", "tall_spruce"],
+  "decorations": ["tall_grass", "double_tall_grass", "fern", "double_fern"],
+  "grass_color": "#3f7a4a",
+  "foliage_color": "#2f6b45"
+}

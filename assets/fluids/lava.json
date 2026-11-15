@@ -1,0 +1,9 @@
+{
+  "id": "lava",
+  "block": "lava",
+  "flow_distance": 3,
+  "speed": 0.35,
+  "dropoff_distance": 2,
+  "infinite_source": false,
+  "push_strength": 0.35
+}

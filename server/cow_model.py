@@ -34,8 +34,8 @@ COW_PARTS = {
         },
     },
     "tail": {
-        "pivot": (0.0, 17.0, 10.0),
-        "box": (-1.0, -7.0, -1.0, 1.0, 0.0, 1.0),
+        "pivot": (0.0, 18.0, 10.0),
+        "box": (-1.0, -7.0, 0.0, 1.0, 0.0, 2.0),
         "uv": {
             "north": (0, 40, 2, 47),
             "south": (2, 40, 4, 47),
@@ -246,7 +246,9 @@ def cow_pose(time, speed, yaw, pitch=0.0):
     poses = {name: (pitch, 0.0, 0.0) for name in HEAD_PARTS}
     poses["body"] = (0.0, 0.0, 0.0)
     poses["udder"] = (0.0, 0.0, 0.0)
-    poses["tail"] = (0.35 + swing * 0.15, 0.0, 0.0)
+    # Negative pitch hangs the tail out behind the rump. Positive pitch
+    # rotates it toward the head and into the body.
+    poses["tail"] = (-0.5 + swing * 0.12, 0.0, 0.0)
     poses["leg_front_left"] = (swing, 0.0, 0.0)
     poses["leg_front_right"] = (-swing, 0.0, 0.0)
     poses["leg_back_left"] = (-swing, 0.0, 0.0)
@@ -277,10 +279,27 @@ def _translation(x, y, z):
     )
 
 
-def cow_part_matrix(pos, yaw, part_name, pitch=0.0):
+def _scale(amount):
+    return np.array(
+        [[amount, 0.0, 0.0, 0.0], [0.0, amount, 0.0, 0.0], [0.0, 0.0, amount, 0.0], [0.0, 0.0, 0.0, 1.0]],
+        dtype=np.float32,
+    )
+
+
+def cow_part_matrix(pos, yaw, part_name, pitch=0.0, baby=False):
     pivot = COW_PARTS[part_name]["pivot"]
-    px, py, pz = pivot[0] * PIXEL, pivot[1] * PIXEL, pivot[2] * PIXEL
-    return _translation(pos[0], pos[1], pos[2]) @ _rotation_y(yaw) @ _translation(px, py, pz) @ _rotation_x(pitch)
+    pivot_scale = 0.5 if baby else 1.0
+    part_scale = (0.85 if part_name in HEAD_PARTS else 0.5) if baby else 1.0
+    px = pivot[0] * PIXEL * pivot_scale
+    py = pivot[1] * PIXEL * pivot_scale
+    pz = pivot[2] * PIXEL * pivot_scale
+    return (
+        _translation(pos[0], pos[1], pos[2])
+        @ _rotation_y(yaw)
+        @ _translation(px, py, pz)
+        @ _scale(part_scale)
+        @ _rotation_x(pitch)
+    )
 
 
 def transform_vertices(vertices, matrix):
@@ -305,14 +324,14 @@ class CowMeshes:
     def __init__(self):
         self.parts = build_cow_meshes()
 
-    def posed_vertices(self, position, yaw, poses):
+    def posed_vertices(self, position, yaw, poses, baby=False):
         chunks = []
         index_chunks = []
         base = 0
         for name in COW_PART_ORDER:
             vertices, indices = self.parts[name]
             pitch, _roll, _yaw = poses.get(name, (0.0, 0.0, 0.0))
-            matrix = cow_part_matrix(position, yaw, name, pitch=pitch)
+            matrix = cow_part_matrix(position, yaw, name, pitch=pitch, baby=baby)
             transformed = transform_vertices(vertices, matrix)
             chunks.append(transformed)
             index_chunks.append(indices + base)

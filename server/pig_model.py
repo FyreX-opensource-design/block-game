@@ -97,6 +97,8 @@ PIG_PARTS = {
     },
 }
 
+PIG_HEAD_PARTS = ("head", "snout")
+
 PIG_PART_ORDER = (
     "body",
     "head",
@@ -203,14 +205,25 @@ def _translation(x, y, z):
     )
 
 
-def pig_part_matrix(pos, yaw, part_name, pitch=0.0, roll=0.0):
+def _scale(amount):
+    return np.array(
+        [[amount, 0.0, 0.0, 0.0], [0.0, amount, 0.0, 0.0], [0.0, 0.0, amount, 0.0], [0.0, 0.0, 0.0, 1.0]],
+        dtype=np.float32,
+    )
+
+
+def pig_part_matrix(pos, yaw, part_name, pitch=0.0, roll=0.0, baby=False):
     pivot = PIG_PARTS[part_name]["pivot"]
-    px, py, pz = pivot[0] * PIXEL, pivot[1] * PIXEL, pivot[2] * PIXEL
+    pivot_scale = 0.5 if baby else 1.0
+    part_scale = (0.85 if part_name in PIG_HEAD_PARTS else 0.5) if baby else 1.0
+    px = pivot[0] * PIXEL * pivot_scale
+    py = pivot[1] * PIXEL * pivot_scale
+    pz = pivot[2] * PIXEL * pivot_scale
     t_world = _translation(pos[0], pos[1], pos[2])
     ry = _rotation_y(yaw)
     t_pivot = _translation(px, py, pz)
     rx = _rotation_x(pitch)
-    return t_world @ ry @ t_pivot @ rx
+    return t_world @ ry @ t_pivot @ _scale(part_scale) @ rx
 
 
 def transform_vertices(vertices, matrix):
@@ -236,14 +249,14 @@ class PigMeshes:
     def __init__(self):
         self.parts = build_pig_meshes()
 
-    def posed_vertices(self, position, yaw, poses):
+    def posed_vertices(self, position, yaw, poses, baby=False):
         chunks = []
         index_chunks = []
         base = 0
         for name in PIG_PART_ORDER:
             vertices, indices = self.parts[name]
             pitch, _roll, _yaw = poses.get(name, (0.0, 0.0, 0.0))
-            matrix = pig_part_matrix(position, yaw, name, pitch=pitch)
+            matrix = pig_part_matrix(position, yaw, name, pitch=pitch, baby=baby)
             transformed = transform_vertices(vertices, matrix)
             chunks.append(transformed)
             index_chunks.append(indices + base)

@@ -9,11 +9,11 @@
   "ceiling": 0.80,
   "min_size": 18,
   "tree_chance": 0.003,
-  "height_offset": 22,
+  "height_offset": 86,
   "height_scale": 1.5,
   "cliff": false,
   "transition": {
-    "blend": 0.08,
+    "blend": 0.16,
     "curve": "smoothstep"
   },
   "trees": ["shrub", "oak"],

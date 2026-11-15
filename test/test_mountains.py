@@ -105,6 +105,7 @@ class MountainBiomeTests(unittest.TestCase):
     def test_mountain_heights_elevated_and_within_world_height(self):
         # Sample coordinates across the world
         mtn_heights = []
+        peak_heights = []
         cliff_heights = []
         plains_heights = []
 
@@ -120,6 +121,8 @@ class MountainBiomeTests(unittest.TestCase):
                     plains_heights.append(h)
                 elif b.id in ("mountains", "wooded_mountains", "mountain_meadow", "mountain_peaks"):
                     mtn_heights.append(h)
+                    if b.id == "mountain_peaks":
+                        peak_heights.append(h)
                 elif b.id == "mountain_cliffs":
                     cliff_heights.append(h)
 
@@ -134,6 +137,9 @@ class MountainBiomeTests(unittest.TestCase):
 
         self.assertGreater(avg_mtn, avg_plains + 10.0)
         self.assertGreater(avg_cliff, avg_mtn + 5.0)
+        # Peaks have to be able to reach the cloud deck.
+        self.assertTrue(peak_heights)
+        self.assertGreater(max(peak_heights), 190)
 
     def test_smooth_mountain_transitions(self):
         # Sampling across boundaries into smooth mountains should have low slope steps
@@ -141,13 +147,16 @@ class MountainBiomeTests(unittest.TestCase):
         mtn_ceil = biome_map["mountains"].ceiling
         forest_ceil = biome_map["forest"].ceiling
 
-        # Find transitions from forest/pine_forest to mountains
+        # Find transitions from the wooded lowlands into the foothills.
+        # Cool forests are often a birch, spruce, or pine stand rather than oak.
+        foothills = {"forest", "pine_forest", "birch_forest", "birch_forest_hills", "spruce_forest", "redwood_forest"}
         found_transition = False
-        for z in range(-200, 201, 15):
-            for x in range(-200, 200):
+        for z in range(-300, 301, 5):
+            for x in range(-300, 300):
                 b1 = biome_at(x, z, 1, BIOMES)
                 b2 = biome_at(x + 1, z, 1, BIOMES)
-                if b1.id in ("forest", "pine_forest") and b2.id == "mountains":
+                pair = {b1.id, b2.id}
+                if "mountains" in pair and pair & foothills:
                     found_transition = True
                     # Check local step size along 10 blocks across the transition
                     row = [terrain_height(px, z, 1) for px in range(x - 5, x + 6)]
@@ -217,7 +226,7 @@ class MountainBiomeTests(unittest.TestCase):
                 world.generate_column(cx, cz)
                 for z in range(cz * 16, (cz + 1) * 16):
                     for x in range(cx * 16, (cx + 1) * 16):
-                        for y in range(50, 120):
+                        for y in range(50, WORLD_HEIGHT - 1):
                             if world.get_block(x, y, z) in (LOG, "pine_log"):
                                 under = world.get_block(x, y - 1, z)
                                 self.assertNotEqual(

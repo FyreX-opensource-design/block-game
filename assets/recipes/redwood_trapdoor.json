@@ -1,0 +1,15 @@
+{
+  "id": "redwood_trapdoor",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "###"
+  ],
+  "key": {
+    "#": "redwood_planks"
+  },
+  "result": {
+    "item": "redwood_trapdoor",
+    "count": 2
+  }
+}

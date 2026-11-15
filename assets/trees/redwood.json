@@ -1,0 +1,13 @@
+{
+  "id": "redwood",
+  "shape": "redwood",
+  "trunk": "redwood_log",
+  "leaves": "redwood_leaves",
+  "trunk_min": 16,
+  "trunk_extra": 6,
+  "extra_threshold": 0.45,
+  "radius": 4,
+  "leaf_down": 12,
+  "leaf_up": 1,
+  "valid_blocks": ["podzol", "grass", "dirt", "muddy_grass", "mud"]
+}

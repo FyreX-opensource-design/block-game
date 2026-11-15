@@ -897,10 +897,15 @@ def _build_chunk_mesh_inner(world, cx, cy, cz):
         for element in elements:
             el_tint = element.get("tint", getattr(block, "tint", None))
             is_grass_tinted = el_tint == "grass" or getattr(block, "id", "") in ("tall_grass", "fern")
+            fire_id = str(block.properties.get("fire") or "")
             from_y = float(element["from"][1])
             to_y = float(element["to"][1])
             for normal_i, uvs in element["faces"].items():
-                if is_grass_tinted and (normal_i != 3 or getattr(block, "id", "") in ("tall_grass", "fern")):
+                if fire_id == "blue_fire":
+                    pt_color = (2.0, 2.0, 0.0)
+                elif fire_id:
+                    pt_color = (2.0, 1.0, 0.0)
+                elif is_grass_tinted and (normal_i != 3 or getattr(block, "id", "") in ("tall_grass", "fern")):
                     pt_color = tuple(grass_grid[int(z), int(x)])
                 else:
                     pt_color = (1.0, 1.0, 1.0)
@@ -1059,6 +1064,37 @@ def _build_chunk_mesh_inner(world, cx, cy, cz):
                     target_ind.extend((base, base + 1, base + 2, base, base + 2, base + 3))
 
     water_block = BLOCKS.get("water")
+    from server.fluid import get_fluid_type, is_lava
+
+    def _emit_fluid(pts, normal, uvs, light, shade, color, lava):
+        nonlocal cursor_cutout, cursor_translucent
+        nx, ny, nz = normal
+        if lava:
+            base = cursor_cutout
+            sink_v, sink_i, sink_l, sink_c = (
+                cutout_extra_vert, cutout_extra_ind, cutout_extra_light, cutout_extra_color
+            )
+            cursor_cutout += 4
+        else:
+            base = cursor_translucent
+            sink_v, sink_i, sink_l, sink_c = (
+                translucent_vert, translucent_ind, translucent_light, translucent_color
+            )
+            cursor_translucent += 4
+        for pt, uv in zip(pts, uvs):
+            sink_v.extend((pt[0], pt[1], pt[2], nx, ny, nz, uv[0], uv[1], shade))
+            sink_l.append(light)
+            sink_c.append(color)
+        sink_i.extend((base, base + 1, base + 2, base, base + 2, base + 3))
+
+    def _linked_h(y, z, x, ny, nz, nx, fluid_type):
+        raw = int(fluid_h[y + 1 + ny, z + 1 + nz, x + 1 + nx])
+        if raw <= 0 or world is None:
+            return raw, False
+        nbr = world.get_block(x0 + int(x) + nx, y0 + int(y) + ny, z0 + int(z) + nz)
+        if get_fluid_type(nbr) != fluid_type:
+            return 0, True
+        return raw, False
 
     for y, z, x in zip(fluid_ys, fluid_zs, fluid_xs):
         cur_h = int(fluid_h[y + 1, z + 1, x + 1])
@@ -1067,6 +1103,13 @@ def _build_chunk_mesh_inner(world, cx, cy, cz):
         if block is None:
             continue
         shade = 0.92 + 0.08 * hash2(x0 + int(x), z0 + int(z))
+        fluid_type = get_fluid_type(block.id) or ""
+        lava = is_lava(block.id)
+        if lava:
+            kind = {"blue_lava": 4.0, "black_lava": 5.0}.get(fluid_type, 3.0)
+            fluid_color = (2.0, kind, 0.0)
+        else:
+            fluid_color = (1.0, 1.0, 1.0)
         is_slab = bool(
             block.properties.get("slab")
             or getattr(block, "slab", False)
@@ -1308,126 +1351,69 @@ def _build_chunk_mesh_inner(world, cx, cy, cz):
                 translucent_ind.extend((base, base + 1, base + 2, base, base + 2, base + 3))
 
         else:
-            # 1. Top face (normal_i = 2, Up, [0, 1, 0])
-            above_h = fluid_h[y + 2, z + 1, x + 1]
+            above_h, _other = _linked_h(y, z, x, 1, 0, 0, fluid_type)
             if above_h == 0:
-                base = cursor_translucent
                 pts = (
                     (int(x), int(y) + cur_top, int(z) + 1),
                     (int(x) + 1, int(y) + cur_top, int(z) + 1),
                     (int(x) + 1, int(y) + cur_top, int(z)),
                     (int(x), int(y) + cur_top, int(z)),
                 )
-                l_sample = tuple(l_grid[y + 2, z + 1, x + 1])
-                for pt, uv in zip(pts, fluid_uvs[2]):
-                    translucent_vert.extend((pt[0], pt[1], pt[2], 0.0, 1.0, 0.0, uv[0], uv[1], shade))
-                    translucent_light.append(l_sample)
-                    translucent_color.append((1.0, 1.0, 1.0))
-                    cursor_translucent += 1
-                translucent_ind.extend((base, base + 1, base + 2, base, base + 2, base + 3))
+                _emit_fluid(pts, (0.0, 1.0, 0.0), fluid_uvs[2], tuple(l_grid[y + 2, z + 1, x + 1]), shade, fluid_color, lava)
 
-            # 2. Bottom face (normal_i = 3, Down, [0, -1, 0])
             below_occ = occ[y, z + 1, x + 1]
-            below_h = fluid_h[y, z + 1, x + 1]
+            below_h, _other = _linked_h(y, z, x, -1, 0, 0, fluid_type)
             if not below_occ and below_h == 0:
-                base = cursor_translucent
                 pts = (
                     (int(x), int(y), int(z)),
                     (int(x) + 1, int(y), int(z)),
                     (int(x) + 1, int(y), int(z) + 1),
                     (int(x), int(y), int(z) + 1),
                 )
-                l_sample = tuple(l_grid[y, z + 1, x + 1])
-                for pt, uv in zip(pts, fluid_uvs[3]):
-                    translucent_vert.extend((pt[0], pt[1], pt[2], 0.0, -1.0, 0.0, uv[0], uv[1], shade))
-                    translucent_light.append(l_sample)
-                    translucent_color.append((1.0, 1.0, 1.0))
-                    cursor_translucent += 1
-                translucent_ind.extend((base, base + 1, base + 2, base, base + 2, base + 3))
+                _emit_fluid(pts, (0.0, -1.0, 0.0), fluid_uvs[3], tuple(l_grid[y, z + 1, x + 1]), shade, fluid_color, lava)
 
-            # 3. East face (normal_i = 0, +X, [1, 0, 0])
-            nbr_occ = occ[y + 1, z + 1, x + 2]
-            nbr_h = int(fluid_h[y + 1, z + 1, x + 2])
-            if not nbr_occ and nbr_h < cur_h:
+            sides = (
+                (0, 0, 1, (1.0, 0.0, 0.0), 0, lambda y_bot, inset: (
+                    (int(x) + 1 - inset, int(y) + y_bot, int(z) + 1),
+                    (int(x) + 1 - inset, int(y) + y_bot, int(z)),
+                    (int(x) + 1 - inset, int(y) + cur_top, int(z)),
+                    (int(x) + 1 - inset, int(y) + cur_top, int(z) + 1),
+                )),
+                (0, 0, -1, (-1.0, 0.0, 0.0), 1, lambda y_bot, inset: (
+                    (int(x) + inset, int(y) + y_bot, int(z)),
+                    (int(x) + inset, int(y) + y_bot, int(z) + 1),
+                    (int(x) + inset, int(y) + cur_top, int(z) + 1),
+                    (int(x) + inset, int(y) + cur_top, int(z)),
+                )),
+                (0, 1, 0, (0.0, 0.0, 1.0), 4, lambda y_bot, inset: (
+                    (int(x), int(y) + y_bot, int(z) + 1 - inset),
+                    (int(x) + 1, int(y) + y_bot, int(z) + 1 - inset),
+                    (int(x) + 1, int(y) + cur_top, int(z) + 1 - inset),
+                    (int(x), int(y) + cur_top, int(z) + 1 - inset),
+                )),
+                (0, -1, 0, (0.0, 0.0, -1.0), 5, lambda y_bot, inset: (
+                    (int(x) + 1, int(y) + y_bot, int(z) + inset),
+                    (int(x), int(y) + y_bot, int(z) + inset),
+                    (int(x), int(y) + cur_top, int(z) + inset),
+                    (int(x) + 1, int(y) + cur_top, int(z) + inset),
+                )),
+            )
+            for ny, nz, nx, normal, uv_i, make_pts in sides:
+                nbr_occ = occ[y + 1 + ny, z + 1 + nz, x + 1 + nx]
+                nbr_h, other = _linked_h(y, z, x, ny, nz, nx, fluid_type)
+                if nbr_occ or nbr_h >= cur_h:
+                    continue
                 y_bot = nbr_h / 16.0
-                base = cursor_translucent
-                pts = (
-                    (int(x) + 1, int(y) + y_bot, int(z) + 1),
-                    (int(x) + 1, int(y) + y_bot, int(z)),
-                    (int(x) + 1, int(y) + cur_top, int(z)),
-                    (int(x) + 1, int(y) + cur_top, int(z) + 1),
+                pts = make_pts(y_bot, 0.01 if other else 0.0)
+                _emit_fluid(
+                    pts,
+                    normal,
+                    _slice_uv(fluid_uvs[uv_i], y_bot, cur_top),
+                    tuple(l_grid[y + 1 + ny, z + 1 + nz, x + 1 + nx]),
+                    shade,
+                    fluid_color,
+                    lava,
                 )
-                uvs = _slice_uv(fluid_uvs[0], y_bot, cur_top)
-                l_sample = tuple(l_grid[y + 1, z + 1, x + 2])
-                for pt, uv in zip(pts, uvs):
-                    translucent_vert.extend((pt[0], pt[1], pt[2], 1.0, 0.0, 0.0, uv[0], uv[1], shade))
-                    translucent_light.append(l_sample)
-                    translucent_color.append((1.0, 1.0, 1.0))
-                    cursor_translucent += 1
-                translucent_ind.extend((base, base + 1, base + 2, base, base + 2, base + 3))
-
-            # 4. West face (normal_i = 1, -X, [-1, 0, 0])
-            nbr_occ = occ[y + 1, z + 1, x]
-            nbr_h = int(fluid_h[y + 1, z + 1, x])
-            if not nbr_occ and nbr_h < cur_h:
-                y_bot = nbr_h / 16.0
-                base = cursor_translucent
-                pts = (
-                    (int(x), int(y) + y_bot, int(z)),
-                    (int(x), int(y) + y_bot, int(z) + 1),
-                    (int(x), int(y) + cur_top, int(z) + 1),
-                    (int(x), int(y) + cur_top, int(z)),
-                )
-                uvs = _slice_uv(fluid_uvs[1], y_bot, cur_top)
-                l_sample = tuple(l_grid[y + 1, z + 1, x])
-                for pt, uv in zip(pts, uvs):
-                    translucent_vert.extend((pt[0], pt[1], pt[2], -1.0, 0.0, 0.0, uv[0], uv[1], shade))
-                    translucent_light.append(l_sample)
-                    translucent_color.append((1.0, 1.0, 1.0))
-                    cursor_translucent += 1
-                translucent_ind.extend((base, base + 1, base + 2, base, base + 2, base + 3))
-
-            # 5. South face (normal_i = 4, +Z, [0, 0, 1])
-            nbr_occ = occ[y + 1, z + 2, x + 1]
-            nbr_h = int(fluid_h[y + 1, z + 2, x + 1])
-            if not nbr_occ and nbr_h < cur_h:
-                y_bot = nbr_h / 16.0
-                base = cursor_translucent
-                pts = (
-                    (int(x), int(y) + y_bot, int(z) + 1),
-                    (int(x) + 1, int(y) + y_bot, int(z) + 1),
-                    (int(x) + 1, int(y) + cur_top, int(z) + 1),
-                    (int(x), int(y) + cur_top, int(z) + 1),
-                )
-                uvs = _slice_uv(fluid_uvs[4], y_bot, cur_top)
-                l_sample = tuple(l_grid[y + 1, z + 2, x + 1])
-                for pt, uv in zip(pts, uvs):
-                    translucent_vert.extend((pt[0], pt[1], pt[2], 0.0, 0.0, 1.0, uv[0], uv[1], shade))
-                    translucent_light.append(l_sample)
-                    translucent_color.append((1.0, 1.0, 1.0))
-                    cursor_translucent += 1
-                translucent_ind.extend((base, base + 1, base + 2, base, base + 2, base + 3))
-
-            # 6. North face (normal_i = 5, -Z, [0, 0, -1])
-            nbr_occ = occ[y + 1, z, x + 1]
-            nbr_h = int(fluid_h[y + 1, z, x + 1])
-            if not nbr_occ and nbr_h < cur_h:
-                y_bot = nbr_h / 16.0
-                base = cursor_translucent
-                pts = (
-                    (int(x) + 1, int(y) + y_bot, int(z)),
-                    (int(x), int(y) + y_bot, int(z)),
-                    (int(x), int(y) + cur_top, int(z)),
-                    (int(x) + 1, int(y) + cur_top, int(z)),
-                )
-                uvs = _slice_uv(fluid_uvs[5], y_bot, cur_top)
-                l_sample = tuple(l_grid[y + 1, z, x + 1])
-                for pt, uv in zip(pts, uvs):
-                    translucent_vert.extend((pt[0], pt[1], pt[2], 0.0, 0.0, -1.0, uv[0], uv[1], shade))
-                    translucent_light.append(l_sample)
-                    translucent_color.append((1.0, 1.0, 1.0))
-                    cursor_translucent += 1
-                translucent_ind.extend((base, base + 1, base + 2, base, base + 2, base + 3))
 
     if cutout_extra_vert:
         cev = np.asarray(cutout_extra_vert, dtype=np.float32).reshape(-1, 9)

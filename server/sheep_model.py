@@ -7,6 +7,7 @@ from server.pig_model import (
     transform_vertices,
     _rotation_x,
     _rotation_y,
+    _scale,
     _translation,
 )
 
@@ -121,6 +122,8 @@ SHEEP_PART_ORDER_WOOL = (
     "leg_back_right",
 )
 
+SHEEP_HEAD_PARTS = ("head", "head_wool")
+
 SHEEP_PART_ORDER_SHEARED = (
     "body",
     "head",
@@ -155,24 +158,29 @@ def sheep_pose(time, speed, yaw, pitch=0.0):
     }
 
 
-def sheep_part_matrix(pos, yaw, part_name, pitch=0.0):
+def sheep_part_matrix(pos, yaw, part_name, pitch=0.0, baby=False):
     pivot = SHEEP_PARTS[part_name]["pivot"]
     px, py, pz = pivot[0] * PIXEL, pivot[1] * PIXEL, pivot[2] * PIXEL
-    if part_name in ("head", "head_wool") and pitch < -0.2:
+    if part_name in SHEEP_HEAD_PARTS and pitch < -0.2:
         # Lower head pivot toward the ground when grazing
         py += pitch * 6.0 * PIXEL
+    pivot_scale = 0.5 if baby else 1.0
+    part_scale = (0.85 if part_name in SHEEP_HEAD_PARTS else 0.5) if baby else 1.0
+    px *= pivot_scale
+    py *= pivot_scale
+    pz *= pivot_scale
     t_world = _translation(pos[0], pos[1], pos[2])
     ry = _rotation_y(yaw)
     t_pivot = _translation(px, py, pz)
     rx = _rotation_x(pitch)
-    return t_world @ ry @ t_pivot @ rx
+    return t_world @ ry @ t_pivot @ _scale(part_scale) @ rx
 
 
 class SheepMeshes:
     def __init__(self):
         self.parts = build_sheep_meshes()
 
-    def posed_vertices(self, position, yaw, poses, sheared=False):
+    def posed_vertices(self, position, yaw, poses, sheared=False, baby=False):
         chunks = []
         index_chunks = []
         base = 0
@@ -180,7 +188,7 @@ class SheepMeshes:
         for name in order:
             vertices, indices = self.parts[name]
             pitch, _roll, _yaw = poses.get(name, (0.0, 0.0, 0.0))
-            matrix = sheep_part_matrix(position, yaw, name, pitch=pitch)
+            matrix = sheep_part_matrix(position, yaw, name, pitch=pitch, baby=baby)
             transformed = transform_vertices(vertices, matrix)
             chunks.append(transformed)
             index_chunks.append(indices + base)

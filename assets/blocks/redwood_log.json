@@ -1,0 +1,22 @@
+{
+  "id": "redwood_log",
+  "lang": "block.redwood_log",
+  "tab": [
+    "building",
+    "natural"
+  ],
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "axe",
+  "mining_level": 0,
+  "loot_table": "blocks/redwood_log",
+  "sound": "wood",
+  "properties": {
+    "rotation": "axis"
+  },
+  "textures": {
+    "top": "redwood_log_top",
+    "side": "redwood_log_side",
+    "bottom": "redwood_log_top"
+  }
+}

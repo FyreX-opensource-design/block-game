@@ -3,7 +3,7 @@ import math
 
 import numpy as np
 
-from server.blocks import STONE_BASE, WATER_LEVEL
+from server.blocks import STONE_BASE, TERRAIN_LIMIT, WATER_LEVEL
 
 MASK = 0xFFFFFFFF
 
@@ -225,6 +225,11 @@ def terrain_grid(x, z, seed, biomes=None):
 
     terrace = np.rint((detail - 0.5) * 4.0) * 2.0
     h_inland = base_h + offset + (lift - 8.0) * (scale - 1.0) + terrace * cliff_w + cliff_s
+    # The high country keeps rising after the foothills, spread over a wide
+    # climate band so a peak can meet the clouds without a wall at the tree line.
+    high = np.clip((climate - 0.72) / 0.22, 0.0, 1.0)
+    high = high * high * (3.0 - 2.0 * high)
+    h_inland = h_inland + high * 48.0
 
     if len(non_inland) >= 2:
         ocean_c = float(non_inland[0].ceiling)
@@ -260,7 +265,7 @@ def terrain_grid(x, z, seed, biomes=None):
         t_oc = np.clip((beach_c - climate) / ocean_w, 0.0, 1.0)
         s_oc = apply_curve_grid(t_oc, ocean_curve)
         final_h = np.rint(h_inland + (floor - h_inland) * s_oc)
-    raw_h = np.clip(final_h, 50, 122).astype(np.int16)
+    raw_h = np.clip(final_h, 50, TERRAIN_LIMIT).astype(np.int16)
     from server.rivers import carve_river_grid
 
     return carve_river_grid(x, z, raw_h, seed, climate)
@@ -403,6 +408,9 @@ def _cached_terrain_height(x, z, seed, biomes_tuple):
 
     terrace = round((detail - 0.5) * 4.0) * 2.0
     h_inland = base_h + offset + (lift - 8.0) * (scale - 1.0) + terrace * cliff_w + cliff_s
+    high = min(1.0, max(0.0, (climate - 0.72) / 0.22))
+    high = high * high * (3.0 - 2.0 * high)
+    h_inland += high * 48.0
 
     if len(non_inland) >= 2:
         ocean_c = float(non_inland[0].ceiling)
@@ -436,7 +444,7 @@ def _cached_terrain_height(x, z, seed, biomes_tuple):
         t_oc = min(1.0, max(0.0, (beach_c - climate) / ocean_w))
         s_oc = apply_curve_scalar(t_oc, ocean_curve)
         final_h = round(h_inland + (floor - h_inland) * s_oc)
-    raw_h = int(max(50, min(122, final_h)))
+    raw_h = int(max(50, min(TERRAIN_LIMIT, final_h)))
     from server.rivers import carve_river_scalar
 
     return carve_river_scalar(x, z, raw_h, seed, climate)

@@ -1,0 +1,8 @@
+{
+  "id": "redwood_sapling",
+  "block": "redwood_sapling",
+  "trees": ["redwood"],
+  "width": 2,
+  "min_time": 900,
+  "max_time": 1800
+}

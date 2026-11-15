@@ -9,11 +9,12 @@
   "ceiling": 0.85,
   "min_size": 18,
   "tree_chance": 0.0,
-  "height_offset": 26,
+  "height_offset": 90,
   "height_scale": 1.6,
   "cliff": false,
+  "valid_spawn": false,
   "transition": {
-    "blend": 0.08,
+    "blend": 0.16,
     "curve": "smoothstep"
   },
   "trees": [],

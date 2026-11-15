@@ -1,0 +1,16 @@
+{
+  "id": "redwood_planks_stairs",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#  ",
+    "## ",
+    "###"
+  ],
+  "key": {
+    "#": "redwood_planks"
+  },
+  "result": {
+    "item": "redwood_planks_stairs",
+    "count": 4
+  }
+}

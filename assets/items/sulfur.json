@@ -1,0 +1,15 @@
+{
+  "id": "sulfur",
+  "name": "Sulfur",
+  "tab": ["materials"],
+  "model": "flat",
+  "texture": "sulfur",
+  "max_stack": 64,
+  "left": "none",
+  "right": "none",
+  "durability": 0,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 0,
+  "lang": "item.sulfur"
+}

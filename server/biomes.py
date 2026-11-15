@@ -106,6 +106,7 @@ class Biome:
         subsoil_depth=0.0,
         temperature=None,
         touching=None,
+        rainfall=None,
     ):
         self.id = biome_id
         self.name = str(name or biome_id.replace("_", " ").title())
@@ -135,6 +136,7 @@ class Biome:
         self.subsoil_depth = float(subsoil_depth)
         self.temperature = tuple(temperature) if temperature is not None else None
         self.touching = tuple(touching) if touching is not None else None
+        self.rainfall = None if rainfall is None else float(rainfall)
 
         trans_blend = self.transition.get("blend")
         actual_blend = blend if blend is not None else trans_blend
@@ -523,6 +525,13 @@ def biome_from_mapping(fields, source, trees, decorations=None):
         else:
             raise ValueError(f"{source}: temperature must be [min, max] or an object with min and max")
 
+    raw_rainfall = fields.get("rainfall")
+    rainfall = None
+    if raw_rainfall is not None:
+        rainfall = _number(raw_rainfall, "rainfall", source)
+        if rainfall < 0.0 or rainfall > 2.0:
+            raise ValueError(f"{source}: rainfall must be between 0 and 2")
+
     raw_touching = fields.get("touching", fields.get("adjacent_to"))
     touching = None
     if raw_touching is not None:
@@ -573,6 +582,7 @@ def biome_from_mapping(fields, source, trees, decorations=None):
         subsoil_depth=subsoil_depth,
         temperature=temperature,
         touching=touching,
+        rainfall=rainfall,
     )
 
 

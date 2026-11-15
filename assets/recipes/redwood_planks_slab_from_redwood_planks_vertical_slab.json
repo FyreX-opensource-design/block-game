@@ -1,0 +1,11 @@
+{
+  "id": "redwood_planks_slab_from_redwood_planks_vertical_slab",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "redwood_planks_vertical_slab"
+  ],
+  "result": {
+    "item": "redwood_planks_slab",
+    "count": 1
+  }
+}

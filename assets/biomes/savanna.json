@@ -23,6 +23,7 @@
   "trees": ["acacia", "shrub"],
   "decorations": ["tall_grass", "dandelion"],
   "grass_color": "#b5b044",
-  "foliage_color": "#9ca638"
+  "foliage_color": "#9ca638",
+  "rainfall": 0.45
 }
 
