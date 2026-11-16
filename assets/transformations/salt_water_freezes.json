@@ -1,0 +1,12 @@
+{
+  "id": "salt_water_freezes",
+  "from": "salt_water",
+  "to": "salt_ice",
+  "fluid": "salt_water",
+  "only_top": true,
+  "exposed": true,
+  "precipitation": "snow",
+  "require_clear_above": false,
+  "min_time": 18,
+  "max_time": 40
+}

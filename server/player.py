@@ -511,11 +511,10 @@ class Player:
             return True
         return False
 
-    def step_up(self, dx, dz):
-        start_x, start_y, start_z = self.pos
-        self.pos[1] = start_y + 1
+    def _climb(self, start_x, start_y, start_z, dx, dz, lift):
+        self.pos[1] = start_y + lift
         if self.collides_at(*self.pos):
-            self.pos[1] = start_y
+            self.pos[0], self.pos[1], self.pos[2] = start_x, start_y, start_z
             return False
         self.sweep(0, dx)
         self.sweep(2, dz)
@@ -523,8 +522,24 @@ class Player:
         if moved < max(0.02, math.hypot(dx, dz) * 0.35):
             self.pos[0], self.pos[1], self.pos[2] = start_x, start_y, start_z
             return False
-        self.sweep(1, -1.05)
+        self.sweep(1, -(lift + 0.05))
+        # Back on the floor we started from means the move did not climb.
+        # Snow on that same floor only raises the feet a little, and that still counts.
+        if self.pos[1] < start_y + 0.05:
+            self.pos[0], self.pos[1], self.pos[2] = start_x, start_y, start_z
+            return False
         return True
+
+    def step_up(self, dx, dz):
+        start_x, start_y, start_z = self.pos
+        if self._climb(start_x, start_y, start_z, dx, dz, 1.0):
+            return True
+        from server.snow import snow_rise
+
+        extra = snow_rise(self.world, start_x, start_y + 1.0, start_z, dx, dz, self.radius)
+        if extra <= 1e-4:
+            return False
+        return self._climb(start_x, start_y, start_z, dx, dz, 1.0 + extra)
 
     def move_horizontal(self, dx, dz):
         start_x, start_y, start_z = self.pos

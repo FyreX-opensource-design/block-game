@@ -194,6 +194,8 @@ class WeatherField:
         self.origin = (-span / 2.0, -span / 2.0)
         self._biome_origin = None
         self._biome_rain = np.ones((self.size, self.size), dtype=np.float64)
+        self._terrain_origin = None
+        self._terrain = None
         self._seed_density()
 
     def _seed_density(self):
@@ -278,25 +280,91 @@ class WeatherField:
         self.rain = rain
         return self.density, self.rain
 
-    def maps(self, overrides):
-        """Terrain height and biome rainfall for the current grid, plus built columns."""
-        from server.biomes import BIOMES, biome_at
+    def _cell_shift(self, old_origin):
+        """How many cells ``origin`` has moved, or None when the cache cannot slide."""
+        if old_origin is None:
+            return None
+        cell = float(self.cell)
+        dx = (self.origin[0] - old_origin[0]) / cell
+        dz = (self.origin[1] - old_origin[1]) / cell
+        if abs(dx - round(dx)) > 1e-4 or abs(dz - round(dz)) > 1e-4:
+            return None
+        dx, dz = int(round(dx)), int(round(dz))
+        if abs(dx) >= self.size or abs(dz) >= self.size:
+            return None
+        return dx, dz
+
+    def _roll_cached(self, cached, old_origin):
+        if cached is None:
+            return None
+        shift = self._cell_shift(old_origin)
+        if shift is None:
+            return None
+        dx, dz = shift
+        if dx == 0 and dz == 0:
+            return cached
+        return np.roll(np.asarray(cached), shift=(-dz, -dx), axis=(0, 1))
+
+    def _fill_shifted(self, grid, old_origin, sample, xx, zz):
+        shift = self._cell_shift(old_origin)
+        if shift is None:
+            return
+        dx, dz = shift
+        if dz > 0:
+            grid[-dz:, :] = sample(xx[-dz:, :], zz[-dz:, :])
+        elif dz < 0:
+            grid[:-dz, :] = sample(xx[:-dz, :], zz[:-dz, :])
+        if dx > 0:
+            grid[:, -dx:] = sample(xx[:, -dx:], zz[:, -dx:])
+        elif dx < 0:
+            grid[:, :-dx] = sample(xx[:, :-dx], zz[:, :-dx])
+
+    def _sample_terrain(self, xx, zz):
         from server.noise import terrain_grid
 
+        return np.asarray(terrain_grid(xx, zz, self.seed), dtype=np.float64)
+
+    def _sample_rainfall(self, xx, zz):
+        from server.biomes import BIOMES, biome_index_grid
+
+        # The old loop asked for the truncated cell center. The grid sample
+        # has to use that same point or a border cell can change biome.
+        grid, catalog = biome_index_grid(np.trunc(xx), np.trunc(zz), self.seed, BIOMES)
+        rain = np.ones(grid.shape, dtype=np.float64)
+        for index in np.unique(grid):
+            rain[grid == index] = rainfall_of(catalog[int(index)])
+        return rain
+
+    def maps(self, overrides):
+        """Terrain height and biome rainfall for the current grid, plus built columns."""
         n = self.size
         cell = float(self.cell)
         ox, oz = self.origin
         xs = ox + (np.arange(n) + 0.5) * cell
         zs = oz + (np.arange(n) + 0.5) * cell
         xx, zz = np.meshgrid(xs, zs)
-        heights = np.asarray(terrain_grid(xx, zz, self.seed), dtype=np.float64)
+        # The height and rainfall maps only change when the grid slides.
+        # Rebuilding either one on every cloud step hitches the machine that
+        # runs the weather process, so a one-cell slide keeps the old cells
+        # and fills the new edge.
+        if self._terrain is None or self._terrain_origin != self.origin:
+            previous = self._terrain_origin
+            rolled = self._roll_cached(self._terrain, previous)
+            if rolled is None:
+                self._terrain = self._sample_terrain(xx, zz)
+            else:
+                self._terrain = rolled
+                self._fill_shifted(self._terrain, previous, self._sample_terrain, xx, zz)
+            self._terrain_origin = self.origin
+        heights = self._terrain.copy()
         if self._biome_origin != self.origin:
-            rain = np.ones((n, n), dtype=np.float64)
-            for i in range(n):
-                for j in range(n):
-                    biome = biome_at(int(xx[i, j]), int(zz[i, j]), self.seed, BIOMES)
-                    rain[i, j] = rainfall_of(biome)
-            self._biome_rain = rain
+            previous = self._biome_origin
+            rolled = self._roll_cached(self._biome_rain, previous)
+            if rolled is None:
+                self._biome_rain = self._sample_rainfall(xx, zz)
+            else:
+                self._biome_rain = rolled
+                self._fill_shifted(self._biome_rain, previous, self._sample_rainfall, xx, zz)
             self._biome_origin = self.origin
         rainfall = self._biome_rain
         for item in overrides or ():

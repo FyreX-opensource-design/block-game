@@ -128,6 +128,16 @@ def _mob_matrix(position, yaw):
     return matrix
 
 
+def _body_matrix(position, yaw, body_pitch=0.0):
+    """Yaw, then an optional nose-up or nose-down tilt around the body's middle."""
+    matrix = _mob_matrix(position, yaw)
+    if body_pitch:
+        pivot = 0.45
+        tilt = _translation(0.0, pivot, 0.0) @ _rotation_xyz(body_pitch, 0.0, 0.0) @ _translation(0.0, -pivot, 0.0)
+        matrix = matrix @ tilt
+    return matrix
+
+
 class LuaBoxModel:
     """Parts are boxes in pixel space. ``pose`` is still, swing, -swing, or look."""
 
@@ -143,12 +153,12 @@ class LuaBoxModel:
             built.append((np.asarray(scale, dtype=np.float32), np.asarray(indices, dtype=np.uint32)))
         self._built = built
 
-    def posed_vertices(self, position, yaw, time, speed, pitch=0.0):
+    def posed_vertices(self, position, yaw, time, speed, pitch=0.0, body_pitch=0.0):
         if speed < 0.05:
             swing = 0.0
         else:
             swing = math.sin(time * 10.0) * min(1.0, speed * 1.6) * 0.7
-        body = _mob_matrix(position, yaw)
+        body = _body_matrix(position, yaw, body_pitch)
         chunks = []
         index_chunks = []
         base = 0
@@ -372,7 +382,7 @@ class GeckoModel:
             name = next(iter(self.animations))
         return self.animations.get(name)
 
-    def posed_vertices(self, position, yaw, time, speed, pitch=0.0):
+    def posed_vertices(self, position, yaw, time, speed, pitch=0.0, body_pitch=0.0):
         clip = self._clip(speed)
         bone_rots = {}
         if clip is not None:
@@ -413,7 +423,7 @@ class GeckoModel:
             cache[name] = matrix
             return matrix
 
-        body = _mob_matrix(position, yaw)
+        body = _body_matrix(position, yaw, body_pitch)
         chunks = []
         index_chunks = []
         base = 0

@@ -348,8 +348,69 @@ class EatGrassGoal(Goal):
                 self.mob.desired_speed = 0.0
 
 
+def _fly_space_clear(world, x, y, z, height, radius, origin_y=None):
+    """True when the body can sit here, and the column from its current height is open."""
+    if world is None:
+        return True
+    from server.fluid import is_fluid
+
+    solid = getattr(world, "blocks_movement", None) or world.is_solid
+    feet = y if origin_y is None else min(y, origin_y)
+    head = (y if origin_y is None else max(y, origin_y)) + height
+    min_y = math.floor(feet)
+    max_y = math.floor(head - 1e-4)
+    min_x = math.floor(x - radius)
+    max_x = math.floor(x + radius - 1e-6)
+    min_z = math.floor(z - radius)
+    max_z = math.floor(z + radius - 1e-6)
+    for by in range(min_y, max_y + 1):
+        for bz in range(min_z, max_z + 1):
+            for bx in range(min_x, max_x + 1):
+                if solid(bx, by, bz):
+                    return False
+                if is_fluid(world.get_block(bx, by, bz)):
+                    return False
+    return True
+
+
+def pick_fly_altitude(mob, world):
+    """A new cruise height above the ground, higher or lower than where the mob is now."""
+    preferred = float(getattr(mob, "fly_height", 1.6))
+    if world is None:
+        floor = mob.pos[1] - preferred
+    else:
+        floor = mob._hover_floor(world)
+        # No ground within the scan: wander around the current height instead of climbing away.
+        if floor >= mob.pos[1] - 0.05:
+            floor = mob.pos[1] - preferred
+    low = max(1.0, preferred * 0.5)
+    high = max(low + 4.0, preferred * 4.0)
+    height = float(getattr(mob, "height", 1.0))
+    radius = float(getattr(mob, "radius", 0.4))
+    x, z = mob.pos[0], mob.pos[2]
+    current = float(mob.pos[1])
+    spare = None
+    for _ in range(8):
+        y = floor + random.uniform(low, high)
+        if not _fly_space_clear(world, x, y, z, height, radius, current):
+            continue
+        if abs(y - current) >= 1.25:
+            return y
+        spare = y
+    if spare is not None:
+        return spare
+    fallback = floor + low
+    if _fly_space_clear(world, x, fallback, z, height, radius, current):
+        return fallback
+    return current
+
+
 class WanderGoal(Goal):
-    """Idle wandering: pauses for random intervals, then walks in a random direction."""
+    """Idle wandering: pauses for random intervals, then walks in a random direction.
+
+    Flying mobs also pick a new altitude each time they pause or set off, so they
+    climb and descend instead of holding one height above the ground.
+    """
 
     def __init__(self, mob):
         super().__init__(mob)
@@ -357,6 +418,24 @@ class WanderGoal(Goal):
         self.timer = random.uniform(1.0, 3.0)
         self.target_yaw = getattr(mob, "yaw", 0.0)
         self.stuck_timer = 0.0
+        self._cruise_y = None
+
+    def _flying(self):
+        return getattr(self.mob, "can_fly", False)
+
+    def _new_cruise(self):
+        if not self._flying():
+            return
+        self._cruise_y = pick_fly_altitude(self.mob, getattr(self.mob, "world", None))
+        self.mob.fly_target_y = self._cruise_y
+
+    def _hold_cruise(self):
+        if not self._flying():
+            return
+        if self._cruise_y is None:
+            self._new_cruise()
+            return
+        self.mob.fly_target_y = self._cruise_y
 
     def can_start(self) -> bool:
         return getattr(self.mob, "panic_timer", 0.0) <= 0
@@ -368,12 +447,15 @@ class WanderGoal(Goal):
         self.state = "idle"
         self.timer = random.uniform(1.5, 4.0)
         self.mob.desired_speed = 0.0
+        self._cruise_y = None
+        self._new_cruise()
 
     def stop(self):
         self.mob.desired_speed = 0.0
 
     def tick(self, dt: float):
         self.timer -= dt
+        self._hold_cruise()
 
         if self.state == "idle":
             self.mob.desired_speed = 0.0
@@ -389,6 +471,7 @@ class WanderGoal(Goal):
                     self.target_yaw = safe_yaw
                     self.mob.target_yaw = self.target_yaw
                     self.stuck_timer = 0.0
+                    self._new_cruise()
                 else:
                     self.timer = random.uniform(1.0, 2.5)
 
@@ -402,6 +485,7 @@ class WanderGoal(Goal):
                     self.state = "idle"
                     self.timer = random.uniform(1.5, 3.5)
                     self.mob.desired_speed = 0.0
+                    self._new_cruise()
                     return
 
             self.mob.desired_speed = getattr(self.mob, "walk_speed", 1.2)
@@ -416,6 +500,7 @@ class WanderGoal(Goal):
                     self.state = "idle"
                     self.timer = random.uniform(1.5, 3.5)
                     self.mob.desired_speed = 0.0
+                    self._new_cruise()
             else:
                 self.stuck_timer = max(0.0, self.stuck_timer - dt)
 
@@ -423,6 +508,7 @@ class WanderGoal(Goal):
                 self.state = "idle"
                 self.timer = random.uniform(2.0, 5.0)
                 self.mob.desired_speed = 0.0
+                self._new_cruise()
 
 
 class RetaliateGoal(Goal):
@@ -439,6 +525,8 @@ class RetaliateGoal(Goal):
     def _attacker(self):
         target = getattr(self.mob, "aggro", None)
         if target is None or not getattr(target, "alive", True) or getattr(target, "dead", False):
+            return None
+        if not getattr(target, "survival", True):
             return None
         mx, my, mz = self.mob.pos
         px, py, pz = target.pos
@@ -552,6 +640,8 @@ class ZombieAttackGoal(Goal):
             self.attack_timer = max(0.0, self.attack_timer - dt)
 
         # Re-evaluate target or track current target
+        if self.target is not None and not getattr(self.target, "survival", True):
+            self.target = None
         if self.target is None or not getattr(self.target, "alive", True):
             self.target = self._find_closest_player()
             if self.target is None:

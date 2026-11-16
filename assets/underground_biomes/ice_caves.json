@@ -1,0 +1,26 @@
+{
+  "id": "ice_caves",
+  "name": "Ice Caves",
+  "enabled": true,
+  "always": false,
+  "surface_biomes": ["cold_plains", "arctic_forest", "snowy_peaks"],
+  "min_y": 6,
+  "max_y": 42,
+  "scale": 0.02,
+  "octaves": 2,
+  "seed_offset": 1207,
+  "threshold": 0.64,
+  "default_stone": "packed_ice",
+  "cave_fill": {
+    "floor": "ice",
+    "ceiling": "packed_ice",
+    "wall": "packed_ice"
+  },
+  "cave_generation": {
+    "style": "cavern",
+    "scale": 0.03,
+    "octaves": 2,
+    "threshold": 0.56,
+    "seed_offset": 907
+  }
+}

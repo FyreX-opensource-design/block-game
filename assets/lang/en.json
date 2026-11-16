@@ -1,5 +1,10 @@
 {
   "block.grass": "Grass",
+  "block.snow_layer": "Snow",
+  "block.ice": "Ice",
+  "block.salt_ice": "Salt Ice",
+  "block.brackish_ice": "Brackish Ice",
+  "block.packed_ice": "Packed Ice",
   "block.dirt": "Dirt",
   "block.stone": "Stone",
   "block.sand": "Sand",

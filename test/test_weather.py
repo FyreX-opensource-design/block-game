@@ -118,6 +118,26 @@ class CloudTests(unittest.TestCase):
         self.assertGreater(rainfall_of(catalog["ocean"]), 1.0)
         self.assertEqual(rainfall_of(catalog["plains"]), 1.0)
 
+    def test_sliding_the_weather_grid_matches_a_fresh_sample(self):
+        from server.biomes import biome_at
+
+        field = WeatherField(seed=496724168)
+        field.recenter(-411.0, -289.0)
+        field.maps([])
+        field.recenter(-411.0 + field.cell, -289.0 + field.cell)
+        heights, rain = field.maps([])
+        fresh = WeatherField(seed=496724168)
+        fresh.origin = field.origin
+        fresh_heights, fresh_rain = fresh.maps([])
+        self.assertTrue(np.allclose(heights, fresh_heights))
+        self.assertTrue(np.allclose(rain, fresh_rain))
+        ox, oz = field.origin
+        for i in range(0, field.size, 13):
+            for j in range(0, field.size, 13):
+                x = int(ox + (j + 0.5) * field.cell)
+                z = int(oz + (i + 0.5) * field.cell)
+                self.assertAlmostEqual(rain[i, j], rainfall_of(biome_at(x, z, field.seed, BIOMES)))
+
 
 class WeatherLinkTests(unittest.TestCase):
     def test_weather_server_follows_the_world_clock(self):

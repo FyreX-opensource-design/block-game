@@ -3188,6 +3188,62 @@ def _block_name(entry, lang):
     return str(entry["id"])
 
 
+def _snow_layer_model(layers):
+    height = int(layers) * 2
+    side_v = 16 - height
+
+    def side():
+        return {"texture": "#side", "uv": [0, side_v, 16, 16]}
+
+    return {
+        "elements": [
+            {
+                "from": [0, 0, 0],
+                "to": [16, height, 16],
+                "faces": {
+                    "up": {"texture": "#top", "uv": [0, 0, 16, 16]},
+                    "down": {"texture": "#bottom", "uv": [0, 0, 16, 16]},
+                    "north": side(),
+                    "south": side(),
+                    "east": side(),
+                    "west": side(),
+                },
+            }
+        ]
+    }
+
+
+def _expand_snow_layers(entry):
+    count = int(entry.get("layers", 8))
+    if count < 1 or count > 8:
+        raise ValueError(f"{entry.get('id')} snow layers must be from 1 to 8")
+    textures = dict(entry["textures"])
+    made = []
+    for layers in range(1, count + 1):
+        block_id = "snow_layer" if layers == 1 else f"snow_layer_{layers}"
+        variant = {
+            "id": block_id,
+            "lang": entry.get("lang", "block.snow_layer"),
+            "model": _snow_layer_model(layers),
+            "hardness": entry.get("hardness", 0.2),
+            "tool": entry.get("tool", "shovel"),
+            "mining_level": entry.get("mining_level", 0),
+            "loot_table": entry.get("loot_table", "blocks/snow_layer"),
+            "sound": entry.get("sound", "grass"),
+            "textures": textures,
+            "solid": True,
+            "fluid_breakable": True,
+            "properties": {"snow_layers": layers, "light_opacity": 0},
+        }
+        if layers == 1:
+            variant["tab"] = entry.get("tab", ["natural"])
+        else:
+            variant["creative"] = False
+            variant["variant"] = True
+        made.append(variant)
+    return made
+
+
 def _block_entries():
     folder = ASSETS / "blocks"
     paths = sorted(folder.glob("*.json"))
@@ -3217,7 +3273,13 @@ def _block_entries():
             ordered.append(entry)
     for block_id in sorted(by_id):
         ordered.append(by_id[block_id])
-    return ordered
+    expanded = []
+    for entry in ordered:
+        if entry.get("type") == "snow_layer":
+            expanded.extend(_expand_snow_layers(entry))
+        else:
+            expanded.append(entry)
+    return expanded
 
 
 def _pack_atlas(images):

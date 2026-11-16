@@ -970,6 +970,160 @@ class TestFluidDefinitionsAndInteractions(unittest.TestCase):
         self.assertEqual(self.world.get_block(5, 81, 5), "salt_water_falling")
         self.assertEqual(len(self.world.fluid.queue), 0)
 
+    def _channel(self, x0, x1, z, fluid, obstacle):
+        """A one-block corridor along X at y=81, with `obstacle` in the middle."""
+        for x in range(x0 - 1, x1 + 2):
+            self.world.set_block(x, 80, z, STONE)
+            self.world.set_block(x, 81, z - 1, STONE)
+            self.world.set_block(x, 81, z + 1, STONE)
+            self.world.set_block(x, 82, z, STONE)
+        self.world.set_block(x0 - 1, 81, z, STONE)
+        self.world.set_block(x1 + 1, 81, z, STONE)
+        self.world.set_block(x0, 81, z, fluid)
+        self.world.set_block((x0 + x1) // 2, 81, z, obstacle)
+
+    def test_fluid_passes_fences_gates_open_doors_and_trapdoor_gaps(self):
+        # Fence: water keeps going and the fence stays put.
+        self._channel(4, 6, 5, "water", "wooden_fence")
+        for _ in range(12):
+            self.world.update_fluids(0.2)
+        self.assertEqual(self.world.get_block(5, 81, 5), "wooden_fence")
+        self.assertTrue(self.world.get_block(6, 81, 5).startswith("water"))
+
+        # Milk uses the same gaps.
+        self.world.chunks[(self.cx, self.cy, self.cz)].data.fill(0)
+        self.world.fluid.queue.clear()
+        self.world.fluid._order.clear()
+        self._channel(4, 6, 5, "milk", "wooden_fence")
+        for _ in range(12):
+            self.world.update_fluids(0.2)
+        self.assertEqual(self.world.get_block(5, 81, 5), "wooden_fence")
+        self.assertTrue(self.world.get_block(6, 81, 5).startswith("milk"))
+
+        # Closed and open fence gates both have gaps between the bars.
+        for gate in ("wooden_fence_gate_north", "wooden_fence_gate_north_open"):
+            self.world.chunks[(self.cx, self.cy, self.cz)].data.fill(0)
+            self.world.fluid.queue.clear()
+            self.world.fluid._order.clear()
+            for z in range(3, 8):
+                self.world.set_block(5, 80, z, STONE)
+                self.world.set_block(4, 81, z, STONE)
+                self.world.set_block(6, 81, z, STONE)
+                self.world.set_block(5, 82, z, STONE)
+            self.world.set_block(5, 81, 3, STONE)
+            self.world.set_block(5, 81, 7, STONE)
+            self.world.set_block(5, 81, 4, "water")
+            self.world.set_block(5, 81, 5, gate)
+            for _ in range(12):
+                self.world.update_fluids(0.2)
+            self.assertEqual(self.world.get_block(5, 81, 5), gate, gate)
+            self.assertTrue(self.world.get_block(5, 81, 6).startswith("water"), gate)
+
+        # A shut door seals the doorway. An open one does not.
+        for door, passes in (("wooden_door_lower_north", False), ("wooden_door_lower_north_open", True)):
+            self.world.chunks[(self.cx, self.cy, self.cz)].data.fill(0)
+            self.world.fluid.queue.clear()
+            self.world.fluid._order.clear()
+            for z in range(3, 8):
+                self.world.set_block(5, 80, z, STONE)
+                self.world.set_block(4, 81, z, STONE)
+                self.world.set_block(6, 81, z, STONE)
+                self.world.set_block(5, 82, z, STONE)
+            self.world.set_block(5, 81, 3, STONE)
+            self.world.set_block(5, 81, 7, STONE)
+            self.world.set_block(5, 81, 6, "water")
+            self.world.set_block(5, 81, 5, door)
+            for _ in range(12):
+                self.world.update_fluids(0.2)
+            self.assertEqual(self.world.get_block(5, 81, 5), door, door)
+            beyond = self.world.get_block(5, 81, 4)
+            if passes:
+                self.assertTrue(beyond.startswith("water"), door)
+            else:
+                self.assertEqual(beyond, AIR, door)
+
+        # A closed trapdoor only fills the top or the bottom of the cell, so water goes through the rest.
+        for hatch in ("wooden_trapdoor_bottom_north", "wooden_trapdoor_top_north"):
+            self.world.chunks[(self.cx, self.cy, self.cz)].data.fill(0)
+            self.world.fluid.queue.clear()
+            self.world.fluid._order.clear()
+            self._channel(4, 6, 5, "water", hatch)
+            for _ in range(12):
+                self.world.update_fluids(0.2)
+            self.assertEqual(self.world.get_block(5, 81, 5), hatch, hatch)
+            self.assertTrue(self.world.get_block(6, 81, 5).startswith("water"), hatch)
+
+        # The same closed hatches hold water above them.
+        for hatch in ("wooden_trapdoor_bottom_north", "wooden_trapdoor_top_north"):
+            self.world.chunks[(self.cx, self.cy, self.cz)].data.fill(0)
+            self.world.fluid.queue.clear()
+            self.world.fluid._order.clear()
+            self.world.set_block(5, 79, 5, STONE)
+            self.world.set_block(5, 81, 5, hatch)
+            self.world.set_block(5, 82, 5, "water")
+            for dx, dz in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                self.world.set_block(5 + dx, 82, 5 + dz, STONE)
+                self.world.set_block(5 + dx, 81, 5 + dz, STONE)
+            for _ in range(8):
+                self.world.update_fluids(0.2)
+            self.assertEqual(self.world.get_block(5, 80, 5), AIR, hatch)
+            self.assertEqual(self.world.get_block(5, 81, 5), hatch, hatch)
+
+        # An open trapdoor is a side panel: water falls through, and it blocks only that side.
+        self.world.chunks[(self.cx, self.cy, self.cz)].data.fill(0)
+        self.world.fluid.queue.clear()
+        self.world.fluid._order.clear()
+        self.world.set_block(5, 79, 5, STONE)
+        self.world.set_block(5, 81, 5, "wooden_trapdoor_bottom_north_open")
+        self.world.set_block(5, 82, 5, "water")
+        for dx, dz in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            self.world.set_block(5 + dx, 82, 5 + dz, STONE)
+            self.world.set_block(5 + dx, 81, 5 + dz, STONE)
+        for _ in range(8):
+            self.world.update_fluids(0.2)
+        self.assertEqual(self.world.get_block(5, 81, 5), "wooden_trapdoor_bottom_north_open")
+        self.assertTrue(is_water(self.world.get_block(5, 80, 5)))
+
+        self.world.chunks[(self.cx, self.cy, self.cz)].data.fill(0)
+        self.world.fluid.queue.clear()
+        self.world.fluid._order.clear()
+        for z in range(3, 8):
+            self.world.set_block(5, 80, z, STONE)
+            self.world.set_block(4, 81, z, STONE)
+            self.world.set_block(6, 81, z, STONE)
+            self.world.set_block(5, 82, z, STONE)
+        self.world.set_block(5, 81, 3, STONE)
+        self.world.set_block(5, 81, 7, STONE)
+        self.world.set_block(5, 81, 6, "water")
+        self.world.set_block(5, 81, 5, "wooden_trapdoor_bottom_north_open")
+        for _ in range(12):
+            self.world.update_fluids(0.2)
+        self.assertEqual(self.world.get_block(5, 81, 4), AIR)
+
+        mesh = build_chunk_mesh(self.world, self.cx, self.cy, self.cz)
+        self.assertIsNotNone(mesh)
+
+    def test_fluid_behind_a_gap_dries_when_the_source_is_removed(self):
+        for obstacle in (
+            "wooden_fence",
+            "wooden_fence_gate_north",
+            "wooden_trapdoor_bottom_north",
+            "wooden_trapdoor_top_north",
+        ):
+            self.world.chunks[(self.cx, self.cy, self.cz)].data.fill(0)
+            self.world.fluid.queue.clear()
+            self.world.fluid._order.clear()
+            self._channel(4, 6, 5, "water", obstacle)
+            for _ in range(12):
+                self.world.update_fluids(0.2)
+            self.assertTrue(self.world.get_block(6, 81, 5).startswith("water"), obstacle)
+            self.world.set_block(4, 81, 5, AIR)
+            for _ in range(20):
+                self.world.update_fluids(0.2)
+            self.assertEqual(self.world.get_block(5, 81, 5), obstacle, obstacle)
+            self.assertEqual(self.world.get_block(4, 81, 5), AIR, obstacle)
+            self.assertEqual(self.world.get_block(6, 81, 5), AIR, obstacle)
+
 
 if __name__ == "__main__":
     unittest.main()

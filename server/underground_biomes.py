@@ -141,9 +141,17 @@ def underground_biome_at(
     """Return the active UndergroundBiome at (x, y, z), or None if none exceeds threshold."""
     best_biome = None
     best_score = -1.0
+    surface_id = None
     for biome in biomes:
         if not biome.enabled or y < biome.min_y or y > biome.max_y:
             continue
+        if biome.surface_biomes:
+            if surface_id is None:
+                from server.biomes import BIOMES, placed_biome
+
+                surface_id = placed_biome(x, z, seed, BIOMES).id
+            if surface_id not in biome.surface_biomes:
+                continue
         val = biome.sample(x, y, z, seed)
         if val >= biome.threshold and (val - biome.threshold) > best_score:
             best_score = val - biome.threshold

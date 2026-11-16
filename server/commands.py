@@ -464,6 +464,11 @@ class CommandHandler:
             ctx.error("Usage: /spawn <mob_type> [x y z]")
             return
         mob_type = args[0].lower()
+        from server.mobs import MOBS
+
+        if mob_type not in MOBS:
+            ctx.error(f"Unknown mob '{mob_type}'.")
+            return
         world = ctx.world or (ctx.server.world if ctx.server else None)
         if world is None:
             ctx.error("World not available.")
@@ -482,6 +487,9 @@ class CommandHandler:
             return
 
         mob = world.spawn_mob(mob_type, pos=[x, y, z])
+        if mob is None:
+            ctx.error(f"Unknown mob '{mob_type}'.")
+            return
         if ctx.server is not None:
             ctx.server.broadcast(
                 {

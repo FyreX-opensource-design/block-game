@@ -589,6 +589,7 @@ class MultiplayerServer:
                                     self.clients[c_uuid].send(prog_msg)
             self.world.update_leaves(0.02)
             self.world.update_transformations(0.02)
+            self.world.update_snow(0.02)
             self.world.update_saplings(0.02)
             self.world.update_crops(0.02)
             changed = self.world.update_fluids(0.02)

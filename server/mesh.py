@@ -736,6 +736,137 @@ def build_chunk_mesh(world, cx, cy, cz):
         _MESH_TL.nearby_cache = prev_nearby
 
 
+def _pour_fluid_through_porous(world, cx, cy, cz, fluid_h, chunk):
+    """Draw fluid inside fences, gates, doors, and trapdoors that a neighbor can pass."""
+    from server.fluid import get_fluid_level, get_fluid_type, is_flow_porous, is_fluid, lets_fluid_through
+
+    types = {}
+    x0 = cx * CHUNK_SIZE
+    y0 = cy * CHUNK_SIZE
+    z0 = cz * CHUNK_SIZE
+    data = chunk.data
+    for value in np.unique(data):
+        block = block_from_index(int(value))
+        if block is None or not is_flow_porous(block.id):
+            continue
+        ys, zs, xs = np.where(data == value)
+        for y, z, x in zip(ys.tolist(), zs.tolist(), xs.tolist()):
+            wx, wy, wz = x0 + int(x), y0 + int(y), z0 + int(z)
+            best_h = 0
+            best_type = None
+            for dx, dy, dz in ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)):
+                if not lets_fluid_through(world, wx, wy, wz, -dx, -dy, -dz):
+                    continue
+                nbr = world.get_block(wx + dx, wy + dy, wz + dz)
+                if not is_fluid(nbr):
+                    continue
+                height = int(get_fluid_level(nbr)) * 2
+                if height > best_h:
+                    best_h = height
+                    best_type = get_fluid_type(nbr)
+            if best_h and best_type:
+                fluid_h[int(y) + 1, int(z) + 1, int(x) + 1] = best_h
+                types[(wx, wy, wz)] = best_type
+    return types
+
+
+def _emit_snow_layers(data, occ, l_grid, x0, z0, snow_ids, base_index):
+    """Snow layers are plain boxes. The generic element loop is a frame hitch
+    once a chunk is covered in them, so they are emitted as one batch.
+    """
+    if not snow_ids:
+        return None
+    vert_parts = []
+    light_parts = []
+    color_parts = []
+    fluor_parts = []
+    fluor_uv_parts = []
+    index_parts = []
+    cursor = int(base_index)
+    for block_id in snow_ids:
+        block = block_from_index(int(block_id))
+        if block is None:
+            continue
+        layers = int((block.properties or {}).get("snow_layers") or 0)
+        if layers <= 0:
+            continue
+        height = np.float32(min(1.0, layers / 8.0))
+        ys, zs, xs = np.nonzero(data == block_id)
+        count = len(ys)
+        if count == 0:
+            continue
+        shade = (
+            0.92 + 0.08 * hash2_grid(np.int64(x0) + xs.astype(np.int64), np.int64(z0) + zs.astype(np.int64), 0)
+        ).astype(np.float32)
+        # Top is not on the cell boundary until the layer is a full block, so a
+        # solid neighbor does not hide it. The other faces do sit on the boundary.
+        faces = (
+            (0, ~occ[ys + 1, zs + 1, xs + 2], True),
+            (1, ~occ[ys + 1, zs + 1, xs], True),
+            (2, np.ones(count, dtype=bool), False),
+            (3, ~occ[ys, zs + 1, xs + 1], True),
+            (4, ~occ[ys + 1, zs + 2, xs + 1], True),
+            (5, ~occ[ys + 1, zs, xs + 1], True),
+        )
+        for normal_i, keep, neighbor_light in faces:
+            if not np.any(keep):
+                continue
+            fy = ys[keep]
+            fz = zs[keep]
+            fx = xs[keep]
+            face_count = len(fy)
+            corners = CORNERS[normal_i].copy()
+            corners[:, 1] *= height
+            origin = np.stack((fx, fy, fz), axis=1).astype(np.float32)
+            positions = (origin[:, None, :] + corners[None, :, :]).reshape(-1, 3)
+            normal = NORMALS[normal_i]
+            uvs = np.broadcast_to(
+                np.asarray(block.face_uvs[normal_i], dtype=np.float32), (face_count, 4, 2)
+            ).reshape(-1, 2)
+            verts = np.empty((face_count * 4, 9), dtype=np.float32)
+            verts[:, 0:3] = positions
+            verts[:, 3:6] = normal
+            verts[:, 6:8] = uvs
+            verts[:, 8] = np.repeat(shade[keep], 4)
+            if neighbor_light:
+                light = l_grid[
+                    fy + 1 + int(normal[1]),
+                    fz + 1 + int(normal[2]),
+                    fx + 1 + int(normal[0]),
+                ]
+            else:
+                light = l_grid[fy + 1, fz + 1, fx + 1]
+            quads = np.arange(face_count, dtype=np.uint32) * 4 + np.uint32(cursor)
+            indices = np.empty(face_count * 6, dtype=np.uint32)
+            indices[0::6] = quads
+            indices[1::6] = quads + 1
+            indices[2::6] = quads + 2
+            indices[3::6] = quads
+            indices[4::6] = quads + 2
+            indices[5::6] = quads + 3
+            vert_parts.append(verts)
+            light_parts.append(np.repeat(light, 4, axis=0))
+            color_parts.append(np.ones((face_count * 4, 3), dtype=np.float32))
+            fluor_parts.append(
+                np.broadcast_to(
+                    np.asarray(_packed_fluorescence(block), dtype=np.float32), (face_count * 4, 4)
+                ).copy()
+            )
+            fluor_uv_parts.append(np.full((face_count * 4, 2), -1.0, dtype=np.float32))
+            index_parts.append(indices)
+            cursor += face_count * 4
+    if not vert_parts:
+        return None
+    return (
+        np.vstack(vert_parts),
+        np.concatenate(index_parts),
+        np.vstack(light_parts),
+        np.vstack(color_parts),
+        np.vstack(fluor_parts),
+        np.vstack(fluor_uv_parts),
+    )
+
+
 def _build_chunk_mesh_inner(world, cx, cy, cz):
     if (cx, cy, cz) not in world.chunks:
         return None
@@ -763,13 +894,30 @@ def _build_chunk_mesh_inner(world, cx, cy, cz):
     faces, total = _exposed(own, occ)
     cutout_faces, cutout_total = _exposed(own_see, occ, see, glass=glass)
     trans_faces, trans_total = _exposed(own_trans, occ)
+    snow_ids = [
+        block_id
+        for block_id in partial_ids
+        if (block := block_from_index(block_id)) is not None
+        and int((block.properties or {}).get("snow_layers") or 0)
+        and not block.full_cube
+    ]
+    snow_set = set(snow_ids)
+    slow_ids = [block_id for block_id in partial_ids if block_id not in snow_set]
     partial_cells = (
-        np.argwhere(np.isin(chunk.data, np.asarray(partial_ids, dtype=chunk.data.dtype))) if partial_ids else ()
+        np.argwhere(np.isin(chunk.data, np.asarray(slow_ids, dtype=chunk.data.dtype))) if slow_ids else ()
     )
+    porous_types = _pour_fluid_through_porous(world, cx, cy, cz, fluid_h, chunk)
     fluid_mask = fluid_h[1:-1, 1:-1, 1:-1] > 0
     fluid_ys, fluid_zs, fluid_xs = np.nonzero(fluid_mask) if np.any(fluid_mask) else ((), (), ())
 
-    if total == 0 and cutout_total == 0 and trans_total == 0 and len(partial_cells) == 0 and len(fluid_ys) == 0:
+    if (
+        total == 0
+        and cutout_total == 0
+        and trans_total == 0
+        and len(partial_cells) == 0
+        and not snow_ids
+        and len(fluid_ys) == 0
+    ):
         return None
 
     l_grid = _build_light_grid(world, cx, cy, cz, chunk)
@@ -886,6 +1034,7 @@ def _build_chunk_mesh_inner(world, cx, cy, cz):
     translucent_fluor = []
     translucent_fluor_uv = []
     cursor_opaque = total * 4
+    snow_arrays = None
     cursor_cutout = len(cutout[0]) if cutout is not None else 0
     cursor_translucent = len(translucent_base[0]) if translucent_base is not None else 0
 
@@ -1136,6 +1285,9 @@ def _build_chunk_mesh_inner(world, cx, cy, cz):
                         target_fuv.append(fluor_uv_src[corner_i] if fluor_uv_src is not None else _NO_FLUOR_UV)
                     target_ind.extend((base, base + 1, base + 2, base, base + 2, base + 3))
 
+    if snow_ids:
+        snow_arrays = _emit_snow_layers(data, occ, l_grid, x0, z0, snow_ids, cursor_opaque)
+
     water_block = BLOCKS.get("water")
     from server.fluid import get_fluid_type, is_lava
 
@@ -1167,7 +1319,9 @@ def _build_chunk_mesh_inner(world, cx, cy, cz):
         if raw <= 0 or world is None:
             return raw, False
         nbr = world.get_block(x0 + int(x) + nx, y0 + int(y) + ny, z0 + int(z) + nz)
-        nbr_type = get_fluid_type(nbr) or ""
+        nbr_type = get_fluid_type(nbr) or porous_types.get(
+            (x0 + int(x) + nx, y0 + int(y) + ny, z0 + int(z) + nz), ""
+        )
         if _fluids_join(fluid_type, nbr_type):
             return raw, False
         return 0, True
@@ -1193,6 +1347,20 @@ def _build_chunk_mesh_inner(world, cx, cy, cz):
         )
         fluid_uvs = (water_block.face_uvs if (is_slab and water_block is not None) else block.face_uvs)
         slab_half = block.properties.get("half", getattr(block, "slab_half", None)) if is_slab else None
+        poured = porous_types.get((x0 + int(x), y0 + int(y), z0 + int(z)))
+        if poured:
+            fluid_type = poured
+            poured_block = BLOCKS.get(poured)
+            lava = poured_block is not None and is_lava(poured_block.id)
+            if lava:
+                kind = {"blue_lava": 4.0, "black_lava": 5.0}.get(fluid_type, 3.0)
+                fluid_color = (2.0, kind, 0.0)
+            else:
+                fluid_color = (1.0, 1.0, 1.0)
+            if poured_block is not None and poured_block.face_uvs:
+                fluid_uvs = poured_block.face_uvs
+            is_slab = False
+            slab_half = None
 
         if slab_half == "bottom":
             cur_base = 0.5
@@ -1589,8 +1757,16 @@ def _build_chunk_mesh_inner(world, cx, cy, cz):
         colors = np.vstack((colors, np.asarray(extra_colors, dtype=np.float32).reshape(-1, 3)))
         fluorescence = np.vstack((fluorescence, np.asarray(extra_fluor, dtype=np.float32).reshape(-1, 4)))
         fluor_uvs = np.vstack((fluor_uvs, np.asarray(extra_fluor_uv, dtype=np.float32).reshape(-1, 2)))
+    if snow_arrays is not None:
+        snow_v, snow_i, snow_l, snow_c, snow_f, snow_fu = snow_arrays
+        vertices = np.vstack((vertices, snow_v))
+        indices = np.concatenate((indices, snow_i))
+        lights = np.vstack((lights, snow_l))
+        colors = np.vstack((colors, snow_c))
+        fluorescence = np.vstack((fluorescence, snow_f))
+        fluor_uvs = np.vstack((fluor_uvs, snow_fu))
 
-    if total == 0 and not extra_vertices and cutout is None and translucent is None:
+    if total == 0 and not extra_vertices and snow_arrays is None and cutout is None and translucent is None:
         return None
     return ChunkMesh(
         vertices,

@@ -1,0 +1,33 @@
+{
+  "id": "snowy_peaks",
+  "name": "Snowy Peaks",
+  "variant_of": "mountain_peaks",
+  "precipitation": "snow",
+  "variant_noise": {
+    "scale": 0.0011,
+    "octaves": 1,
+    "seed_offset": 5303,
+    "offset": [7.0, 22.0],
+    "threshold": 0.5,
+    "above": true
+  },
+  "surface": "stone",
+  "soil": "stone",
+  "soil_depth": 1,
+  "scale": 0.006,
+  "octaves": 2,
+  "seed_offset": 90,
+  "ceiling": 0.85,
+  "tree_chance": 0.0,
+  "height_offset": 90,
+  "height_scale": 1.6,
+  "cliff": false,
+  "valid_spawn": false,
+  "transition": {
+    "blend": 0.16,
+    "curve": "smoothstep"
+  },
+  "trees": [],
+  "decorations": [],
+  "grass_color": "#d0ddd8"
+}

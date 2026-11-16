@@ -172,6 +172,20 @@ def _tree_site(x, z, height, seed, biomes, height_at):
     return tree
 
 
+def _block_is_snow(block_id):
+    block = BLOCKS.get(block_id) if not isinstance(block_id, int) else block_from_index(block_id)
+    if block is None:
+        return False
+    return bool((block.properties or {}).get("snow_layers"))
+
+
+def _trunk_can_replace(stored, leaves_index):
+    """Trunks replace air, leaves, and snow so a layer does not erase the bottom log."""
+    if stored == 0 or stored == leaves_index:
+        return True
+    return _block_is_snow(stored)
+
+
 def tree_blocks(tree, x, ground, z, seed):
     """Return the blocks of ``tree`` rooted at (x, ground, z) as world coordinates.
 
@@ -513,6 +527,9 @@ class World:
         from server.fire import FireSystem
 
         self.fire = FireSystem(self)
+        from server.snow import SnowSystem
+
+        self.snow = SnowSystem(self)
         self._singleplayer_player = None
         if load_entities and self.store is not None:
             self.load_entities()
@@ -623,6 +640,12 @@ class World:
             return self.transformations.update(dt)
         return []
 
+    def update_snow(self, dt):
+        snow = getattr(self, "snow", None)
+        if snow is None:
+            return []
+        return snow.update(dt)
+
     def update_saplings(self, dt):
         if getattr(self, "saplings", None) is not None:
             return self.saplings.update(dt)
@@ -707,7 +730,7 @@ class World:
         elif str(mob_or_type) in MOBS:
             mob = AssetMob(str(mob_or_type), pos=pos, vel=vel, yaw=yaw, pitch=pitch)
         else:
-            mob = Mob(mob_type=str(mob_or_type), pos=pos, vel=vel, yaw=yaw, pitch=pitch)
+            return None
         if after_init is not None:
             after_init(mob)
         if baby and hasattr(mob, "make_baby"):
@@ -1033,6 +1056,12 @@ class World:
                 # Open front and sides allow water flow
                 return False
 
+        from server.fluid import lets_fluid_through
+
+        dx, dy, dz = flow_dir if flow_dir is not None else (0, 0, 0)
+        if lets_fluid_through(self, x, y, z, dx, dy, dz):
+            return False
+
         return True
 
     def blocks_movement(self, x, y, z):
@@ -1072,6 +1101,11 @@ class World:
         b_obj = BLOCKS.get(block_id)
         if b_obj is None or not b_obj.solid:
             return []
+
+        layers = int((b_obj.properties or {}).get("snow_layers") or 0)
+        if layers > 0:
+            height = min(1.0, layers / 8.0)
+            return [(float(x), float(y), float(z), float(x + 1), float(y) + height, float(z + 1))]
 
         from server.blocks import (
             door_bounds,
@@ -1940,6 +1974,12 @@ class World:
             data[cover_mask & columns & (levels >= soil_top)] = block_index(biome.soil)
             data[cover_mask & columns & (levels < soil_top)] = block_index(biome.subsoil)
             data[top_mask & columns] = block_index(biome.surface)
+            if getattr(biome, "precipitation", "rain") == "snow":
+                sy = surface - y0 + 1
+                cover = columns & (surface > WATER_LEVEL) & (sy >= 0) & (sy < CHUNK_SIZE)
+                if np.any(cover):
+                    lz, lx = np.nonzero(cover)
+                    data[np.asarray(sy[lz, lx], dtype=np.intp), lz, lx] = block_index("snow_layer")
 
         chunk_xx = xx[margin : margin + CHUNK_SIZE, margin : margin + CHUNK_SIZE]
         chunk_zz = zz[margin : margin + CHUNK_SIZE, margin : margin + CHUNK_SIZE]
@@ -2918,7 +2958,7 @@ class World:
                 continue
             if replace:
                 cur = int(data[by - y0, z, x])
-                if cur == 0 or cur == leaves_index:
+                if _trunk_can_replace(cur, leaves_index):
                     data[by - y0, z, x] = block_index(block_id)
             elif data[by - y0, z, x] == 0:
                 data[by - y0, z, x] = block_index(block_id)
@@ -2938,7 +2978,7 @@ class World:
                 return
             current = self.get_block(bx, by, bz)
             if replace:
-                if current not in (AIR, leaves_id):
+                if current not in (AIR, leaves_id) and not _block_is_snow(current):
                     return
             elif current != AIR:
                 return

@@ -559,7 +559,143 @@ def is_blocking(world, x, y, z, from_level=None, from_y=None, flow_dx=None, flow
     if is_fluid(block):
         return False
 
+    dx = flow_dx or 0
+    dz = flow_dz or 0
+    if (dx or dz) and lets_fluid_through(world, x, y, z, dx, 0, dz):
+        return False
+
     return world.is_solid(x, y, z)
+
+
+def _step_down_times(block, level, fluid_def, steps):
+    """Drop `level` once for each block of travel, including the destination."""
+    pot = int(level)
+    source = block
+    for i in range(max(0, int(steps))):
+        pot = _step_down_level(source if i == 0 else "", pot, fluid_def)
+        if pot <= 0:
+            return 0
+    return pot
+
+
+def _flow_axis(dx, dy, dz):
+    if dx:
+        return 0
+    if dy:
+        return 1
+    return 2
+
+
+def _box_seals_axis(box, axis, x, y, z):
+    """True when `box` covers the whole cell on the plane perpendicular to `axis`."""
+    x0, y0, z0, x1, y1, z1 = box
+    eps = 1e-3
+    if axis != 0 and not (x0 <= x + eps and x1 >= x + 1.0 - eps):
+        return False
+    if axis != 1 and not (y0 <= y + eps and y1 >= y + 1.0 - eps):
+        return False
+    if axis != 2 and not (z0 <= z + eps and z1 >= z + 1.0 - eps):
+        return False
+    return True
+
+
+def is_flow_porous(block_id):
+    """Fences, gates, doors, and trapdoors leave an opening fluid can use."""
+    if not block_id or block_id == AIR or is_fluid(block_id):
+        return False
+    from server.blocks import is_door, is_fence, is_fence_gate, is_trapdoor
+
+    return bool(is_fence(block_id) or is_fence_gate(block_id) or is_door(block_id) or is_trapdoor(block_id))
+
+
+def lets_fluid_through(world, x, y, z, dx, dy, dz):
+    """True when fluid moving by (dx, dy, dz) can pass this block instead of stopping.
+
+    A closed door or a trapdoor panel blocks only the direction its panel covers.
+    Fence posts and gate bars leave gaps, so fluid runs through them open or closed.
+    """
+    if not dx and not dy and not dz:
+        return False
+    block_id = world.get_block(x, y, z)
+    if not is_flow_porous(block_id):
+        return False
+    from server.blocks import door_bounds, get_door_info, get_trapdoor_info, is_fence, is_fence_gate, trapdoor_bounds
+
+    if is_fence(block_id) or is_fence_gate(block_id):
+        return True
+    info = get_door_info(block_id)
+    if info is not None:
+        box = door_bounds(x, y, z, info["facing"], info["open"], info.get("hinge", "left"))
+        return not _box_seals_axis(box, _flow_axis(dx, dy, dz), x, y, z)
+    info = get_trapdoor_info(block_id)
+    if info is not None:
+        box = trapdoor_bounds(x, y, z, info["half"], info["facing"], info["open"])
+        return not _box_seals_axis(box, _flow_axis(dx, dy, dz), x, y, z)
+    return False
+
+
+def _cell_beyond_porous(world, x, y, z, dx, dy, dz, limit):
+    """First cell along this step that fluid cannot pass through.
+
+    Returns (nx, ny, nz, steps), where steps is the distance from (x, y, z).
+    """
+    nx = x + dx
+    ny = y + dy
+    nz = z + dz
+    steps = 1
+    limit = max(1, int(limit))
+    while steps <= limit:
+        if ny < 0 or ny >= WORLD_HEIGHT:
+            return None
+        if lets_fluid_through(world, nx, ny, nz, dx, dy, dz):
+            nx += dx
+            ny += dy
+            nz += dz
+            steps += 1
+            continue
+        return nx, ny, nz, steps
+    return None
+
+
+def _fluid_upstream(world, x, y, z, dx, dz, limit=8):
+    """Fluid that can reach (x, y, z) through porous blocks, and how far away it is."""
+    found = _cell_beyond_porous(world, x, y, z, dx, 0, dz, limit)
+    if found is None:
+        return None
+    nx, ny, nz, steps = found
+    block = world.get_block(nx, ny, nz)
+    if is_fluid(block):
+        return block, steps
+    return None
+
+
+def _fluid_above(world, x, y, z, limit=4):
+    """Fluid that can fall onto (x, y, z), looking up through porous blocks."""
+    ny = y + 1
+    seen = 0
+    while ny < WORLD_HEIGHT and seen < limit:
+        block = world.get_block(x, ny, z)
+        if is_fluid(block):
+            return block
+        if lets_fluid_through(world, x, ny, z, 0, -1, 0):
+            ny += 1
+            seen += 1
+            continue
+        return None
+    return None
+
+
+def _fall_target(world, x, y, z, fluid_type=None):
+    """Where fluid at (x, y, z) would land, skipping blocks that do not seal the column."""
+    if y <= 0:
+        return None
+    found = _cell_beyond_porous(world, x, y, z, 0, -1, 0, 4)
+    if found is None:
+        return None
+    nx, ny, nz, steps = found
+    if can_flow_into(world, nx, ny, nz, fluid_type=fluid_type, from_y=ny + 1):
+        return nx, ny, nz, steps
+    return None
 
 
 def get_fluid_flow(world, x, y, z):
@@ -581,7 +717,7 @@ def get_fluid_flow(world, x, y, z):
     fy = 0.0
     if is_falling or (y + 1 < WORLD_HEIGHT and is_falling_fluid(world.get_block(x, y + 1, z))):
         fy = -1.0
-    elif y > 0 and can_flow_into(world, x, y - 1, z, from_y=y):
+    elif y > 0 and _fall_target(world, x, y, z) is not None:
         fy = -0.5
 
     vx = 0.0
@@ -605,7 +741,9 @@ def get_fluid_flow(world, x, y, z):
             diff = cur_level - nbr_level
             vx += dx * diff
             vz += dz * diff
-        elif can_flow_into(world, nx, y, nz, flow_dx=dx, flow_dz=dz, from_y=y):
+        elif can_flow_into(world, nx, y, nz, flow_dx=dx, flow_dz=dz, from_y=y) or lets_fluid_through(
+            world, nx, y, nz, dx, 0, dz
+        ):
             if y > 0 and (can_flow_into(world, nx, y - 1, nz, from_y=y) or is_fluid(world.get_block(nx, y - 1, nz))):
                 diff = cur_level + 1
             else:
@@ -664,8 +802,11 @@ def _is_dropoff_cell(world, x, y, z, fluid_type=None):
     """Return True if fluid at (x, y, z) can drop down into (x, y - 1, z)."""
     if y <= 0:
         return False
+    # A fence or an open hatch is not a cell fluid can sit in, so it is not the hole.
+    if is_flow_porous(world.get_block(x, y, z)):
+        return False
     below = world.get_block(x, y - 1, z)
-    if can_flow_into(world, x, y - 1, z, fluid_type=fluid_type, from_y=y):
+    if can_flow_into(world, x, y - 1, z, fluid_type=fluid_type, from_y=y) or _fall_target(world, x, y, z, fluid_type) is not None:
         return True
     # Non-source fluid below acts as a sink, whereas a full fluid source surface does not.
     return is_fluid(below) and not is_fluid_source(below)
@@ -676,7 +817,7 @@ def _blocks_horizontal_spread(world, x, y, z, block, fluid_type=None):
     if y <= 0:
         return False
     below = world.get_block(x, y - 1, z)
-    if can_flow_into(world, x, y - 1, z, fluid_type=fluid_type, from_y=y):
+    if can_flow_into(world, x, y - 1, z, fluid_type=fluid_type, from_y=y) or _fall_target(world, x, y, z, fluid_type) is not None:
         return True
     if is_fluid(below):
         # A full fluid source resting on another source (e.g., deep ocean) spreads sideways;
@@ -710,7 +851,11 @@ def find_dropoff_directions(world, x, y, z, max_dist=None):
         nbr_vs = get_vertical_slab_info(nbr)
         if nbr_vs is not None and (-dx, -dz) == CARDINAL_FOR_FACING.get(nbr_vs["facing"]):
             continue
-        if can_flow_into(world, nx, y, nz, fluid_type=fluid_type, flow_dx=dx, flow_dz=dz, from_y=y):
+        beyond = _cell_beyond_porous(world, x, y, z, dx, 0, dz, max_dist)
+        if beyond is None:
+            continue
+        tx, ty, tz, _steps = beyond
+        if can_flow_into(world, tx, ty, tz, fluid_type=fluid_type, flow_dx=dx, flow_dz=dz, from_y=y):
             valid_dirs.append((dx, dz))
 
     if not valid_dirs:
@@ -889,7 +1034,8 @@ def compute_new_fluid_state(world, x, y, z):
         return cur
 
     below = world.get_block(x, y - 1, z)
-    below_solid_or_source = (y > 0) and (world.is_solid(x, y - 1, z) or is_fluid_source(below))
+    porous_floor = y > 0 and lets_fluid_through(world, x, y - 1, z, 0, -1, 0)
+    below_solid_or_source = (y > 0) and not porous_floor and (world.is_solid(x, y - 1, z) or is_fluid_source(below))
 
     # Infinite fluid source: 2 or more adjacent sources of the same fluid with infinite_source=True
     if below_solid_or_source:
@@ -904,38 +1050,40 @@ def compute_new_fluid_state(world, x, y, z):
                     if source_counts[f_type] >= 2:
                         return f_def.block
 
-    # Falling fluid from above
-    above = world.get_block(x, y + 1, z) if (y + 1 < WORLD_HEIGHT) else AIR
-    if is_fluid(above):
+    # Falling fluid from above, including fluid sitting over a fence or an open hatch.
+    above = _fluid_above(world, x, y, z)
+    if above is not None:
         above_type = get_fluid_type(above) or "water"
         if can_flow_into(world, x, y, z, from_y=y + 1, fluid_type=above_type):
             return _fluid_falling_block(above_type)
 
-    # Horizontal spread
+    # Horizontal spread. Porous blocks are skipped, so the source may be more than one cell away.
     max_level = 0
     chosen_fluid = None
     cur_type = get_fluid_type(cur) if is_fluid(cur) else None
 
     for dx, dz in CARDINALS:
-        nx = x + dx
-        nz = z + dz
-        nbr = world.get_block(nx, y, nz)
-        if not is_fluid(nbr):
+        found = _fluid_upstream(world, x, y, z, dx, dz, 8)
+        if found is None:
             continue
+        nbr, steps = found
         nbr_vs = get_vertical_slab_info(nbr)
         if nbr_vs is not None and (-dx, -dz) == CARDINAL_FOR_FACING.get(nbr_vs["facing"]):
             continue
         nbr_type = get_fluid_type(nbr) or "water"
         nbr_def = get_fluid_def(nbr_type)
         nbr_level = get_fluid_level(nbr)
-        pot = _step_down_level(nbr, nbr_level, nbr_def)
+        pot = _step_down_times(nbr, nbr_level, nbr_def, steps)
         if pot <= 0:
             continue
-        if not can_flow_into(world, x, y, z, from_level=nbr_level, from_y=y, fluid_type=nbr_type, from_x=nx, from_z=nz):
+        arrive = nbr_level if steps == 1 else _step_down_times(nbr, nbr_level, nbr_def, steps - 1)
+        if not can_flow_into(world, x, y, z, from_level=arrive, from_y=y, fluid_type=nbr_type, flow_dx=-dx, flow_dz=-dz):
             continue
-        if _blocks_horizontal_spread(world, nx, y, nz, nbr, fluid_type=nbr_type):
+        src_x = x + dx * steps
+        src_z = z + dz * steps
+        if _blocks_horizontal_spread(world, src_x, y, src_z, nbr, fluid_type=nbr_type):
             continue
-        dirs = find_dropoff_directions(world, nx, y, nz, max_dist=nbr_def.dropoff_distance)
+        dirs = find_dropoff_directions(world, src_x, y, src_z, max_dist=nbr_def.dropoff_distance)
         if (-dx, -dz) in dirs:
             if pot > max_level or (pot == max_level and nbr_type == cur_type):
                 max_level = pot
@@ -970,22 +1118,37 @@ class FluidSystem:
         self._enqueue((x, y, z))
         for dx, dz in CARDINALS:
             self._enqueue((x + dx, y, z + dz))
+            # The cell past a fence, gate, or open hatch has to hear that this fluid changed,
+            # or it keeps the level it had when the source was still there.
+            beyond = _cell_beyond_porous(self.world, x, y, z, dx, 0, dz, 8)
+            if beyond is not None and beyond[3] > 1:
+                self._enqueue((beyond[0], beyond[1], beyond[2]))
         if y > 0:
             self._enqueue((x, y - 1, z))
+            beyond = _cell_beyond_porous(self.world, x, y, z, 0, -1, 0, 4)
+            if beyond is not None and beyond[3] > 1:
+                self._enqueue((beyond[0], beyond[1], beyond[2]))
         if y + 1 < WORLD_HEIGHT:
             self._enqueue((x, y + 1, z))
+            beyond = _cell_beyond_porous(self.world, x, y, z, 0, 1, 0, 4)
+            if beyond is not None and beyond[3] > 1:
+                self._enqueue((beyond[0], beyond[1], beyond[2]))
 
     def _dominant_fluid_for_cell(self, x, y, z):
         blk = self.world.get_block(x, y, z)
         f_type = get_fluid_type(blk)
         if f_type:
             return f_type
-        if y + 1 < WORLD_HEIGHT:
-            above_type = get_fluid_type(self.world.get_block(x, y + 1, z))
+        above = _fluid_above(self.world, x, y, z)
+        if above is not None:
+            above_type = get_fluid_type(above)
             if above_type:
                 return above_type
         for dx, dz in CARDINALS:
-            nbr_type = get_fluid_type(self.world.get_block(x + dx, y, z + dz))
+            found = _fluid_upstream(self.world, x, y, z, dx, dz, 8)
+            if found is None:
+                continue
+            nbr_type = get_fluid_type(found[0])
             if nbr_type:
                 return nbr_type
         return "water"
@@ -1066,19 +1229,20 @@ class FluidSystem:
                 if s_info is not None and s_info["half"] == "bottom":
                     can_fall_below = False
 
-                # If fluid can fall down, schedule below
+                # If fluid can fall down, schedule the landing cell, skipping fences and open hatches.
                 cur_below = self.world.get_block(x, y - 1, z) if y > 0 else AIR
-                if can_fall_below and y > 0 and can_flow_into(self.world, x, y - 1, z, from_y=y, fluid_type=cur_type):
+                fall = _fall_target(self.world, x, y, z, cur_type) if can_fall_below and y > 0 else None
+                if fall is not None:
+                    fx, fy, fz, _steps = fall
                     fall_blk = _fluid_falling_block(cur_type)
-                    if cur_below != fall_blk:
-                        self._enqueue((x, y - 1, z))
+                    if self.world.get_block(fx, fy, fz) != fall_blk:
+                        self._enqueue((fx, fy, fz))
                 elif can_fall_below and y > 0 and is_fluid(cur_below) and not (is_fluid_source(cur) and is_fluid_source(cur_below)):
                     # Non-source fluid resting on fluid cannot spread horizontally
                     pass
                 else:
                     cur_level = get_fluid_level(cur)
-                    target_level = _step_down_level(cur, cur_level, cur_def)
-                    if target_level > 0:
+                    if _step_down_level(cur, cur_level, cur_def) > 0:
                         from server.blocks import get_vertical_slab_info, get_waterlogged_vertical_slab
 
                         cur_vs = get_vertical_slab_info(cur)
@@ -1092,15 +1256,37 @@ class FluidSystem:
                             nbr_vs = get_vertical_slab_info(nbr)
                             if nbr_vs is not None and (-dx, -dz) == CARDINAL_FOR_FACING.get(nbr_vs["facing"]):
                                 continue
-                            if can_flow_into(self.world, nx, y, nz, from_level=cur_level, from_y=y, fluid_type=cur_type, from_x=x, from_z=z):
+                            beyond = _cell_beyond_porous(self.world, x, y, z, dx, 0, dz, cur_def.flow_distance)
+                            if beyond is None:
+                                continue
+                            tx, _ty, tz, steps = beyond
+                            target_level = _step_down_times(cur, cur_level, cur_def, steps)
+                            if target_level <= 0:
+                                continue
+                            dest = self.world.get_block(tx, y, tz)
+                            dest_vs = get_vertical_slab_info(dest)
+                            if dest_vs is not None and (-dx, -dz) == CARDINAL_FOR_FACING.get(dest_vs["facing"]):
+                                continue
+                            arrive = cur_level if steps == 1 else _step_down_times(cur, cur_level, cur_def, steps - 1)
+                            if can_flow_into(
+                                self.world,
+                                tx,
+                                y,
+                                tz,
+                                from_level=arrive,
+                                from_y=y,
+                                fluid_type=cur_type,
+                                flow_dx=dx,
+                                flow_dz=dz,
+                            ):
                                 expected = (
-                                    get_waterlogged_vertical_slab(nbr, level=target_level)
-                                    if nbr_vs is not None
+                                    get_waterlogged_vertical_slab(dest, level=target_level)
+                                    if dest_vs is not None
                                     else _fluid_level_block(cur_type, target_level)
                                 )
-                                nbr_level = get_fluid_level(nbr) if (is_fluid(nbr) and get_fluid_type(nbr) == cur_type) else 0
-                                if nbr_level < target_level and nbr != expected:
-                                    self._enqueue((nx, y, nz))
+                                nbr_level = get_fluid_level(dest) if (is_fluid(dest) and get_fluid_type(dest) == cur_type) else 0
+                                if nbr_level < target_level and dest != expected:
+                                    self._enqueue((tx, y, tz))
 
             # Fluid collision transformation and fluid_meet interactions
             current_now = self.world.get_block(x, y, z)

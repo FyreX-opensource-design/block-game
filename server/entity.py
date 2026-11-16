@@ -627,7 +627,9 @@ class Mob:
 
         if attacker is not None and hasattr(attacker, "pos"):
             self.panic_source = [attacker.pos[0], attacker.pos[1], attacker.pos[2]]
-            self.aggro = attacker
+            # Creative players are not a fight. Leave any real target alone.
+            if getattr(attacker, "survival", True):
+                self.aggro = attacker
         elif knockback_dir is not None:
             self.panic_source = [self.pos[0] - knockback_dir[0], self.pos[1], self.pos[2] - knockback_dir[1]]
 
@@ -759,13 +761,10 @@ class Mob:
             return True
         return False
 
-    def step_up(self, dx, dz, world):
-        if world is None:
-            return False
-        start_x, start_y, start_z = self.pos
-        self.pos[1] = start_y + 1.05
+    def _climb(self, start_x, start_y, start_z, dx, dz, world, lift):
+        self.pos[1] = start_y + lift
         if self.collides_at(*self.pos, world):
-            self.pos[1] = start_y
+            self.pos[0], self.pos[1], self.pos[2] = start_x, start_y, start_z
             return False
         self.sweep(0, dx, world)
         self.sweep(2, dz, world)
@@ -773,8 +772,26 @@ class Mob:
         if moved < max(0.02, math.hypot(dx, dz) * 0.35):
             self.pos[0], self.pos[1], self.pos[2] = start_x, start_y, start_z
             return False
-        self.sweep(1, -1.1, world)
+        self.sweep(1, -(lift + 0.05), world)
+        # Back on the floor we started from means the move did not climb.
+        # Snow on that same floor only raises the feet a little, and that still counts.
+        if self.pos[1] < start_y + 0.05:
+            self.pos[0], self.pos[1], self.pos[2] = start_x, start_y, start_z
+            return False
         return True
+
+    def step_up(self, dx, dz, world):
+        if world is None:
+            return False
+        start_x, start_y, start_z = self.pos
+        if self._climb(start_x, start_y, start_z, dx, dz, world, 1.05):
+            return True
+        from server.snow import snow_rise
+
+        extra = snow_rise(world, start_x, start_y + 1.05, start_z, dx, dz, self.radius)
+        if extra <= 1e-4:
+            return False
+        return self._climb(start_x, start_y, start_z, dx, dz, world, 1.05 + extra)
 
     def move_horizontal(self, dx, dz, world, avoid_hazards=False):
         if world is None:
@@ -972,12 +989,13 @@ class Mob:
             if abs(self.vel[2]) < 0.01 and flow_z == 0.0:
                 self.vel[2] = 0.0
         elif getattr(self, "can_fly", False):
-            if getattr(self, "aggro", None) is None:
-                self.fly_target_y = None
             goal_y = getattr(self, "fly_target_y", None)
             if goal_y is None:
                 goal_y = self._hover_floor(world) + float(getattr(self, "fly_height", 1.6))
             self.vel[1] = max(-3.0, min(3.0, (goal_y - self.pos[1]) * 3.0))
+            climb = float(goal_y) - self.pos[1]
+            self.pitch = max(-0.6, min(0.6, climb * 0.35))
+            self.target_pitch = self.pitch
         else:
             self.vel[1] = max(TERMINAL_VELOCITY, self.vel[1] - GRAVITY * dt)
 
@@ -1012,9 +1030,12 @@ class Mob:
 
         separate_from_bodies(self, world)
 
-        # Walk animation tracking
+        # Walk animation tracking. Fliers keep flapping while they climb, dive, or hover.
         hspeed = math.hypot(self.vel[0], self.vel[2])
-        if self.on_ground and hspeed > 0.05:
+        if getattr(self, "can_fly", False):
+            speed = max(0.55, math.hypot(self.vel[0], self.vel[1], self.vel[2]))
+            self.walk_time += dt * speed * 2.5
+        elif self.on_ground and hspeed > 0.05:
             self.walk_time += dt * hspeed * 2.5
 
         # Cactus contact damage

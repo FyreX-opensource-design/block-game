@@ -190,6 +190,12 @@ class LichenAtollTests(unittest.TestCase):
             survival = True
             pos = [6.0, 14.0, 4.5]
 
+        creative = Attacker()
+        creative.survival = False
+        mob.take_damage(1, attacker=creative)
+        self.assertFalse(retaliate.can_start())
+        mob.hurt_time = 0.0
+
         mob.take_damage(1, attacker=Attacker())
         self.assertTrue(retaliate.can_start())
         mob.update(0.2, world)
@@ -250,3 +256,73 @@ class LichenAtollTests(unittest.TestCase):
         self.assertTrue(can_place_block(world, 3, 81, 4, "wheat_0"))
         self.assertFalse(can_place_block(world, 4, 81, 4, "wheat_0"))
         self.assertIn("till_lichen_soil", {rule.id for rule in INTERACTIONS})
+
+    def test_lichenete_wanders_up_and_down(self):
+        from server.ai import WanderGoal, pick_fly_altitude
+        from server.entity import AssetMob
+
+        class Flat:
+            def __init__(self):
+                self.entities = []
+                self.ceiling = None
+
+            def get_block(self, x, y, z):
+                return "stone" if self.is_solid(x, y, z) else "air"
+
+            def is_solid(self, x, y, z):
+                return y == 4 or (self.ceiling is not None and y == self.ceiling)
+
+        flat = Flat()
+        mob = AssetMob("lichenete", pos=[0.5, 9.0, 0.5])
+        mob.world = flat
+        surface = 5.0
+
+        highs = []
+        for _ in range(24):
+            highs.append(pick_fly_altitude(mob, flat) - surface)
+        self.assertLess(min(highs), 2.0)
+        self.assertGreater(max(highs), 5.0)
+
+        flat.ceiling = 9
+        mob.pos[1] = 7.0
+        for _ in range(16):
+            chosen = pick_fly_altitude(mob, flat)
+            self.assertLess(chosen + mob.height, flat.ceiling + 0.05)
+        flat.ceiling = None
+        mob.pos[1] = 9.0
+
+        mob.goals = None
+        mob.pos[1] = 7.0
+        mob.fly_target_y = 12.0
+        for _ in range(16):
+            mob.update(0.05, flat)
+        self.assertGreater(mob.pos[1], 9.0)
+        self.assertGreater(mob.pitch, 0.0)
+
+        mob.fly_target_y = 6.0
+        for _ in range(16):
+            mob.update(0.05, flat)
+        self.assertLess(mob.pos[1], 9.0)
+        self.assertLess(mob.pitch, 0.0)
+
+        wander_mob = AssetMob("lichenete", pos=[0.5, 9.0, 0.5])
+        wander_mob.world = flat
+        wander = next(goal for _priority, goal in wander_mob.goals.goals if isinstance(goal, WanderGoal))
+        cruises = []
+        for _ in range(8):
+            wander._new_cruise()
+            cruises.append(wander._cruise_y)
+        self.assertGreater(max(cruises) - min(cruises), 2.5)
+        wander_mob.update(0.05, flat)
+        above = wander_mob.fly_target_y - surface
+        self.assertGreaterEqual(above, 0.9)
+        self.assertLessEqual(above, 8.0)
+
+        class Attacker:
+            alive = True
+            survival = True
+            pos = [0.5, 7.0, 4.0]
+
+        wander_mob.aggro = Attacker()
+        wander_mob.update(0.05, flat)
+        self.assertAlmostEqual(wander_mob.fly_target_y, 7.3, places=2)

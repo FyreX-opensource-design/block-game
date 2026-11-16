@@ -17,7 +17,10 @@ Every file in ``assets/transformations`` (``.json`` or ``.lua``) describes one r
       "enabled": true
     }
 
-Only ``id``, ``from``, ``to`` and ``sources`` are required.
+Only ``id``, ``from`` and ``to`` are required. ``sources`` is required unless the rule names a
+``precipitation`` or a list of ``biomes``. A ``fluid`` rule matches every level of that
+fluid. ``only_top`` skips a block that still has the same fluid above it, and ``exposed``
+also requires the block above to be open air, snow, or another non-solid cover.
 """
 
 import json
@@ -49,11 +52,23 @@ class Transformation:
         enabled=True,
         source=None,
         without_source=False,
+        fluid=None,
+        only_top=False,
+        exposed=False,
+        precipitation=None,
+        biomes=(),
+        from_indices=None,
     ):
         self.id = rule_id
         self.from_block = from_block
         self.to_block = to_block
         self.sources = tuple(sources)
+        self.fluid = fluid or None
+        self.only_top = bool(only_top)
+        self.exposed = bool(exposed)
+        self.precipitation = precipitation or None
+        self.biomes = tuple(biomes or ())
+        self.from_indices = tuple(from_indices) if from_indices else None
         self.min_time = float(min_time)
         self.max_time = float(max_time)
         self.radius = int(radius)
@@ -117,12 +132,42 @@ def transformation_from_mapping(fields, source):
     sources = fields.get("sources")
     if isinstance(sources, str):
         sources = [sources]
-    if not isinstance(sources, (list, tuple)) or not sources:
+    if sources is None:
+        sources = []
+    if not isinstance(sources, (list, tuple)):
+        raise ValueError(f"{source}: sources must be a list")
+    raw_precip = fields.get("precipitation")
+    raw_biomes = fields.get("biomes")
+    if isinstance(raw_biomes, str):
+        raw_biomes = [raw_biomes]
+    if not sources and not raw_precip and not raw_biomes:
         raise ValueError(f"{source}: sources must be a non-empty list")
     sources = [str(s) for s in sources]
     for entry in sources:
         if not entry.startswith("#") and entry not in BLOCKS:
             raise ValueError(f"{source}: unknown source block {entry}")
+    if raw_precip is not None and raw_precip not in ("rain", "snow"):
+        raise ValueError(f"{source}: precipitation must be rain or snow")
+    fluid = fields.get("fluid")
+    from_indices = None
+    if fluid is not None:
+        from server.fluid import FLUIDS, get_fluid_type
+
+        if fluid not in FLUIDS:
+            raise ValueError(f"{source}: unknown fluid {fluid}")
+        found = []
+        for block_id, block in BLOCKS.items():
+            props = getattr(block, "properties", None) or {}
+            if props.get("waterlogged"):
+                continue
+            if get_fluid_type(block_id) != fluid:
+                continue
+            index = block_index(block_id)
+            if index is not None:
+                found.append(index)
+        from_indices = tuple(found)
+    if raw_biomes is not None and not isinstance(raw_biomes, (list, tuple)):
+        raise ValueError(f"{source}: biomes must be a list of biome ids")
 
     values = {
         "min_time": 120.0,
@@ -156,6 +201,12 @@ def transformation_from_mapping(fields, source):
         enabled=bool(fields.get("enabled", True)),
         source=source,
         without_source=bool(fields.get("without_source", False)),
+        fluid=fluid,
+        only_top=bool(fields.get("only_top", False)),
+        exposed=bool(fields.get("exposed", False)),
+        precipitation=raw_precip,
+        biomes=raw_biomes or (),
+        from_indices=from_indices,
     )
 
 
@@ -176,6 +227,7 @@ class TransformationSystem:
         self.tick_interval = 0.5
         self.chunks_per_tick = 8
         self._cursor = 0
+        self._biome_cache = {}
 
     # --- eligibility -------------------------------------------------------------
 
@@ -191,12 +243,67 @@ class TransformationSystem:
                         return True
         return False
 
+    def _climate_ok(self, rule, x, z):
+        if not rule.precipitation and not rule.biomes:
+            return True
+        key = (int(x), int(z))
+        biome = self._biome_cache.get(key)
+        if biome is None:
+            from server.biomes import biome_at
+
+            biome = biome_at(x, z, self.world.seed, self.world.biomes)
+            if len(self._biome_cache) > 4096:
+                self._biome_cache.clear()
+            self._biome_cache[key] = biome
+        if rule.biomes and biome.id not in rule.biomes:
+            return False
+        if rule.precipitation and getattr(biome, "precipitation", "rain") != rule.precipitation:
+            return False
+        return True
+
+    def _surface_open(self, rule, x, y, z):
+        """True when this fluid block is the exposed top of its column."""
+        from server.fluid import get_fluid_type
+
+        above = self.world.get_block(x, y + 1, z)
+        if rule.fluid and get_fluid_type(above) == rule.fluid:
+            return False
+        if not rule.exposed:
+            return True
+        if above in (AIR, "", None):
+            return True
+        block = BLOCKS.get(above)
+        if block is None:
+            return False
+        props = block.properties or {}
+        if props.get("snow_layers"):
+            return True
+        if props.get("ice") or (block.solid and block.full_cube) or get_fluid_type(above):
+            return False
+        return not block.solid
+
     def is_eligible(self, rule, x, y, z):
         w = self.world
-        if w.get_block(x, y, z) != rule.from_block:
+        block_id = w.get_block(x, y, z)
+        if rule.fluid:
+            from server.fluid import get_fluid_type
+
+            if get_fluid_type(block_id) != rule.fluid:
+                return False
+            props = (BLOCKS.get(block_id).properties if BLOCKS.get(block_id) else {}) or {}
+            if props.get("waterlogged"):
+                return False
+            if (rule.only_top or rule.exposed) and not self._surface_open(rule, x, y, z):
+                return False
+        else:
+            if block_id != rule.from_block:
+                return False
+            if rule.require_clear_above and not self._clear_above(rule, x, y, z):
+                return False
+        if not self._climate_ok(rule, x, z):
             return False
-        if rule.require_clear_above and not self._clear_above(rule, x, y, z):
-            return False
+        if not rule.sources:
+            return True
         found = self._source_in_range(rule, x, y, z)
         if rule.without_source:
             return not found
@@ -218,8 +325,19 @@ class TransformationSystem:
             return
         cx, cy, cz = key
         for rule in self.rules:
-            idx = block_index(rule.from_block)
-            for ly, lz, lx in np.argwhere(chunk.data == idx):
+            if rule.from_indices and (rule.only_top or rule.exposed):
+                idxs = np.asarray(rule.from_indices, dtype=chunk.data.dtype)
+                mask = np.isin(chunk.data, idxs)
+                exposed = mask.copy()
+                # A cell with the same fluid directly above is not the surface.
+                exposed[:-1] &= ~np.isin(chunk.data[1:], idxs)
+                coords = np.argwhere(exposed)
+            else:
+                idx = block_index(rule.from_block)
+                if idx is None:
+                    continue
+                coords = np.argwhere(chunk.data == idx)
+            for ly, lz, lx in coords:
                 pos = (cx * CHUNK_SIZE + int(lx), cy * CHUNK_SIZE + int(ly), cz * CHUNK_SIZE + int(lz))
                 if pos in self.timers:
                     continue

@@ -331,7 +331,9 @@ class Game(pyglet.window.Window):
             if self.network_client is None:
                 self._update_fluids(min(dt, 0.05))
                 self.world.update_leaves(min(dt, 0.05))
-                self.world.update_transformations(min(dt, 0.05))
+                step = min(dt, 0.05)
+                self._defer_block_meshes(lambda: self.world.update_transformations(step))
+                self._defer_block_meshes(lambda: self.world.update_snow(step))
                 self.world.update_saplings(min(dt, 0.05))
                 self.world.update_crops(min(dt, 0.05))
                 self.world.update_lichen(min(dt, 0.05))
@@ -1005,6 +1007,47 @@ class Game(pyglet.window.Window):
 
     def _upload_block_change(self, x, y, z):
         self._upload_block_changes(((x, y, z),))
+
+    def _defer_block_meshes(self, step):
+        """Run a world tick whose block edits are meshed on the frame budget.
+
+        Snowfall and freezing rewrite whole chunks. Uploading each edit in the
+        tick that placed it is a frame hitch, so the chunks wait for the
+        budgeted uploader instead.
+        """
+        if self.world is None:
+            return
+        changed = []
+        previous = self.world.on_block_set
+
+        def _collect(x, y, z, _block):
+            changed.append((x, y, z))
+
+        self.world.on_block_set = _collect
+        try:
+            step()
+        finally:
+            self.world.on_block_set = previous
+        for x, y, z in changed:
+            cx = x // CHUNK_SIZE
+            cy = y // CHUNK_SIZE
+            cz = z // CHUNK_SIZE
+            lx = x % CHUNK_SIZE
+            ly = y % CHUNK_SIZE
+            lz = z % CHUNK_SIZE
+            self.world.mark_dirty(cx, cy, cz)
+            if lx == 0:
+                self.world.mark_dirty(cx - 1, cy, cz)
+            elif lx == CHUNK_SIZE - 1:
+                self.world.mark_dirty(cx + 1, cy, cz)
+            if ly == 0 and cy > 0:
+                self.world.mark_dirty(cx, cy - 1, cz)
+            elif ly == CHUNK_SIZE - 1 and cy < SECTION_COUNT - 1:
+                self.world.mark_dirty(cx, cy + 1, cz)
+            if lz == 0:
+                self.world.mark_dirty(cx, cy, cz - 1)
+            elif lz == CHUNK_SIZE - 1:
+                self.world.mark_dirty(cx, cy, cz + 1)
 
     def _update_fluids(self, dt):
         """Run one fluid tick, then rebuild each touched chunk once.

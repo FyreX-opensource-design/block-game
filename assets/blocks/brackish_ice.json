@@ -1,0 +1,23 @@
+{
+  "id": "brackish_ice",
+  "lang": "block.brackish_ice",
+  "tab": ["natural"],
+  "model": "cube",
+  "render": "translucent",
+  "opacity": 0.74,
+  "solid": true,
+  "hardness": 0.5,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "loot_table": "blocks/brackish_ice",
+  "sound": "stone",
+  "light_opacity": 2,
+  "properties": {
+    "ice": true
+  },
+  "textures": {
+    "top": "brackish_ice",
+    "side": "brackish_ice",
+    "bottom": "brackish_ice"
+  }
+}

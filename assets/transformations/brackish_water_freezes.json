@@ -1,0 +1,12 @@
+{
+  "id": "brackish_water_freezes",
+  "from": "brackish_water",
+  "to": "brackish_ice",
+  "fluid": "brackish_water",
+  "only_top": true,
+  "exposed": true,
+  "precipitation": "snow",
+  "require_clear_above": false,
+  "min_time": 18,
+  "max_time": 40
+}

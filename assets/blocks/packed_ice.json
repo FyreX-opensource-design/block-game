@@ -1,0 +1,19 @@
+{
+  "id": "packed_ice",
+  "lang": "block.packed_ice",
+  "tab": ["natural"],
+  "model": "cube",
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "loot_table": "blocks/packed_ice",
+  "sound": "stone",
+  "properties": {
+    "ice": true
+  },
+  "textures": {
+    "top": "packed_ice",
+    "side": "packed_ice",
+    "bottom": "packed_ice"
+  }
+}

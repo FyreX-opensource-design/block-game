@@ -1564,13 +1564,21 @@ class Renderer:
         texture = self._asset_mob_texture(definition.model.texture)
         if texture is None:
             return True
-        hspeed = math.hypot(entity.vel[0], entity.vel[2])
+        speed = math.hypot(entity.vel[0], entity.vel[2])
+        eye_pitch = getattr(entity, "pitch", 0.0)
+        body_pitch = 0.0
+        if getattr(entity, "can_fly", False):
+            # Keep the wings beating while it hovers, climbs, or dives, and nose the body along.
+            speed = max(0.55, math.hypot(entity.vel[0], entity.vel[1], entity.vel[2]))
+            body_pitch = eye_pitch
+            eye_pitch = 0.0
         vertices, indices = model.posed_vertices(
             entity.pos,
             entity.yaw,
             time_val,
-            hspeed,
-            pitch=getattr(entity, "pitch", 0.0),
+            speed,
+            pitch=eye_pitch,
+            body_pitch=body_pitch,
         )
         if len(vertices) == 0:
             return True
@@ -2295,6 +2303,55 @@ def _cloud_vertices(weather, now, received_at):
     return mesh
 
 
+def _precip_streaks(sx, sz, now, top, bottom, span, length, speed, half_w, color, alpha, shortest, cam_x, cam_z):
+    """Camera-facing vertical streaks or short flakes."""
+    if sx is None or len(sx) == 0:
+        return None
+    sx = np.asarray(sx, dtype=np.float32)
+    sz = np.asarray(sz, dtype=np.float32)
+    length = np.asarray(length, dtype=np.float32)
+    if length.ndim == 0:
+        length = np.full(sx.shape, float(length), dtype=np.float32)
+    half_w = np.asarray(half_w, dtype=np.float32)
+    if half_w.ndim == 0:
+        half_w = np.full(sx.shape, float(half_w), dtype=np.float32)
+    alpha = np.asarray(alpha, dtype=np.float32)
+    if alpha.ndim == 0:
+        alpha = np.full(sx.shape, float(alpha), dtype=np.float32)
+    fall = (float(now) * float(speed) + np.arange(sx.shape[0], dtype=np.float32) * 3.7) % (span + length)
+    head = np.minimum(top, top - fall + length)
+    tail = np.maximum(bottom, head - length)
+    keep = head - tail >= shortest
+    if not np.any(keep):
+        return None
+    sx, sz = sx[keep], sz[keep]
+    head, tail, half_w, alpha = head[keep], tail[keep], half_w[keep], alpha[keep]
+    rx = float(cam_z) - sz
+    rz = sx - float(cam_x)
+    scale = np.maximum(np.hypot(rx, rz), 1e-4)
+    rx = rx / scale * half_w
+    rz = rz / scale * half_w
+    side = np.array([-1.0, 1.0, 1.0, -1.0, 1.0, -1.0], dtype=np.float32)
+    y_at = np.stack([head, head, tail, head, tail, tail], axis=1)
+    x = sx[:, None] + rx[:, None] * side
+    z = sz[:, None] + rz[:, None] * side
+    red = np.full(sx.shape, color[0], dtype=np.float32)
+    green = np.full(sx.shape, color[1], dtype=np.float32)
+    blue = np.full(sx.shape, color[2], dtype=np.float32)
+    zeros = np.zeros(x.shape, dtype=np.float32)
+    cols = np.stack(
+        [
+            np.broadcast_to(red[:, None], x.shape),
+            np.broadcast_to(green[:, None], x.shape),
+            np.broadcast_to(blue[:, None], x.shape),
+            np.broadcast_to(alpha[:, None], x.shape),
+        ],
+        axis=2,
+    )
+    uvs = np.stack([zeros, zeros], axis=2)
+    return np.concatenate([np.stack([x, y_at, z], axis=2), cols, uvs], axis=2).reshape(-1).astype(np.float32, copy=False)
+
+
 def _rain_vertices(world, weather, camera, now):
     if not weather.get("_cloud_ready"):
         _cloud_vertices(weather, now, now)
@@ -2348,6 +2405,34 @@ def _rain_vertices(world, weather, camera, now):
     span = top - bottom
     if span < 4.0:
         return None
+    snowing = np.zeros(sx.shape[0], dtype=bool)
+    biomes = getattr(world, "biomes", None)
+    if biomes:
+        from server.biomes import biome_at
+
+        seed = getattr(world, "seed", 0)
+        for index, (px, pz) in enumerate(zip(sx, sz)):
+            biome = biome_at(float(px), float(pz), seed, biomes)
+            snowing[index] = getattr(biome, "precipitation", "rain") == "snow"
+    if np.any(snowing):
+        flakes = _precip_streaks(
+            sx[snowing], sz[snowing], now, top, bottom, span,
+            length=0.42, speed=4.2, half_w=0.11, color=(0.97, 0.98, 1.0), alpha=0.9, shortest=0.2,
+            cam_x=cam_x, cam_z=cam_z,
+        )
+        rain = None
+        if np.any(~snowing):
+            rain_amount = amount[~snowing]
+            rain = _precip_streaks(
+                sx[~snowing], sz[~snowing], now, top, bottom, span,
+                length=5.0 + rain_amount * 3.0, speed=22.0, half_w=0.05 + rain_amount * 0.03,
+                color=(0.78, 0.86, 0.95), alpha=np.minimum(0.8, 0.5 + rain_amount * 0.35), shortest=1.5,
+                cam_x=cam_x, cam_z=cam_z,
+            )
+        parts = [part for part in (flakes, rain) if part is not None and len(part)]
+        if not parts:
+            return None
+        return np.concatenate(parts) if len(parts) > 1 else parts[0]
     length = 5.0 + amount * 3.0
     # phase grows with time and the window moves down from the cloud deck.
     fall = (float(now) * 22.0 + np.arange(sx.shape[0], dtype=np.float32) * 3.7) % (span + length)

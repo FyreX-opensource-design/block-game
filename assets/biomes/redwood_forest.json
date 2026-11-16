@@ -2,6 +2,7 @@
   "id": "redwood_forest",
   "name": "Redwood Forest",
   "variant_of": "forest",
+  "priority": 5,
   "temperature": [0.0, 0.5],
   "touching": [
     "pine_forest",
@@ -10,11 +11,11 @@
     "mountains"
   ],
   "variant_noise": {
-    "scale": 0.0035,
-    "octaves": 2,
+    "scale": 0.0015,
+    "octaves": 1,
     "seed_offset": 6400,
     "offset": [-6.0, 4.0],
-    "threshold": 0.55,
+    "threshold": 0.48,
     "above": true
   },
   "surface": "podzol",
