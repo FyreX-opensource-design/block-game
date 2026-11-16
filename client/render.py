@@ -72,6 +72,8 @@ in vec3 in_blocklight_rgb;
 in float in_blocklight_uv;
 in float in_blocklight_ir;
 in vec3 in_color;
+in vec4 in_fluorescence;
+in vec2 in_fluor_uv;
 
 out vec2 v_uv;
 out vec3 v_normal;
@@ -82,6 +84,8 @@ out vec3 v_blocklight_rgb;
 out float v_blocklight_uv;
 out float v_blocklight_ir;
 out vec3 v_color;
+out vec4 v_fluorescence;
+out vec2 v_fluor_uv;
 out float v_emissive;
 
 vec4 frame_rect(int kind, int frame) {
@@ -99,19 +103,12 @@ vec4 frame_rect(int kind, int frame) {
 
 vec2 animated_uv() {
     int kind = int(in_color.g + 0.5);
-    if (kind == 1 || kind == 2) {
-        int frame = int(mod(floor(anim_time * 0.4), 4.0));
-        vec4 base = kind == 2 ? blue_fire_frames[0] : fire_frames[0];
-        vec4 rect = frame_rect(kind, frame);
-        vec2 span = max(base.zw - base.xy, vec2(0.00001));
-        vec2 local = clamp((in_uv - base.xy) / span, 0.0, 1.0);
-        return mix(rect.xy, rect.zw, local);
-    }
-    vec2 px = in_uv * atlas_size - 0.5;
-    vec2 origin_px = floor(px / 16.0) * 16.0;
-    float dir = kind == 4 ? -1.0 : 1.0;
-    vec2 local = mod(px - origin_px + vec2(anim_time * 0.15, anim_time * 0.05) * dir, 16.0);
-    return (origin_px + local + 0.5) / atlas_size;
+    int frame = int(mod(floor(anim_time * 0.4), 4.0));
+    vec4 base = kind == 2 ? blue_fire_frames[0] : fire_frames[0];
+    vec4 rect = frame_rect(kind, frame);
+    vec2 span = max(base.zw - base.xy, vec2(0.00001));
+    vec2 local = clamp((in_uv - base.xy) / span, 0.0, 1.0);
+    return mix(rect.xy, rect.zw, local);
 }
 
 void main() {
@@ -120,10 +117,20 @@ void main() {
     v_emissive = 0.0;
     v_uv = in_uv;
     v_color = in_color;
+    v_fluorescence = in_fluorescence;
+    v_fluor_uv = in_fluor_uv;
     if (in_color.r > 1.5) {
-        v_uv = animated_uv();
+        int kind = int(in_color.g + 0.5);
         v_color = vec3(1.0);
-        v_emissive = 1.0;
+        if (kind == 1 || kind == 2) {
+            v_uv = animated_uv();
+            v_emissive = 1.0;
+        } else {
+            // Lava keeps its tile UVs. The fragment shader boils inside the
+            // tile; wrapping here makes the four corners disagree and the
+            // whole face stretches into a single texel.
+            v_emissive = kind == 4 ? 3.0 : 2.0;
+        }
     }
     v_normal = in_normal;
     v_shade = in_shade;
@@ -138,6 +145,8 @@ void main() {
 WORLD_FRAG = """
 #version 330 core
 uniform sampler2D atlas;
+uniform vec2 atlas_size;
+uniform float anim_time;
 uniform vec3 fog_color;
 uniform float fog_near;
 uniform float fog_far;
@@ -155,12 +164,43 @@ in vec3 v_blocklight_rgb;
 in float v_blocklight_uv;
 in float v_blocklight_ir;
 in vec3 v_color;
+in vec4 v_fluorescence;
+in vec2 v_fluor_uv;
 in float v_emissive;
 
 out vec4 fragColor;
 
+// Matches server.lighting.fluorescence_response. The alpha channel packs
+// start (0..15) + full * 16 + strength_sixteenths * 256.
+float fluorescence_response(vec4 fluor, float uv_level) {
+    float strength = floor(fluor.a / 256.0) / 16.0;
+    if (strength <= 0.0) {
+        return 0.0;
+    }
+    float start = mod(fluor.a, 16.0);
+    float full_level = mod(floor(fluor.a / 16.0), 16.0);
+    float end_level = max(full_level, start + 0.05);
+    float t = clamp((uv_level - start) / (end_level - start), 0.0, 1.0);
+    return t * t * (3.0 - 2.0 * t) * strength;
+}
+
+vec2 lava_uv(float dir) {
+    vec2 px = v_uv * atlas_size - 0.5;
+    vec2 origin = floor(px / 16.0) * 16.0;
+    vec2 local = clamp(px - origin, 0.0, 15.0);
+    float t = anim_time * 0.15 * dir;
+    vec2 drift = vec2(sin(t), cos(t * 0.73)) * 1.5;
+    vec2 boil = vec2(sin(local.y * 1.2 + t * 2.4), cos(local.x * 1.05 - t * 1.9)) * 0.8;
+    local = clamp(local + drift + boil, 0.0, 15.0);
+    return (origin + local + 0.5) / atlas_size;
+}
+
 void main() {
-    vec4 texel = texture(atlas, v_uv);
+    vec2 uv = v_uv;
+    if (v_emissive > 1.5) {
+        uv = lava_uv(v_emissive > 2.5 ? -1.0 : 1.0);
+    }
+    vec4 texel = texture(atlas, uv);
     if (texel.a < 0.5) discard;
 
     vec3 base_rgb = texel.rgb;
@@ -188,23 +228,34 @@ void main() {
 
     vec3 sky_color = sun_color * (ambient_sky + direct_sun) * v_shade;
     vec3 block_rgb = v_blocklight_rgb;
-    vec3 uv_fluorescence = vec3(0.40, 0.15, 0.70) * v_blocklight_uv;
     vec3 ir_warmth = vec3(0.65, 0.25, 0.08) * v_blocklight_ir;
     vec3 ambient_base = vec3(0.04);
+    float fluor_response = fluorescence_response(v_fluorescence, v_blocklight_uv * 15.0);
+    vec3 fluor_glow = v_fluorescence.rgb;
+    float fluor_mask = 1.0;
+    if (v_fluor_uv.x >= 0.0) {
+        vec4 fluor_tex = texture(atlas, v_fluor_uv);
+        fluor_mask = fluor_tex.a;
+        fluor_glow *= fluor_tex.rgb;
+    }
+    float fluor_amount = fluor_response * fluor_mask;
 
     vec3 final_color;
     if (vision_mode == 0) {
-        // Normal vision
-        vec3 total_light = ambient_base + sky_color + block_rgb + uv_fluorescence * 0.35 + ir_warmth * 0.35;
-        vec3 lit = base_rgb * total_light;
+        // Normal vision. The overlay alpha picks which pixels react, and its color keeps the variation.
+        vec3 total_light = ambient_base + sky_color + block_rgb + ir_warmth * 0.35;
+        vec3 shifted = mix(base_rgb, fluor_glow, clamp(fluor_amount, 0.0, 1.0));
+        float room = clamp(max(total_light.r, max(total_light.g, total_light.b)), 0.0, 1.0);
+        vec3 lit = shifted * total_light + fluor_glow * fluor_amount * (1.0 - room);
         float fog = clamp((v_dist - fog_near) / (fog_far - fog_near), 0.0, 1.0);
         final_color = mix(lit, fog_color, fog);
     } else if (vision_mode == 1) {
-        // UV Vision mode
-        float uv_val = v_blocklight_uv;
-        vec3 uv_color = vec3(0.35, 0.1, 0.85) * uv_val * 1.5 + vec3(0.1, 0.85, 0.75) * pow(uv_val, 2.0);
-        vec3 dim_scene = base_rgb * 0.15 * (v_skylight * 0.5 + 0.1);
-        vec3 lit = dim_scene + uv_color;
+        // UV vision: the field shows where the light is, and a defined block uses its own color.
+        float shown = clamp(fluor_amount, 0.0, 1.0);
+        vec3 shifted = mix(base_rgb, fluor_glow, shown);
+        vec3 field = vec3(0.22, 0.05, 0.50) * v_blocklight_uv;
+        vec3 dim_scene = shifted * 0.12 * (v_skylight * 0.5 + 0.1);
+        vec3 lit = dim_scene + field + fluor_glow * shown;
         float fog = clamp((v_dist - fog_near) / (fog_far - fog_near), 0.0, 1.0);
         final_color = mix(lit, vec3(0.05, 0.02, 0.1), fog);
     } else if (vision_mode == 2) {
@@ -256,8 +307,22 @@ in vec3 v_blocklight_rgb;
 in float v_blocklight_uv;
 in float v_blocklight_ir;
 in vec3 v_color;
+in vec4 v_fluorescence;
+in vec2 v_fluor_uv;
 
 out vec4 fragColor;
+
+float fluorescence_response(vec4 fluor, float uv_level) {
+    float strength = floor(fluor.a / 256.0) / 16.0;
+    if (strength <= 0.0) {
+        return 0.0;
+    }
+    float start = mod(fluor.a, 16.0);
+    float full_level = mod(floor(fluor.a / 16.0), 16.0);
+    float end_level = max(full_level, start + 0.05);
+    float t = clamp((uv_level - start) / (end_level - start), 0.0, 1.0);
+    return t * t * (3.0 - 2.0 * t) * strength;
+}
 
 void main() {
     vec4 texel = texture(atlas, v_uv);
@@ -282,12 +347,22 @@ void main() {
 
     vec3 sky_color = sun_color * (ambient_sky + direct_sun) * v_shade;
     vec3 block_rgb = v_blocklight_rgb;
-    vec3 uv_fluorescence = vec3(0.40, 0.15, 0.70) * v_blocklight_uv;
     vec3 ir_warmth = vec3(0.65, 0.25, 0.08) * v_blocklight_ir;
     vec3 ambient_base = vec3(0.04);
+    float fluor_response = fluorescence_response(v_fluorescence, v_blocklight_uv * 15.0);
+    vec3 fluor_glow = v_fluorescence.rgb;
+    float fluor_mask = 1.0;
+    if (v_fluor_uv.x >= 0.0) {
+        vec4 fluor_tex = texture(atlas, v_fluor_uv);
+        fluor_mask = fluor_tex.a;
+        fluor_glow *= fluor_tex.rgb;
+    }
+    float fluor_amount = fluor_response * fluor_mask;
 
-    vec3 total_light = ambient_base + sky_color + block_rgb + uv_fluorescence * 0.35 + ir_warmth * 0.35;
-    vec3 color = base_rgb * total_light;
+    vec3 total_light = ambient_base + sky_color + block_rgb + ir_warmth * 0.35;
+    vec3 shifted = mix(base_rgb, fluor_glow, clamp(fluor_amount, 0.0, 1.0));
+    float room = clamp(max(total_light.r, max(total_light.g, total_light.b)), 0.0, 1.0);
+    vec3 color = shifted * total_light + fluor_glow * fluor_amount * (1.0 - room);
     float fog = clamp((v_dist - fog_near) / (fog_far - fog_near), 0.0, 1.0);
     fragColor = vec4(mix(color, fog_color, fog), texel.a);
 }
@@ -427,7 +502,7 @@ void main() {
     float ambient_sky = effective_skylight * 0.70;
 
     vec3 sky_color = sun_color * (ambient_sky + direct_sun);
-    vec3 total_light = vec3(0.04) + sky_color + entity_blocklight_rgb + vec3(0.40, 0.15, 0.70) * (entity_blocklight_uv * 0.35) + vec3(0.65, 0.25, 0.08) * (entity_blocklight_ir * 0.35);
+    vec3 total_light = vec3(0.04) + sky_color + entity_blocklight_rgb + vec3(0.65, 0.25, 0.08) * (entity_blocklight_ir * 0.35);
 
     vec3 final_color;
     if (vision_mode == 0) {
@@ -785,6 +860,8 @@ class Renderer:
             "3f 3f 2f 1f",
             ("in_pos", "in_normal", "in_uv", "in_shade"),
             colors=getattr(mesh, "colors", None),
+            fluorescence=getattr(mesh, "fluorescence", None),
+            fluor_uvs=getattr(mesh, "fluor_uvs", None),
         )
         cutout = None
         if mesh.cutout is not None:
@@ -796,6 +873,8 @@ class Renderer:
                 "3f 3f 2f 1f",
                 ("in_pos", "in_normal", "in_uv", "in_shade"),
                 colors=getattr(mesh, "cutout_colors", None),
+                fluorescence=getattr(mesh, "cutout_fluorescence", None),
+                fluor_uvs=getattr(mesh, "cutout_fluor_uvs", None),
             )
         translucent = None
         if getattr(mesh, "translucent", None) is not None:
@@ -807,12 +886,14 @@ class Renderer:
                 "3f 3f 2f 1f",
                 ("in_pos", "in_normal", "in_uv", "in_shade"),
                 colors=getattr(mesh, "translucent_colors", None),
+                fluorescence=getattr(mesh, "translucent_fluorescence", None),
+                fluor_uvs=getattr(mesh, "translucent_fluor_uvs", None),
             )
         if opaque is None and cutout is None and translucent is None:
             return
         self.chunks[key] = _ChunkDraw(opaque, cutout, translucent, origin)
 
-    def _buffer(self, program, vertices, indices, lights, layout, names, colors=None):
+    def _buffer(self, program, vertices, indices, lights, layout, names, colors=None, fluorescence=None, fluor_uvs=None):
         if len(indices) == 0:
             return None
         vbo = self.ctx.buffer(np.ascontiguousarray(vertices, dtype=np.float32).tobytes())
@@ -824,16 +905,24 @@ class Renderer:
         if colors is None or len(colors) != len(vertices):
             colors = np.ones((len(vertices), 3), dtype=np.float32)
         vbo_color = self.ctx.buffer(np.ascontiguousarray(colors, dtype=np.float32).tobytes())
+        if fluorescence is None or len(fluorescence) != len(vertices):
+            fluorescence = np.zeros((len(vertices), 4), dtype=np.float32)
+        vbo_fluor = self.ctx.buffer(np.ascontiguousarray(fluorescence, dtype=np.float32).tobytes())
+        if fluor_uvs is None or len(fluor_uvs) != len(vertices):
+            fluor_uvs = np.full((len(vertices), 2), -1.0, dtype=np.float32)
+        vbo_fluor_uv = self.ctx.buffer(np.ascontiguousarray(fluor_uvs, dtype=np.float32).tobytes())
         vao = self.ctx.vertex_array(
             program,
             [
                 (vbo, layout, *names),
                 (vbo_light, "1f 3f 1f 1f", "in_skylight", "in_blocklight_rgb", "in_blocklight_uv", "in_blocklight_ir"),
                 (vbo_color, "3f", "in_color"),
+                (vbo_fluor, "4f", "in_fluorescence"),
+                (vbo_fluor_uv, "2f", "in_fluor_uv"),
             ],
             ibo,
         )
-        return vao, vbo, ibo, vbo_light, vbo_color
+        return vao, vbo, ibo, vbo_light, vbo_color, vbo_fluor, vbo_fluor_uv
 
     def drop(self, key):
         item = self.chunks.pop(key, None)
@@ -1190,6 +1279,7 @@ class Renderer:
         vertices, indices = self.player_meshes.posed_vertices(player.pos, player.yaw, poses)
         self._draw_entity(vp, camera, vertices, indices, self.skin, fog=True, day_time=day_time)
         self._draw_held(vp, camera, player, poses, item_id, first_person=False, eye=None, fog=True, day_time=day_time)
+        self.draw_entity_flames(vp, player, day_time)
 
     def draw_fallen_block_overlay(self, width, height, block_id, tiles=4):
         """Fill the viewport with the texture of the block the player is inside.
@@ -1243,6 +1333,56 @@ class Renderer:
         self._textured(ortho(width, height), floats, self.atlas)
         self.ctx.enable(moderngl.DEPTH_TEST)
 
+    def draw_fire_overlay(self, width, height, kind, day_time=1000.0):
+        """First-person flames around the edges of the view."""
+        rect = _flame_frame(kind, day_time)
+        if rect is None:
+            return
+        u0, v0, u1, v1 = rect
+        band = min(width, height) * 0.22
+        floats = []
+        floats.extend(_quad_uv(0, 0, band, height, u0, v1, u1, v0))
+        floats.extend(_quad_uv(width - band, 0, width, height, u1, v1, u0, v0))
+        floats.extend(_quad_uv(band * 0.5, 0, width - band * 0.5, band * 1.35, u0, v1, u1, v0))
+        self.ctx.disable(moderngl.DEPTH_TEST)
+        self.ctx.disable(moderngl.CULL_FACE)
+        self.ctx.enable(moderngl.BLEND)
+        self.ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
+        self._textured(ortho(width, height), floats, self.atlas)
+        self.ctx.enable(moderngl.DEPTH_TEST)
+
+    def draw_entity_flames(self, vp, entity, day_time=1000.0):
+        """Two flame sheets crossed through a mob or a third-person player."""
+        kind = getattr(entity, "fire_kind", "") or ""
+        if kind not in ("fire", "blue_fire"):
+            return
+        rect = _flame_frame(kind, day_time)
+        if rect is None or entity is None:
+            return
+        u0, v0, u1, v1 = rect
+        x = float(entity.pos[0])
+        y = float(entity.pos[1])
+        z = float(entity.pos[2])
+        height = max(0.4, float(getattr(entity, "height", 1.0) or 1.0))
+        reach = max(0.35, float(getattr(entity, "radius", 0.3) or 0.3) * 1.6)
+        y1 = y + height
+        floats = []
+        floats.extend(
+            _world_quad((x - reach, y, z), (x + reach, y, z), (x + reach, y1, z), (x - reach, y1, z), u0, v0, u1, v1)
+        )
+        floats.extend(
+            _world_quad((x, y, z - reach), (x, y, z + reach), (x, y1, z + reach), (x, y1, z - reach), u0, v0, u1, v1)
+        )
+        self.ctx.enable(moderngl.DEPTH_TEST)
+        self.ctx.disable(moderngl.CULL_FACE)
+        self.ctx.enable(moderngl.BLEND)
+        self.ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
+        self.ctx.depth_mask = False
+        self._textured(vp, floats, self.atlas)
+        self.ctx.depth_mask = True
+        self.ctx.enable(moderngl.CULL_FACE)
+        self.ctx.disable(moderngl.BLEND)
+
     def draw_other_players(self, vp, camera, other_players, time, day_time=1000.0):
         if not other_players:
             return
@@ -1260,6 +1400,7 @@ class Renderer:
             held = getattr(player, "held_item", "")
             if held:
                 self._draw_held(vp, camera, player, poses, held, first_person=False, eye=None, fog=True, day_time=day_time)
+            self.draw_entity_flames(vp, player, day_time)
 
     def _draw_held(self, vp, camera, player, poses, item_id, first_person, eye, fog, day_time=1000.0):
         matrix = item_hold_matrix(player, poses, first_person=first_person, eye=eye, item_id=item_id)
@@ -1622,6 +1763,9 @@ class Renderer:
             (vertices, indices), kind = packed
             texture = self.atlas if kind == "block" else self.items
             self._draw_entity(vp, camera, vertices, indices, texture, fog=True, day_time=day_time)
+        for entity in entities:
+            if getattr(entity, "fire_kind", ""):
+                self.draw_entity_flames(vp, entity, day_time)
 
     def draw_particles(self, vp, camera, system):
         particles = getattr(system, "particles", None)
@@ -2299,6 +2443,29 @@ def _quad(x0, y0, x1, y1):
         x0, y0, 0, x1, y0, 0, x1, y1, 0,
         x0, y0, 0, x1, y1, 0, x0, y1, 0,
     ]
+
+
+def _flame_frame(kind, day_time):
+    block_id = "blue_fire" if kind == "blue_fire" else "fire"
+    frames = _animation_frames(block_id)
+    if not frames:
+        return None
+    frame = int(math.floor(float(day_time) * 0.4)) % len(frames)
+    rect = frames[frame]
+    if len(rect) < 4:
+        return None
+    return rect
+
+
+def _world_quad(p0, p1, p2, p3, u0, v0, u1, v1):
+    def vert(point, u, v):
+        return (float(point[0]), float(point[1]), float(point[2]), float(u), float(v))
+
+    a = vert(p0, u0, v1)
+    b = vert(p1, u1, v1)
+    c = vert(p2, u1, v0)
+    d = vert(p3, u0, v0)
+    return [value for corner in (a, b, c, a, c, d) for value in corner]
 
 
 def _quad_uv(x0, y0, x1, y1, u0, v0, u1, v1):

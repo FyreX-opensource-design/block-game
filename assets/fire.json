@@ -1,0 +1,6 @@
+{
+  "tick_interval": 0.4,
+  "max_new_flames": 4,
+  "flame_cap": 12,
+  "lava_per_tick": 16
+}

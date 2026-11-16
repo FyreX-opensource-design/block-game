@@ -1,0 +1,16 @@
+{
+  "id": "lichen_soil",
+  "lang": "block.lichen_soil",
+  "tab": "natural",
+  "model": "cube",
+  "soil": true,
+  "hardness": 0.5,
+  "tool": "shovel",
+  "mining_level": 0,
+  "sound": "dirt",
+  "textures": {
+    "top": "lichen_soil",
+    "side": "lichen_soil",
+    "bottom": "lichen_soil"
+  }
+}

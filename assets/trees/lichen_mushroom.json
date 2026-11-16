@@ -1,0 +1,13 @@
+{
+  "id": "lichen_mushroom",
+  "shape": "mushroom",
+  "trunk": "lichen_stem",
+  "leaves": "lichen_cap",
+  "trunk_min": 4,
+  "trunk_extra": 2,
+  "extra_threshold": 0.45,
+  "radius": 3,
+  "leaf_down": 1,
+  "leaf_up": 1,
+  "valid_blocks": ["lichen_grass", "lichen_soil"]
+}

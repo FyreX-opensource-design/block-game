@@ -1,0 +1,9 @@
+{
+  "id": "lichen_planks",
+  "type": "crafting_shapeless",
+  "ingredients": ["lichen_stem"],
+  "result": {
+    "item": "lichen_planks",
+    "count": 4
+  }
+}

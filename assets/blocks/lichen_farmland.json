@@ -1,0 +1,16 @@
+{
+  "id": "lichen_farmland",
+  "lang": "block.lichen_farmland",
+  "tab": "natural",
+  "model": "cube",
+  "hardness": 0.6,
+  "tool": "shovel",
+  "mining_level": 0,
+  "loot_table": "blocks/lichen_farmland",
+  "sound": "dirt",
+  "textures": {
+    "top": "lichen_farmland",
+    "side": "lichen_soil",
+    "bottom": "lichen_soil"
+  }
+}

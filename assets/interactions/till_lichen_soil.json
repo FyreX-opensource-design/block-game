@@ -1,0 +1,8 @@
+{
+  "id": "till_lichen_soil",
+  "tool": "hoe",
+  "blocks": ["lichen_soil", "lichen_grass"],
+  "result": "lichen_farmland",
+  "damage": 1,
+  "require_clear_above": true
+}

@@ -1,0 +1,32 @@
+{
+  "id": "glow_bulb",
+  "stages": 4,
+  "min_time": 180,
+  "max_time": 340,
+  "needs_water": true,
+  "water_radius": 4,
+  "water_vertical": 1,
+  "seeds": "glow_bulb_seeds",
+  "produce": "glow_bulb",
+  "food": 2,
+  "ground": ["lichen_farmland"],
+  "light": {
+    "r": 4,
+    "g": 1,
+    "b": 8,
+    "uv": 12,
+    "ir": 0
+  },
+  "fluorescence": {
+    "texture": "glow_bulb_glow",
+    "start": 1,
+    "full": 5,
+    "strength": 1
+  },
+  "wild": {
+    "block": "wild_glow_bulb",
+    "chance": 0.02,
+    "surfaces": ["lichen_grass"],
+    "biomes": ["lichen_atoll"]
+  }
+}

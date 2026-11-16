@@ -122,7 +122,7 @@ class Block:
         translucent=False,
         light_opacity=None,
     ):
-        from server.lighting import parse_light_levels
+        from server.lighting import parse_fluorescence, parse_light_levels
 
         self.id = block_id
         self.name = name
@@ -214,6 +214,8 @@ class Block:
             self.properties["cook_speed"] = self.cook_speed
         self.emission = parse_light_levels(light if light is not None else emission)
         self.light = self.emission
+        self.fluorescence = parse_fluorescence(self.properties.get("fluorescence"))
+        self.fluor_face_uvs = None
         self.ctm = bool(ctm or self.properties.get("ctm", False))
         self.palettes = tuple(palettes) if palettes else ()
         self.palette_face_uvs = tuple(palette_face_uvs) if palette_face_uvs else (tuple(face_uvs),)
@@ -2791,10 +2793,102 @@ def can_support_torch(block_or_id, mount="up"):
     return bool(block.full_cube)
 
 
+# A vine sheet sits against the supporting neighbor. The bit name matches the
+# torch mount: "east" hangs on the east side of the block to the west.
+VINE_BITS = (
+    (1, "east", (-1, 0, 0), (0.0, 0.0, 0.0), (1.0, 16.0, 16.0)),
+    (2, "west", (1, 0, 0), (15.0, 0.0, 0.0), (16.0, 16.0, 16.0)),
+    (4, "south", (0, 0, -1), (0.0, 0.0, 0.0), (16.0, 16.0, 1.0)),
+    (8, "north", (0, 0, 1), (0.0, 0.0, 15.0), (16.0, 16.0, 16.0)),
+    (16, "up", (0, 1, 0), (0.0, 15.0, 0.0), (16.0, 16.0, 16.0)),
+    (32, "down", (0, -1, 0), (0.0, 0.0, 0.0), (16.0, 1.0, 16.0)),
+)
+
+
+def is_vine(block_or_id):
+    if hasattr(block_or_id, "properties"):
+        block = block_or_id
+    else:
+        block = BLOCKS.get(block_or_id)
+    return bool(block is not None and block.properties.get("vine"))
+
+
+def vine_info(block_or_id):
+    if hasattr(block_or_id, "properties"):
+        block = block_or_id
+    else:
+        block = BLOCKS.get(block_or_id)
+    if block is None or not block.properties.get("vine"):
+        return None
+    return {
+        "base_id": getattr(block, "base_id", block.id),
+        "mask": int(block.properties.get("vine_mask") or 0),
+    }
+
+
+def vine_block_id(base_id, mask):
+    mask = int(mask)
+    if mask <= 0:
+        return base_id
+    return f"{base_id}_v{mask}"
+
+
+def vine_bit_for_normal(normal):
+    nx, ny, nz = normal
+    if nx > 0:
+        return 1
+    if nx < 0:
+        return 2
+    if nz > 0:
+        return 4
+    if nz < 0:
+        return 8
+    if ny < 0:
+        return 16
+    if ny > 0:
+        return 32
+    return 0
+
+
+def _vine_bit_supported(world, x, y, z, bit):
+    for flag, name, offset, _origin, _extent in VINE_BITS:
+        if flag != bit:
+            continue
+        dx, dy, dz = offset
+        support = world.get_block(x + dx, y + dy, z + dz)
+        if name == "up":
+            block = BLOCKS.get(support)
+            return block is not None and block.solid and block.full_cube
+        mount = "up" if name == "down" else name
+        return can_support_torch(support, mount)
+    return False
+
+
+def vine_supported_mask(world, x, y, z, mask):
+    kept = 0
+    for flag, _name, _offset, _origin, _extent in VINE_BITS:
+        if mask & flag and _vine_bit_supported(world, x, y, z, flag):
+            kept |= flag
+    return kept
+
+
+def combine_vine(existing_id, placed_id):
+    """Add a new vine face onto a vine that already occupies the cell."""
+    have = vine_info(existing_id)
+    placed = vine_info(placed_id)
+    if have is None or placed is None or have["base_id"] != placed["base_id"]:
+        return placed_id
+    return vine_block_id(placed["base_id"], have["mask"] | placed["mask"])
+
+
 def placement_block(block_id, normal, yaw=None, local_y=None):
     block = BLOCKS.get(block_id)
     if block is None:
         return block_id
+    if is_vine(block):
+        bit = vine_bit_for_normal(normal)
+        placed = vine_block_id(block.base_id, bit)
+        return placed if placed in BLOCKS else block_id
     if is_stairs(block):
         if yaw is not None:
             facing = player_facing_from_yaw(yaw)
@@ -3234,6 +3328,11 @@ def _load_registry():
         for texture_name in entry.get("animation") or []:
             if texture_name not in texture_names:
                 texture_names.append(texture_name)
+        fluor_entry = entry.get("fluorescence") or (entry.get("properties") or {}).get("fluorescence")
+        if isinstance(fluor_entry, dict) and fluor_entry.get("texture"):
+            fluor_name = str(fluor_entry["texture"])
+            if fluor_name not in texture_names:
+                texture_names.append(fluor_name)
         palettes_raw = entry.get("palettes")
         if palettes_raw and isinstance(palettes_raw, list):
             for pal in palettes_raw:
@@ -3277,10 +3376,15 @@ def _load_registry():
     for entry, elements, textures, name in prepared:
         resolved = []
         face_uvs = [None] * len(FACE_INDEX)
+        fluor_entry = entry.get("fluorescence") or (entry.get("properties") or {}).get("fluorescence")
+        fluor_name = str(fluor_entry.get("texture")) if isinstance(fluor_entry, dict) and fluor_entry.get("texture") else None
+        fluor_rect = rects.get(fluor_name) if fluor_name else None
+        fluor_face_uvs = [None] * len(FACE_INDEX)
         for element in elements:
             origin = [float(value) for value in element["from"]]
             extent = [float(value) for value in element["to"]]
             faces = {}
+            fluor_faces = {}
             face_uv_specs = {}
             texture_rects = {}
             for face_name, spec in element["faces"].items():
@@ -3295,9 +3399,17 @@ def _load_registry():
                 faces[index] = uv
                 face_uv_specs[index] = spec_uv
                 texture_rects[index] = rects[texture_name]
+                if fluor_rect is not None:
+                    fluor_uv = _map_uv(fluor_rect, spec_uv)
+                    fluor_faces[index] = fluor_uv
+                    if fluor_face_uvs[index] is None:
+                        fluor_face_uvs[index] = fluor_uv
                 if face_uvs[index] is None:
                     face_uvs[index] = uv
-            resolved.append({"from": origin, "to": extent, "faces": faces, "face_uv_specs": face_uv_specs, "texture_rects": texture_rects})
+            element_out = {"from": origin, "to": extent, "faces": faces, "face_uv_specs": face_uv_specs, "texture_rects": texture_rects}
+            if fluor_faces:
+                element_out["fluor_faces"] = fluor_faces
+            resolved.append(element_out)
         full_cube = (
             len(resolved) == 1
             and resolved[0]["from"] == [0.0, 0.0, 0.0]
@@ -3308,6 +3420,9 @@ def _load_registry():
             fallback = next((uv for uv in face_uvs if uv is not None), None)
             if fallback is not None:
                 face_uvs = [uv if uv is not None else fallback for uv in face_uvs]
+        if fluor_rect is not None:
+            full_fluor = _map_uv(fluor_rect, [0, 0, 16, 16])
+            fluor_face_uvs = [uv if uv is not None else full_fluor for uv in fluor_face_uvs]
         render = entry.get("render", "solid")
         if render not in ("solid", "cutout", "translucent"):
             raise ValueError(f"{entry['id']} render must be solid, cutout, or translucent")
@@ -3324,6 +3439,11 @@ def _load_registry():
         if unknown:
             raise ValueError(f"{entry['id']} tab {unknown[0]} is not a creative tab")
         properties = dict(entry.get("properties") or {})
+        fluor_src = entry.get("fluorescence", properties.get("fluorescence"))
+        if fluor_src is not None:
+            properties["fluorescence"] = fluor_src
+        if entry.get("model") == "vine" or properties.get("vine"):
+            properties["vine"] = True
         is_slab_type = entry.get("type") == "slab" or properties.get("slab", False) or entry.get("model") == "slab"
         is_vertical_slab_type = entry.get("type") == "vertical_slab" or entry.get("model") == "vertical_slab"
         is_door_type = entry.get("type") == "door" or properties.get("door", False)
@@ -3545,6 +3665,7 @@ def _load_registry():
             translucent=translucent,
             light_opacity=light_opacity_val,
         )
+        block.fluor_face_uvs = tuple(fluor_face_uvs) if fluor_rect is not None else None
         def _register_block(b_id, b_obj):
             if len(by_index) == 99:
                 by_index.append(None)
@@ -3558,6 +3679,58 @@ def _load_registry():
         _register_block(block.id, block)
         if creative_tab:
             creative.append(block.id)
+        if block.properties.get("vine"):
+            vine_tex = textures.get("side") or textures.get("vine") or textures.get("all") or entry["id"]
+            vine_uv = _map_uv(rects[vine_tex], [0, 0, 16, 16]) if vine_tex in rects else face_uvs[0]
+            vine_edge = _map_uv(rects[vine_tex], [0, 0, 16, 1]) if vine_tex in rects else vine_uv
+            vine_fluor = _map_uv(fluor_rect, [0, 0, 16, 16]) if fluor_rect is not None else None
+            vine_fluor_edge = _map_uv(fluor_rect, [0, 0, 16, 1]) if fluor_rect is not None else None
+            # The sheet is one pixel thick. Only the broad faces show the plant;
+            # the rims stay a hairline so the side of the texture is not stretched.
+            broad = {1: (0, 1), 2: (0, 1), 4: (4, 5), 8: (4, 5), 16: (2, 3), 32: (2, 3)}
+            for mask in range(1, 64):
+                vine_elements = []
+                for bit, _name, _offset, origin, extent in VINE_BITS:
+                    if not mask & bit:
+                        continue
+                    faces = {index: vine_edge for index in range(6)}
+                    for index in broad[bit]:
+                        faces[index] = vine_uv
+                    vine_el = {"from": list(origin), "to": list(extent), "faces": faces, "cutout": True}
+                    if vine_fluor is not None:
+                        fluor_faces = {index: vine_fluor_edge for index in range(6)}
+                        for index in broad[bit]:
+                            fluor_faces[index] = vine_fluor
+                        vine_el["fluor_faces"] = fluor_faces
+                    vine_elements.append(vine_el)
+                vine_id = f"{block.id}_v{mask}"
+                vine_props = dict(base_props)
+                vine_props["vine"] = True
+                vine_props["vine_mask"] = mask
+                vine_block = Block(
+                    vine_id,
+                    name,
+                    False,
+                    False,
+                    [vine_uv] * 6,
+                    vine_elements,
+                    True,
+                    opacity,
+                    (),
+                    properties=vine_props,
+                    base_id=block.id,
+                    is_variant=True,
+                    hardness=block.hardness,
+                    tool=block.tool,
+                    mining_level=block.mining_level,
+                    loot_table=block.loot_table,
+                    emission=block.emission,
+                    fluid_breakable=block.fluid_breakable,
+                    sound=block.sound,
+                    sounds=block.sounds,
+                )
+                vine_block.fluor_face_uvs = block.fluor_face_uvs
+                _register_block(vine_id, vine_block)
 
         if rotation_type in ("axis", "xyz") or "axis" in properties:
             top_uv = face_uvs[FACE_INDEX["up"]]
@@ -6021,6 +6194,21 @@ def can_place_block(world, x, y, z, block_id, hit=None):
         # Cannot place on top of or against non-solid blocks (e.g. flowers, tall grass)
         if hit_obj is not None and not hit_obj.solid:
             return False
+
+    if is_vine(b_obj):
+        info = vine_info(b_obj)
+        if info is None or info["mask"] == 0:
+            return False
+        cur = world.get_block(x, y, z)
+        if cur not in ("", AIR, None):
+            cur_info = vine_info(cur)
+            if cur_info is None or cur_info["base_id"] != info["base_id"]:
+                return False
+        return all(
+            _vine_bit_supported(world, x, y, z, flag)
+            for flag, _name, _offset, _origin, _extent in VINE_BITS
+            if info["mask"] & flag
+        )
 
     # Check torch support requirements
     if is_torch(b_obj):

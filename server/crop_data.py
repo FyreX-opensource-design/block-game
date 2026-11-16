@@ -24,6 +24,9 @@ One day cycle is 1200 seconds. Seven steps at 180–340 seconds each take about
 one to two days. Stage blocks, seed and produce items, and loot tables are
 created from the file when those assets are not already written by hand.
 ``wild`` places an untamed plant in the listed biomes.
+``ground`` lists the blocks a planted stage will root in. It defaults to
+farmland. ``light`` is copied onto the stages (young stages burn dimmer) and
+the wild plant. ``fluorescence`` is copied the same way.
 """
 
 import json
@@ -65,6 +68,9 @@ class CropSpec:
         food,
         wild,
         source,
+        ground=("farmland",),
+        light=None,
+        fluorescence=None,
     ):
         self.id = crop_id
         self.stages = tuple(stages)
@@ -78,6 +84,9 @@ class CropSpec:
         self.food = int(food)
         self.wild = wild
         self.source = str(source)
+        self.ground = tuple(ground)
+        self.light = None if light is None else dict(light)
+        self.fluorescence = None if fluorescence is None else dict(fluorescence)
 
     @property
     def lang_block(self):
@@ -164,6 +173,9 @@ def spec_from_mapping(fields, source):
         food,
         _wild(fields.get("wild"), crop_id, source),
         source,
+        ground=_ground(fields.get("ground"), source),
+        light=_light(fields.get("light"), source),
+        fluorescence=_fluorescence(fields.get("fluorescence"), source),
     )
 
 
@@ -246,14 +258,26 @@ def block_entries(folder=None):
                     spec.lang_block,
                     block_id,
                     table,
-                    valid_ground=("farmland",),
+                    valid_ground=spec.ground,
+                    light=_stage_light(spec.light, index, len(spec.stages)),
+                    fluorescence=spec.fluorescence,
                 )
             )
         wild = spec.wild
         if wild is None or (root / f"{wild.block}.json").is_file():
             continue
         table = f"crops/{spec.id}_wild" if spec.seeds and spec.produce else None
-        entries.append(_plant_block(wild.block, f"block.{wild.block}", wild.block, table, valid_ground=None))
+        entries.append(
+            _plant_block(
+                wild.block,
+                f"block.{wild.block}",
+                wild.block,
+                table,
+                valid_ground=None,
+                light=spec.light,
+                fluorescence=spec.fluorescence,
+            )
+        )
     return entries
 
 
@@ -328,7 +352,67 @@ def wild_plants(folder=None):
     return tuple(plants)
 
 
-def _plant_block(block_id, lang, texture, loot_table, valid_ground):
+def _ground(raw, source):
+    if raw is None:
+        return ("farmland",)
+    if isinstance(raw, str):
+        raw = [raw]
+    if not isinstance(raw, (list, tuple)) or not raw:
+        raise ValueError(f"{source}: ground must list at least one block")
+    ground = []
+    for block_id in raw:
+        if not isinstance(block_id, str) or _ID.fullmatch(block_id) is None:
+            raise ValueError(f"{source}: unknown ground block {block_id!r}")
+        if block_id not in ground:
+            ground.append(block_id)
+    return tuple(ground)
+
+
+def _light(raw, source):
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ValueError(f"{source}: light must be an object")
+    light = {}
+    for key in ("r", "g", "b", "uv", "ir"):
+        if key not in raw:
+            continue
+        number = _number(raw[key], key, source)
+        if int(number) != number or number < 0 or number > 15:
+            raise ValueError(f"{source}: light {key} must be a whole number from 0 to 15")
+        light[key] = int(number)
+    if not light:
+        raise ValueError(f"{source}: light needs at least one channel")
+    return light
+
+
+def _fluorescence(raw, source):
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ValueError(f"{source}: fluorescence must be an object")
+    return dict(raw)
+
+
+def _stage_light(light, index, count):
+    """Young stages emit a fraction of the ripe light, and still emit something."""
+    if not light:
+        return None
+    if count <= 1:
+        return dict(light)
+    scale = (index + 1) / count
+    scaled = {key: int(round(value * scale)) for key, value in light.items()}
+    if any(scaled.values()):
+        return scaled
+    scaled = dict(light)
+    for key, value in light.items():
+        if value > 0:
+            scaled[key] = 1
+            break
+    return scaled
+
+
+def _plant_block(block_id, lang, texture, loot_table, valid_ground, light=None, fluorescence=None):
     entry = {
         "id": block_id,
         "lang": lang,
@@ -348,6 +432,10 @@ def _plant_block(block_id, lang, texture, loot_table, valid_ground):
         entry["loot_table"] = loot_table
     if valid_ground is not None:
         entry["valid_ground"] = list(valid_ground)
+    if light:
+        entry["light"] = dict(light)
+    if fluorescence:
+        entry["fluorescence"] = dict(fluorescence)
     return entry
 
 

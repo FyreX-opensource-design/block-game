@@ -1,4 +1,5 @@
 numpy>=2.2
 pyglet>=2.1
+pyogg>=0.6
 moderngl>=5.10
 flask>=3.0

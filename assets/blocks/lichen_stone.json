@@ -1,0 +1,15 @@
+{
+  "id": "lichen_stone",
+  "lang": "block.lichen_stone",
+  "tab": ["building", "natural"],
+  "model": "cube",
+  "hardness": 1.5,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "sound": "stone",
+  "textures": {
+    "top": "lichen_stone",
+    "side": "lichen_stone",
+    "bottom": "lichen_stone"
+  }
+}

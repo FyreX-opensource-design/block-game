@@ -69,6 +69,7 @@ class Player:
         self.max_health = float(DEFAULT_MAX_HEALTH)
         self.health = float(DEFAULT_MAX_HEALTH)
         self.hurt_time = 0.0
+        self.fire_kind = ""
         self.dead = False
         self.death_cause = ""
         self._fall_peak = None
@@ -290,6 +291,12 @@ class Player:
         """
         events = []
         self.hurt_time = max(0.0, self.hurt_time - max(0.0, float(dt)))
+        try:
+            from server.fire import body_flame
+
+            self.fire_kind = body_flame(self.world, self.pos, self.radius, self.height)
+        except Exception:
+            self.fire_kind = ""
         if not self.survival or self.dead:
             self.reset_damage_state()
             return events
@@ -360,7 +367,7 @@ class Player:
             self._cactus_timer = 0.0
 
         lava = get_damage_type("lava")
-        if lava is not None and self.in_lava():
+        if lava is not None and self.fire_kind:
             interval = max(0.05, lava.interval)
             if self._lava_timer <= 0.0:
                 dealt = self.take_damage(lava.damage, lava)

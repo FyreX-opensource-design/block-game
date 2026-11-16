@@ -1,0 +1,6 @@
+{
+  "id": "spore_frond",
+  "block": "spore_frond",
+  "chance": 0.08,
+  "surfaces": ["lichen_grass"]
+}

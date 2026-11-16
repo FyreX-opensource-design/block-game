@@ -290,6 +290,39 @@ class TestFluidMeshing(unittest.TestCase):
         self.assertTrue(step_at_2, "Missing vertical step face between water and water_7")
         self.assertTrue(step_at_3, "Missing vertical step face between water_7 and water_6")
 
+    def test_different_water_types_share_one_surface(self):
+        self.world.set_block(4, 80, 4, STONE)
+        self.world.set_block(5, 80, 4, STONE)
+        self.world.set_block(4, 81, 4, "salt_water")
+        self.world.set_block(5, 81, 4, "water")
+        self.world.set_block(4, 80, 6, STONE)
+        self.world.set_block(4, 81, 6, "salt_water")
+        self.world.set_block(4, 82, 6, "brackish_water")
+        self.world.set_block(8, 80, 4, STONE)
+        self.world.set_block(9, 80, 4, STONE)
+        self.world.set_block(8, 81, 4, "water")
+        self.world.set_block(9, 81, 4, "lava")
+
+        mesh = build_chunk_mesh(self.world, self.cx, self.cy, self.cz)
+        verts = [mesh.translucent[0]]
+        if mesh.cutout is not None:
+            verts.append(mesh.cutout[0])
+        joined = []
+        lava_wall = False
+        for block in verts:
+            for i in range(0, len(block), 4):
+                norm = block[i, 3:6]
+                pts = block[i : i + 4, 0:3]
+                seam = abs(pts[:, 2] - 4.5).max() < 0.6
+                if abs(abs(norm[0]) - 1.0) < 1e-3 and abs(pts[:, 0] - 5.0).max() < 0.05 and seam:
+                    joined.append(pts)
+                if abs(norm[1] - 1.0) < 1e-3 and abs(pts[:, 0] - 4.0).max() < 1.0 and abs(pts[:, 2] - 6.0).max() < 1.0 and abs(pts[:, 1] - 2.0).max() < 0.05:
+                    joined.append(pts)
+                if abs(abs(norm[0]) - 1.0) < 1e-3 and abs(pts[:, 0] - 9.0).max() < 0.05:
+                    lava_wall = True
+        self.assertEqual(joined, [])
+        self.assertTrue(lava_wall, "Lava should still meet water with a face")
+
     def test_water_texture_translucency(self):
         from server.images import read_png
         from pathlib import Path
@@ -391,9 +424,9 @@ class TestFluidMeshing(unittest.TestCase):
         calls = []
         original = self.world.lighting.compute_chunk_lighting
 
-        def _count(cx, cy, cz):
+        def _count(cx, cy, cz, spread=True):
             calls.append((cx, cy, cz))
-            return original(cx, cy, cz)
+            return original(cx, cy, cz, spread=spread)
 
         self.world.lighting.compute_chunk_lighting = _count
         self.world.update_fluids(0.25)

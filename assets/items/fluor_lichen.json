@@ -1,0 +1,19 @@
+{
+  "id": "fluor_lichen",
+  "lang": "block.fluor_lichen",
+  "tab": [
+    "building",
+    "natural"
+  ],
+  "model": "block",
+  "item_model": "fluor_lichen_inventory",
+  "block": "fluor_lichen",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 1,
+  "food": 0
+}

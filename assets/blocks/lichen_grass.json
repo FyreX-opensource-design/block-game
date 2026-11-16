@@ -1,0 +1,23 @@
+{
+  "id": "lichen_grass",
+  "lang": "block.lichen_grass",
+  "tab": "natural",
+  "model": "cube",
+  "soil": true,
+  "hardness": 0.6,
+  "tool": "shovel",
+  "mining_level": 0,
+  "loot_table": "blocks/lichen_grass",
+  "sound": "grass",
+  "textures": {
+    "top": "lichen_grass_top",
+    "side": "lichen_grass_side",
+    "bottom": "lichen_soil"
+  },
+  "fluorescence": {
+    "texture": "lichen_grass_glow",
+    "start": 1,
+    "full": 5,
+    "strength": 1
+  }
+}

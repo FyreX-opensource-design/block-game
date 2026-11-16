@@ -1,0 +1,21 @@
+{
+  "id": "lichen_sandstone",
+  "lang": "block.lichen_sandstone",
+  "tab": ["building", "natural"],
+  "model": "cube",
+  "hardness": 0.8,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "sound": "stone",
+  "textures": {
+    "top": "lichen_sandstone",
+    "side": "lichen_sandstone",
+    "bottom": "lichen_sandstone"
+  },
+  "fluorescence": {
+    "texture": "lichen_sandstone_glow",
+    "start": 11,
+    "full": 15,
+    "strength": 0.25
+  }
+}

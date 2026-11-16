@@ -34,6 +34,7 @@ class SoundManager:
 
         import pyglet
 
+        failed = []
         for ext in ("*.ogg", "*.wav", "*.mp3"):
             for file_path in self.sounds_dir.glob(ext):
                 stem = file_path.stem
@@ -41,7 +42,13 @@ class SoundManager:
                     source = pyglet.media.load(str(file_path), streaming=False)
                     self._sources[stem] = source
                 except Exception as e:
-                    logger.debug("Could not load sound %s: %s", file_path.name, e)
+                    failed.append(file_path.name)
+                    logger.warning("Could not load sound %s: %s", file_path.name, e)
+        if failed and not self._sources:
+            logger.warning(
+                "No sounds loaded (%d failed). Ogg files need PyOgg and libvorbis.",
+                len(failed),
+            )
 
     def play(self, sound_name: str, volume=1.0):
         """Play a loaded sound by name."""

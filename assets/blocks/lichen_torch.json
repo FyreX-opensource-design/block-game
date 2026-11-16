@@ -1,0 +1,20 @@
+{
+  "id": "lichen_torch",
+  "lang": "block.lichen_torch",
+  "tab": ["building", "tools"],
+  "model": "torch",
+  "render": "cutout",
+  "solid": false,
+  "hardness": 0.0,
+  "tool": "none",
+  "mining_level": 0,
+  "fluid_breakable": true,
+  "light": {"r": 4, "g": 1, "b": 9, "uv": 8, "ir": 0},
+  "properties": {
+    "torch": true,
+    "tags": ["torches"]
+  },
+  "textures": {
+    "torch": "lichen_torch"
+  }
+}

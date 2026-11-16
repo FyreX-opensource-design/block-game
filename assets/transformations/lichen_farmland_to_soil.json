@@ -1,0 +1,12 @@
+{
+  "id": "lichen_farmland_to_soil",
+  "from": "lichen_farmland",
+  "to": "lichen_soil",
+  "sources": ["#fresh_water"],
+  "min_time": 30,
+  "max_time": 60,
+  "radius": 4,
+  "vertical_radius": 1,
+  "require_clear_above": false,
+  "without_source": true
+}

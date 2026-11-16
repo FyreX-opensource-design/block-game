@@ -1,0 +1,22 @@
+{
+  "type": "block",
+  "pools": [
+    {
+      "rolls": 1,
+      "entries": [
+        {
+          "type": "item",
+          "name": "lichen_sapling",
+          "count": 1,
+          "chance": 0.08
+        },
+        {
+          "type": "item",
+          "name": "glow_bulb_seeds",
+          "count": 1,
+          "chance": 0.04
+        }
+      ]
+    }
+  ]
+}

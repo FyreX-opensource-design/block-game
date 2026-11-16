@@ -1,0 +1,13 @@
+{
+  "id": "fire",
+  "priority": 0,
+  "life": [6.0, 10.0],
+  "spread_life": [3.0, 5.0],
+  "ignite_life": [6.0, 10.0],
+  "brief_life": [1.0, 1.6],
+  "spread_chance": 0.15,
+  "extinguish_chance": 0.2,
+  "burn_window": 10.0,
+  "cooldown": 6.0,
+  "hold_life": 8.0
+}

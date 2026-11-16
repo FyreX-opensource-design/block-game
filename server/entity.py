@@ -520,6 +520,7 @@ class Mob:
         self.health = float(health)
         self.max_health = float(max_health)
         self.hurt_time = 0.0
+        self.fire_kind = ""
         self.panic_timer = 0.0
         self.panic_source = None
         self.desired_speed = 0.0
@@ -548,6 +549,10 @@ class Mob:
         self.despawn_timer = 999999.0
         self.loot_table = f"entities/{mob_type}"
         self.goals = None
+        self.can_fly = False
+        self.fly_height = 1.6
+        self.fly_target_y = None
+        self.aggro = None
 
     @property
     def is_mob(self):
@@ -622,6 +627,7 @@ class Mob:
 
         if attacker is not None and hasattr(attacker, "pos"):
             self.panic_source = [attacker.pos[0], attacker.pos[1], attacker.pos[2]]
+            self.aggro = attacker
         elif knockback_dir is not None:
             self.panic_source = [self.pos[0] - knockback_dir[0], self.pos[1], self.pos[2] - knockback_dir[1]]
 
@@ -807,6 +813,21 @@ class Mob:
             self.sweep(0, dx, world)
             self.sweep(2, dz, world)
 
+    def _hover_floor(self, world):
+        """The ground under a flying mob, or its own feet when the drop is deep."""
+        if world is None:
+            return self.pos[1]
+        bx = math.floor(self.pos[0])
+        bz = math.floor(self.pos[2])
+        start = math.floor(self.pos[1])
+        for drop in range(0, 12):
+            gy = start - drop
+            if gy < 0:
+                break
+            if world.is_solid(bx, gy, bz):
+                return float(gy + 1)
+        return self.pos[1]
+
     def in_water(self, world):
         if world is None:
             return False
@@ -950,6 +971,13 @@ class Mob:
                 self.vel[0] = 0.0
             if abs(self.vel[2]) < 0.01 and flow_z == 0.0:
                 self.vel[2] = 0.0
+        elif getattr(self, "can_fly", False):
+            if getattr(self, "aggro", None) is None:
+                self.fly_target_y = None
+            goal_y = getattr(self, "fly_target_y", None)
+            if goal_y is None:
+                goal_y = self._hover_floor(world) + float(getattr(self, "fly_height", 1.6))
+            self.vel[1] = max(-3.0, min(3.0, (goal_y - self.pos[1]) * 3.0))
         else:
             self.vel[1] = max(TERMINAL_VELOCITY, self.vel[1] - GRAVITY * dt)
 
@@ -993,7 +1021,12 @@ class Mob:
         if world is not None and self.is_touching_cactus(world):
             self.take_damage(1.0, world=world)
 
-        if world is not None and self.in_lava(world):
+        self.fire_kind = ""
+        if world is not None:
+            from server.fire import body_flame
+
+            self.fire_kind = body_flame(world, self.pos, self.radius, self.height)
+        if self.fire_kind:
             from server.damage import get_damage_type
 
             burn = get_damage_type("lava")

@@ -1,0 +1,13 @@
+{
+  "id": "lichen_torch",
+  "type": "crafting_shaped",
+  "pattern": ["W", "S"],
+  "key": {
+    "W": "lichenete_wing",
+    "S": "#sticks"
+  },
+  "result": {
+    "item": "lichen_torch",
+    "count": 4
+  }
+}

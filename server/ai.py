@@ -70,6 +70,8 @@ def is_position_hazardous(world, px: float, py: float, pz: float, max_fall: int 
 
 def is_direction_safe(mob, yaw: float, world=None, lookahead: float = 1.0, max_fall: int = 4) -> bool:
     """Return True if moving along `yaw` from mob's current position avoids fluids and falls > max_fall."""
+    if getattr(mob, "can_fly", False):
+        return True
     if world is None:
         world = getattr(mob, "world", None)
     if world is None:
@@ -421,6 +423,55 @@ class WanderGoal(Goal):
                 self.state = "idle"
                 self.timer = random.uniform(2.0, 5.0)
                 self.mob.desired_speed = 0.0
+
+
+class RetaliateGoal(Goal):
+    """Stays calm until something hits it, then chases that attacker."""
+
+    def __init__(self, mob, target_range=12.0, reach=1.4, damage=2.0, cooldown=1.0):
+        super().__init__(mob)
+        self.attack = None
+        self.target_range = float(target_range)
+        self.reach = float(reach)
+        self.damage = float(damage)
+        self.cooldown = float(cooldown)
+
+    def _attacker(self):
+        target = getattr(self.mob, "aggro", None)
+        if target is None or not getattr(target, "alive", True) or getattr(target, "dead", False):
+            return None
+        mx, my, mz = self.mob.pos
+        px, py, pz = target.pos
+        if (px - mx) ** 2 + (py - my) ** 2 + (pz - mz) ** 2 > self.target_range ** 2:
+            return None
+        return target
+
+    def can_start(self) -> bool:
+        return self._attacker() is not None
+
+    def can_continue(self) -> bool:
+        return self._attacker() is not None
+
+    def start(self):
+        if self.attack is None:
+            self.attack = ZombieAttackGoal(
+                self.mob, target_range=self.target_range, reach=self.reach, damage=self.damage, cooldown=self.cooldown
+            )
+        self.attack.target = self._attacker()
+        self.attack.start()
+
+    def stop(self):
+        if self.attack is not None:
+            self.attack.stop()
+
+    def tick(self, dt: float):
+        target = self._attacker()
+        if target is None:
+            self.mob.desired_speed = 0.0
+            return
+        self.attack.target = target
+        self.mob.fly_target_y = target.pos[1] + 0.3
+        self.attack.tick(dt)
 
 
 class ZombieAttackGoal(Goal):

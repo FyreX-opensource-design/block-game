@@ -1,0 +1,16 @@
+{
+  "id": "lichen_lantern",
+  "lang": "block.lichen_lantern",
+  "tab": ["building"],
+  "model": "cube",
+  "hardness": 1.0,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "sound": "stone",
+  "textures": {
+    "top": "lichen_lantern",
+    "side": "lichen_lantern",
+    "bottom": "lichen_lantern"
+  },
+  "light": {"r": 3, "g": 1, "b": 7, "uv": 11, "ir": 0}
+}

@@ -1,0 +1,31 @@
+{
+  "id": "spore_frond",
+  "lang": "block.spore_frond",
+  "tab": "natural",
+  "model": "cross",
+  "render": "cutout",
+  "solid": false,
+  "hardness": 0.0,
+  "tool": "none",
+  "mining_level": 0,
+  "fluid_breakable": true,
+  "plant": true,
+  "requires_soil": true,
+  "sound": "grass",
+  "textures": {
+    "cross": "spore_frond"
+  },
+  "light": {
+    "r": 2,
+    "g": 1,
+    "b": 6,
+    "uv": 8,
+    "ir": 0
+  },
+  "fluorescence": {
+    "texture": "spore_frond_glow",
+    "start": 1,
+    "full": 4,
+    "strength": 1
+  }
+}

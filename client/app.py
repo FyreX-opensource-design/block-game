@@ -334,6 +334,7 @@ class Game(pyglet.window.Window):
                 self.world.update_transformations(min(dt, 0.05))
                 self.world.update_saplings(min(dt, 0.05))
                 self.world.update_crops(min(dt, 0.05))
+                self.world.update_lichen(min(dt, 0.05))
                 self.world.update_furnaces(min(dt, 0.05))
             self._update_item_pickups(min(dt, 0.05))
 
@@ -1969,6 +1970,7 @@ class Game(pyglet.window.Window):
             is_offset_torch,
             is_slab,
             is_torch,
+            combine_vine,
             placement_block,
             player_facing_from_yaw,
             rotation_variant,
@@ -2949,6 +2951,7 @@ class Game(pyglet.window.Window):
             yaw=player_yaw,
             local_y=place_local_y,
         )
+        block_to_place = combine_vine(self.world.get_block(x, y, z), block_to_place)
 
         if is_torch(block_to_place) and hit["ny"] == 1 and has_half_offset_top(target_block):
             offset_torch_id = get_offset_torch(block_to_place)
@@ -3696,6 +3699,12 @@ class Game(pyglet.window.Window):
             self._nametag_labels = []
 
         if self.mode == "play" and self.ready:
+            if (
+                self.player is not None
+                and self.view_mode == VIEW_FIRST
+                and getattr(self.player, "fire_kind", "")
+            ):
+                self.renderer.draw_fire_overlay(fw, fh, self.player.fire_kind, day_time)
             if self.gamemode == "survival" and self.player is not None and self.player.hurt_time > 0:
                 self.renderer.draw_hurt_flash(fw, fh, min(1.0, self.player.hurt_time / 0.4))
             break_prog = self._break_progress if (self.gamemode == "survival" and self._breaking_block is not None) else 0.0

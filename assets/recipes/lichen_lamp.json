@@ -1,0 +1,13 @@
+{
+  "id": "lichen_lamp",
+  "type": "crafting_shaped",
+  "pattern": ["A", "E", "A"],
+  "key": {
+    "A": "fluor_amber",
+    "E": "lichenete_eye"
+  },
+  "result": {
+    "item": "lichen_lamp",
+    "count": 1
+  }
+}

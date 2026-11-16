@@ -1,0 +1,13 @@
+{
+  "id": "fluor_amber",
+  "block": "fluor_amber",
+  "target": "lichen_stone",
+  "min_y": 4,
+  "max_y": 62,
+  "scale": 0.16,
+  "threshold": 0.6,
+  "octaves": 2,
+  "seed_offset": 6411,
+  "max_vein_size": 7,
+  "enabled": true
+}

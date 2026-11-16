@@ -1,0 +1,7 @@
+{
+  "id": "lichen_sapling",
+  "block": "lichen_sapling",
+  "trees": ["lichen_mushroom"],
+  "min_time": 900,
+  "max_time": 1800
+}

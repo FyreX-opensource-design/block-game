@@ -1,0 +1,21 @@
+{
+  "id": "lichen_sand",
+  "lang": "block.lichen_sand",
+  "tab": "natural",
+  "model": "cube",
+  "hardness": 0.5,
+  "tool": "shovel",
+  "mining_level": 0,
+  "gravity": true,
+  "textures": {
+    "top": "lichen_sand",
+    "side": "lichen_sand",
+    "bottom": "lichen_sand"
+  },
+  "fluorescence": {
+    "texture": "lichen_sand_glow",
+    "start": 9,
+    "full": 14,
+    "strength": 0.5
+  }
+}

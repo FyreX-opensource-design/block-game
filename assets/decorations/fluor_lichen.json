@@ -1,0 +1,6 @@
+{
+  "id": "fluor_lichen",
+  "block": "fluor_lichen",
+  "chance": 0.22,
+  "surfaces": ["lichen_grass", "lichen_soil", "lichen_sand"]
+}

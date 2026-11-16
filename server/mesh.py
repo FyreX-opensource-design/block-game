@@ -28,6 +28,24 @@ from server.blocks import (
 from server.noise import hash2, hash2_grid
 
 _MESH_TL = threading.local()
+_ZERO_FLUOR = (0.0, 0.0, 0.0, 0.0)
+_NO_FLUOR_UV = (-1.0, -1.0)
+
+
+def _write_fluor_uvs(dest, cursor, span, block, normal_i, count):
+    uvs = getattr(block, "fluor_face_uvs", None)
+    if not uvs or normal_i >= len(uvs) or uvs[normal_i] is None:
+        return
+    dest[cursor : cursor + span] = np.broadcast_to(
+        np.asarray(uvs[normal_i], dtype=np.float32), (count, 4, 2)
+    ).reshape(-1, 2)
+
+
+def _packed_fluorescence(block):
+    spec = getattr(block, "fluorescence", None)
+    if spec is None:
+        return _ZERO_FLUOR
+    return spec.packed
 
 CORNERS = np.array(
     [
@@ -69,6 +87,12 @@ class ChunkMesh:
         colors=None,
         cutout_colors=None,
         translucent_colors=None,
+        fluorescence=None,
+        cutout_fluorescence=None,
+        translucent_fluorescence=None,
+        fluor_uvs=None,
+        cutout_fluor_uvs=None,
+        translucent_fluor_uvs=None,
     ):
         self.vertices = vertices
         self.indices = indices
@@ -80,11 +104,25 @@ class ChunkMesh:
         self.colors = colors
         self.cutout_colors = cutout_colors
         self.translucent_colors = translucent_colors
+        self.fluorescence = fluorescence
+        self.cutout_fluorescence = cutout_fluorescence
+        self.translucent_fluorescence = translucent_fluorescence
+        self.fluor_uvs = fluor_uvs
+        self.cutout_fluor_uvs = cutout_fluor_uvs
+        self.translucent_fluor_uvs = translucent_fluor_uvs
 
 
 def _build_grass_grid(world, cx, cz):
     if world is None or not getattr(world, "biomes", None):
         return np.full((CHUNK_SIZE, CHUNK_SIZE, 3), (0.51, 0.72, 0.29), dtype=np.float32)
+    cache = getattr(world, "_grass_color_cache", None)
+    if cache is None:
+        cache = {}
+        world._grass_color_cache = cache
+    key = (int(cx), int(cz))
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
     from server.biomes import biome_index_grid
     x0 = cx * CHUNK_SIZE
     z0 = cz * CHUNK_SIZE
@@ -103,7 +141,9 @@ def _build_grass_grid(world, cx, cz):
         raw[1:-1, :-2] + raw[1:-1, 1:-1] + raw[1:-1, 2:] +
         raw[2:, :-2] + raw[2:, 1:-1] + raw[2:, 2:]
     ) * (1.0 / 9.0)
-    return smoothed.astype(np.float32)
+    smoothed = smoothed.astype(np.float32)
+    cache[key] = smoothed
+    return smoothed
 
 
 def _sample_light(world, wx, wy, wz):
@@ -230,6 +270,16 @@ def _mask_glass(data):
         if block is not None and is_glass(block) and block.full_cube and not getattr(block, "translucent", False):
             mask |= data == value
     return mask
+
+
+_JOINED_WATERS = frozenset({"water", "salt_water", "brackish_water"})
+
+
+def _fluids_join(left, right):
+    """Fresh, salt, and brackish water are one surface. Other fluids keep a wall."""
+    if left == right:
+        return True
+    return left in _JOINED_WATERS and right in _JOINED_WATERS
 
 
 def _fluid_height_grid(data):
@@ -445,6 +495,7 @@ def _mesh_sub_cell(
             pt_color = tuple(grass_grid[lz, lx])
         else:
             pt_color = (1.0, 1.0, 1.0)
+        pt_fluor = _packed_fluorescence(mat_block)
 
         # Check if this octant is part of a horizontally/vertically offset block paired with an adjacent cell
         off_x = None
@@ -635,6 +686,8 @@ def _mesh_sub_cell(
                     ))
                     translucent_light.append(l_sample)
                     translucent_color.append(pt_color)
+                    translucent_fluor.append(pt_fluor)
+                    translucent_fluor_uv.append(_NO_FLUOR_UV)
                     cursor_translucent += 1
                 translucent_ind.extend((base, base + 1, base + 2, base, base + 2, base + 3))
             elif is_cutout:
@@ -648,6 +701,8 @@ def _mesh_sub_cell(
                     ))
                     cutout_extra_light.append(l_sample)
                     cutout_extra_color.append(pt_color)
+                    cutout_extra_fluor.append(pt_fluor)
+                    cutout_extra_fluor_uv.append(_NO_FLUOR_UV)
                     cursor_cutout += 1
                 cutout_extra_ind.extend((base, base + 1, base + 2, base, base + 2, base + 3))
             else:
@@ -661,6 +716,8 @@ def _mesh_sub_cell(
                     ))
                     extra_lights.append(l_sample)
                     extra_colors.append(pt_color)
+                    extra_fluor.append(pt_fluor)
+                    extra_fluor_uv.append(_NO_FLUOR_UV)
                     cursor_opaque += 1
                 extra_indices.extend((base, base + 1, base + 2, base, base + 2, base + 3))
 
@@ -722,6 +779,8 @@ def _build_chunk_mesh_inner(world, cx, cy, cz):
     indices = np.empty(total * 6, dtype=np.uint32)
     lights = np.empty((total * 4, 6), dtype=np.float32)
     colors = np.ones((total * 4, 3), dtype=np.float32)
+    fluorescence = np.zeros((total * 4, 4), dtype=np.float32)
+    fluor_uvs = np.full((total * 4, 2), -1.0, dtype=np.float32)
     x0 = cx * CHUNK_SIZE
     y0 = cy * CHUNK_SIZE
     z0 = cz * CHUNK_SIZE
@@ -777,6 +836,8 @@ def _build_chunk_mesh_inner(world, cx, cy, cz):
 
             face_light = l_grid[yy + 1 + ny, zz + 1 + nz, xx + 1 + nx]
             lights[cursor : cursor + span] = np.repeat(face_light, 4, axis=0)
+            fluorescence[cursor : cursor + span] = _packed_fluorescence(block)
+            _write_fluor_uvs(fluor_uvs, cursor, span, block, normal_i, count)
 
             if getattr(block, "tint", None) == "grass" or getattr(block, "id", "") in ("grass", "muddy_grass"):
                 if normal_i != 3:  # Not bottom face (which is dirt/mud)
@@ -810,14 +871,20 @@ def _build_chunk_mesh_inner(world, cx, cy, cz):
     extra_indices = []
     extra_lights = []
     extra_colors = []
+    extra_fluor = []
+    extra_fluor_uv = []
     cutout_extra_vert = []
     cutout_extra_ind = []
     cutout_extra_light = []
     cutout_extra_color = []
+    cutout_extra_fluor = []
+    cutout_extra_fluor_uv = []
     translucent_vert = []
     translucent_ind = []
     translucent_light = []
     translucent_color = []
+    translucent_fluor = []
+    translucent_fluor_uv = []
     cursor_opaque = total * 4
     cursor_cutout = len(cutout[0]) if cutout is not None else 0
     cursor_translucent = len(translucent_base[0]) if translucent_base is not None else 0
@@ -894,6 +961,8 @@ def _build_chunk_mesh_inner(world, cx, cy, cz):
             elements = get_dripstone_elements(world, wx, wy, wz, block)
         else:
             elements = block.elements
+        if str((block.properties or {}).get("fire") or ""):
+            elements = _fire_clinging(elements, world, wx, wy, wz)
         for element in elements:
             el_tint = element.get("tint", getattr(block, "tint", None))
             is_grass_tinted = el_tint == "grass" or getattr(block, "id", "") in ("tall_grass", "fern")
@@ -909,6 +978,7 @@ def _build_chunk_mesh_inner(world, cx, cy, cz):
                     pt_color = tuple(grass_grid[int(z), int(x)])
                 else:
                     pt_color = (1.0, 1.0, 1.0)
+                pt_fluor = _packed_fluorescence(block)
 
                 el_translucent = (
                     bool(element["translucent"])
@@ -1027,25 +1097,26 @@ def _build_chunk_mesh_inner(world, cx, cy, cz):
 
                 for emit_el, emit_uvs in emit_list:
                     points = _element_corners(emit_el, normal_i)
+                    fluor_uv_src = (emit_el.get("fluor_faces") or {}).get(normal_i)
                     if el_translucent:
                         base = cursor_translucent
-                        target_vert, target_ind, target_light, target_color = (
-                            translucent_vert, translucent_ind, translucent_light, translucent_color
+                        target_vert, target_ind, target_light, target_color, target_fluor, target_fuv = (
+                            translucent_vert, translucent_ind, translucent_light, translucent_color, translucent_fluor, translucent_fluor_uv
                         )
                         cursor_translucent += 4
                     elif el_cutout:
                         base = cursor_cutout
-                        target_vert, target_ind, target_light, target_color = (
-                            cutout_extra_vert, cutout_extra_ind, cutout_extra_light, cutout_extra_color
+                        target_vert, target_ind, target_light, target_color, target_fluor, target_fuv = (
+                            cutout_extra_vert, cutout_extra_ind, cutout_extra_light, cutout_extra_color, cutout_extra_fluor, cutout_extra_fluor_uv
                         )
                         cursor_cutout += 4
                     else:
                         base = cursor_opaque
-                        target_vert, target_ind, target_light, target_color = (
-                            extra_vertices, extra_indices, extra_lights, extra_colors
+                        target_vert, target_ind, target_light, target_color, target_fluor, target_fuv = (
+                            extra_vertices, extra_indices, extra_lights, extra_colors, extra_fluor, extra_fluor_uv
                         )
                         cursor_opaque += 4
-                    for corner, uv in zip(points, emit_uvs):
+                    for corner_i, (corner, uv) in enumerate(zip(points, emit_uvs)):
                         target_vert.extend(
                             (
                                 int(x) + corner[0],
@@ -1061,6 +1132,8 @@ def _build_chunk_mesh_inner(world, cx, cy, cz):
                         )
                         target_light.append(l_sample)
                         target_color.append(pt_color)
+                        target_fluor.append(pt_fluor)
+                        target_fuv.append(fluor_uv_src[corner_i] if fluor_uv_src is not None else _NO_FLUOR_UV)
                     target_ind.extend((base, base + 1, base + 2, base, base + 2, base + 3))
 
     water_block = BLOCKS.get("water")
@@ -1071,20 +1144,22 @@ def _build_chunk_mesh_inner(world, cx, cy, cz):
         nx, ny, nz = normal
         if lava:
             base = cursor_cutout
-            sink_v, sink_i, sink_l, sink_c = (
-                cutout_extra_vert, cutout_extra_ind, cutout_extra_light, cutout_extra_color
+            sink_v, sink_i, sink_l, sink_c, sink_f, sink_fuv = (
+                cutout_extra_vert, cutout_extra_ind, cutout_extra_light, cutout_extra_color, cutout_extra_fluor, cutout_extra_fluor_uv
             )
             cursor_cutout += 4
         else:
             base = cursor_translucent
-            sink_v, sink_i, sink_l, sink_c = (
-                translucent_vert, translucent_ind, translucent_light, translucent_color
+            sink_v, sink_i, sink_l, sink_c, sink_f, sink_fuv = (
+                translucent_vert, translucent_ind, translucent_light, translucent_color, translucent_fluor, translucent_fluor_uv
             )
             cursor_translucent += 4
         for pt, uv in zip(pts, uvs):
             sink_v.extend((pt[0], pt[1], pt[2], nx, ny, nz, uv[0], uv[1], shade))
             sink_l.append(light)
             sink_c.append(color)
+            sink_f.append(_ZERO_FLUOR)
+            sink_fuv.append(_NO_FLUOR_UV)
         sink_i.extend((base, base + 1, base + 2, base, base + 2, base + 3))
 
     def _linked_h(y, z, x, ny, nz, nx, fluid_type):
@@ -1092,9 +1167,10 @@ def _build_chunk_mesh_inner(world, cx, cy, cz):
         if raw <= 0 or world is None:
             return raw, False
         nbr = world.get_block(x0 + int(x) + nx, y0 + int(y) + ny, z0 + int(z) + nz)
-        if get_fluid_type(nbr) != fluid_type:
-            return 0, True
-        return raw, False
+        nbr_type = get_fluid_type(nbr) or ""
+        if _fluids_join(fluid_type, nbr_type):
+            return raw, False
+        return 0, True
 
     for y, z, x in zip(fluid_ys, fluid_zs, fluid_xs):
         cur_h = int(fluid_h[y + 1, z + 1, x + 1])
@@ -1136,6 +1212,8 @@ def _build_chunk_mesh_inner(world, cx, cy, cz):
                     translucent_vert.extend((pt[0], pt[1], pt[2], 0.0, 1.0, 0.0, uv[0], uv[1], shade))
                     translucent_light.append(l_sample)
                     translucent_color.append((1.0, 1.0, 1.0))
+                    translucent_fluor.append(_ZERO_FLUOR)
+                    translucent_fluor_uv.append(_NO_FLUOR_UV)
                     cursor_translucent += 1
                 translucent_ind.extend((base, base + 1, base + 2, base, base + 2, base + 3))
 
@@ -1160,6 +1238,8 @@ def _build_chunk_mesh_inner(world, cx, cy, cz):
                     translucent_vert.extend((pt[0], pt[1], pt[2], 1.0, 0.0, 0.0, uv[0], uv[1], shade))
                     translucent_light.append(l_sample)
                     translucent_color.append((1.0, 1.0, 1.0))
+                    translucent_fluor.append(_ZERO_FLUOR)
+                    translucent_fluor_uv.append(_NO_FLUOR_UV)
                     cursor_translucent += 1
                 translucent_ind.extend((base, base + 1, base + 2, base, base + 2, base + 3))
 
@@ -1181,6 +1261,8 @@ def _build_chunk_mesh_inner(world, cx, cy, cz):
                     translucent_vert.extend((pt[0], pt[1], pt[2], -1.0, 0.0, 0.0, uv[0], uv[1], shade))
                     translucent_light.append(l_sample)
                     translucent_color.append((1.0, 1.0, 1.0))
+                    translucent_fluor.append(_ZERO_FLUOR)
+                    translucent_fluor_uv.append(_NO_FLUOR_UV)
                     cursor_translucent += 1
                 translucent_ind.extend((base, base + 1, base + 2, base, base + 2, base + 3))
 
@@ -1202,6 +1284,8 @@ def _build_chunk_mesh_inner(world, cx, cy, cz):
                     translucent_vert.extend((pt[0], pt[1], pt[2], 0.0, 0.0, 1.0, uv[0], uv[1], shade))
                     translucent_light.append(l_sample)
                     translucent_color.append((1.0, 1.0, 1.0))
+                    translucent_fluor.append(_ZERO_FLUOR)
+                    translucent_fluor_uv.append(_NO_FLUOR_UV)
                     cursor_translucent += 1
                 translucent_ind.extend((base, base + 1, base + 2, base, base + 2, base + 3))
 
@@ -1223,6 +1307,8 @@ def _build_chunk_mesh_inner(world, cx, cy, cz):
                     translucent_vert.extend((pt[0], pt[1], pt[2], 0.0, 0.0, -1.0, uv[0], uv[1], shade))
                     translucent_light.append(l_sample)
                     translucent_color.append((1.0, 1.0, 1.0))
+                    translucent_fluor.append(_ZERO_FLUOR)
+                    translucent_fluor_uv.append(_NO_FLUOR_UV)
                     cursor_translucent += 1
                 translucent_ind.extend((base, base + 1, base + 2, base, base + 2, base + 3))
 
@@ -1243,6 +1329,8 @@ def _build_chunk_mesh_inner(world, cx, cy, cz):
                     translucent_vert.extend((pt[0], pt[1], pt[2], 0.0, 1.0, 0.0, uv[0], uv[1], shade))
                     translucent_light.append(l_sample)
                     translucent_color.append((1.0, 1.0, 1.0))
+                    translucent_fluor.append(_ZERO_FLUOR)
+                    translucent_fluor_uv.append(_NO_FLUOR_UV)
                     cursor_translucent += 1
                 translucent_ind.extend((base, base + 1, base + 2, base, base + 2, base + 3))
 
@@ -1262,6 +1350,8 @@ def _build_chunk_mesh_inner(world, cx, cy, cz):
                     translucent_vert.extend((pt[0], pt[1], pt[2], 0.0, -1.0, 0.0, uv[0], uv[1], shade))
                     translucent_light.append(l_sample)
                     translucent_color.append((1.0, 1.0, 1.0))
+                    translucent_fluor.append(_ZERO_FLUOR)
+                    translucent_fluor_uv.append(_NO_FLUOR_UV)
                     cursor_translucent += 1
                 translucent_ind.extend((base, base + 1, base + 2, base, base + 2, base + 3))
 
@@ -1284,6 +1374,8 @@ def _build_chunk_mesh_inner(world, cx, cy, cz):
                     translucent_vert.extend((pt[0], pt[1], pt[2], 1.0, 0.0, 0.0, uv[0], uv[1], shade))
                     translucent_light.append(l_sample)
                     translucent_color.append((1.0, 1.0, 1.0))
+                    translucent_fluor.append(_ZERO_FLUOR)
+                    translucent_fluor_uv.append(_NO_FLUOR_UV)
                     cursor_translucent += 1
                 translucent_ind.extend((base, base + 1, base + 2, base, base + 2, base + 3))
 
@@ -1305,6 +1397,8 @@ def _build_chunk_mesh_inner(world, cx, cy, cz):
                     translucent_vert.extend((pt[0], pt[1], pt[2], -1.0, 0.0, 0.0, uv[0], uv[1], shade))
                     translucent_light.append(l_sample)
                     translucent_color.append((1.0, 1.0, 1.0))
+                    translucent_fluor.append(_ZERO_FLUOR)
+                    translucent_fluor_uv.append(_NO_FLUOR_UV)
                     cursor_translucent += 1
                 translucent_ind.extend((base, base + 1, base + 2, base, base + 2, base + 3))
 
@@ -1326,6 +1420,8 @@ def _build_chunk_mesh_inner(world, cx, cy, cz):
                     translucent_vert.extend((pt[0], pt[1], pt[2], 0.0, 0.0, 1.0, uv[0], uv[1], shade))
                     translucent_light.append(l_sample)
                     translucent_color.append((1.0, 1.0, 1.0))
+                    translucent_fluor.append(_ZERO_FLUOR)
+                    translucent_fluor_uv.append(_NO_FLUOR_UV)
                     cursor_translucent += 1
                 translucent_ind.extend((base, base + 1, base + 2, base, base + 2, base + 3))
 
@@ -1347,6 +1443,8 @@ def _build_chunk_mesh_inner(world, cx, cy, cz):
                     translucent_vert.extend((pt[0], pt[1], pt[2], 0.0, 0.0, -1.0, uv[0], uv[1], shade))
                     translucent_light.append(l_sample)
                     translucent_color.append((1.0, 1.0, 1.0))
+                    translucent_fluor.append(_ZERO_FLUOR)
+                    translucent_fluor_uv.append(_NO_FLUOR_UV)
                     cursor_translucent += 1
                 translucent_ind.extend((base, base + 1, base + 2, base, base + 2, base + 3))
 
@@ -1420,53 +1518,77 @@ def _build_chunk_mesh_inner(world, cx, cy, cz):
         cei = np.asarray(cutout_extra_ind, dtype=np.uint32)
         cel = np.asarray(cutout_extra_light, dtype=np.float32).reshape(-1, 6)
         cec = np.asarray(cutout_extra_color, dtype=np.float32).reshape(-1, 3)
+        cef = np.asarray(cutout_extra_fluor, dtype=np.float32).reshape(-1, 4)
+        cefu = np.asarray(cutout_extra_fluor_uv, dtype=np.float32).reshape(-1, 2)
         if cutout is not None:
             cutout_v = np.vstack((cutout[0], cev))
             cutout_i = np.concatenate((cutout[1], cei))
             cutout_l = np.vstack((cutout[2], cel))
             cutout_c = np.vstack((cutout[3], cec))
+            cutout_f = np.vstack((cutout[4], cef))
+            cutout_fu = np.vstack((cutout[5], cefu))
         else:
             cutout_v = cev
             cutout_i = cei
             cutout_l = cel
             cutout_c = cec
+            cutout_f = cef
+            cutout_fu = cefu
         cutout = (cutout_v, cutout_i)
         cutout_lights = cutout_l
         cutout_colors = cutout_c
+        cutout_fluorescence = cutout_f
+        cutout_fluor_uvs = cutout_fu
     elif cutout is not None:
         cutout_lights = cutout[2]
         cutout_colors = cutout[3]
+        cutout_fluorescence = cutout[4]
+        cutout_fluor_uvs = cutout[5]
         cutout = (cutout[0], cutout[1])
     else:
         cutout_lights = None
         cutout_colors = None
+        cutout_fluorescence = None
+        cutout_fluor_uvs = None
 
     translucent = None
     translucent_lights = None
     translucent_colors = None
+    translucent_fluorescence = None
+    translucent_fluor_uvs = None
     if translucent_vert:
         tv = np.asarray(translucent_vert, dtype=np.float32).reshape(-1, 9)
         ti = np.asarray(translucent_ind, dtype=np.uint32)
         tl = np.asarray(translucent_light, dtype=np.float32).reshape(-1, 6)
         tc = np.asarray(translucent_color, dtype=np.float32).reshape(-1, 3)
+        tf = np.asarray(translucent_fluor, dtype=np.float32).reshape(-1, 4)
+        tfu = np.asarray(translucent_fluor_uv, dtype=np.float32).reshape(-1, 2)
         if translucent_base is not None:
             translucent = (np.vstack((translucent_base[0], tv)), np.concatenate((translucent_base[1], ti)))
             translucent_lights = np.vstack((translucent_base[2], tl))
             translucent_colors = np.vstack((translucent_base[3], tc))
+            translucent_fluorescence = np.vstack((translucent_base[4], tf))
+            translucent_fluor_uvs = np.vstack((translucent_base[5], tfu))
         else:
             translucent = (tv, ti)
             translucent_lights = tl
             translucent_colors = tc
+            translucent_fluorescence = tf
+            translucent_fluor_uvs = tfu
     elif translucent_base is not None:
         translucent = (translucent_base[0], translucent_base[1])
         translucent_lights = translucent_base[2]
         translucent_colors = translucent_base[3]
+        translucent_fluorescence = translucent_base[4]
+        translucent_fluor_uvs = translucent_base[5]
 
     if extra_vertices:
         vertices = np.vstack((vertices, np.asarray(extra_vertices, dtype=np.float32).reshape(-1, 9)))
         indices = np.concatenate((indices, np.asarray(extra_indices, dtype=np.uint32)))
         lights = np.vstack((lights, np.asarray(extra_lights, dtype=np.float32).reshape(-1, 6)))
         colors = np.vstack((colors, np.asarray(extra_colors, dtype=np.float32).reshape(-1, 3)))
+        fluorescence = np.vstack((fluorescence, np.asarray(extra_fluor, dtype=np.float32).reshape(-1, 4)))
+        fluor_uvs = np.vstack((fluor_uvs, np.asarray(extra_fluor_uv, dtype=np.float32).reshape(-1, 2)))
 
     if total == 0 and not extra_vertices and cutout is None and translucent is None:
         return None
@@ -1481,6 +1603,12 @@ def _build_chunk_mesh_inner(world, cx, cy, cz):
         colors=colors,
         cutout_colors=cutout_colors,
         translucent_colors=translucent_colors,
+        fluorescence=fluorescence,
+        cutout_fluorescence=cutout_fluorescence,
+        translucent_fluorescence=translucent_fluorescence,
+        fluor_uvs=fluor_uvs,
+        cutout_fluor_uvs=cutout_fluor_uvs,
+        translucent_fluor_uvs=translucent_fluor_uvs,
     )
 
 
@@ -2122,6 +2250,8 @@ def _emit_cutout(world, data, faces, total, x0, y0, z0, l_grid=None, grass_grid=
     indices = np.empty(total * 12, dtype=np.uint32)
     lights = np.empty((total * 8, 6), dtype=np.float32)
     colors = np.ones((total * 8, 3), dtype=np.float32)
+    fluorescence = np.zeros((total * 8, 4), dtype=np.float32)
+    fluor_uvs = np.full((total * 8, 2), -1.0, dtype=np.float32)
     cursor = 0
     face_i = 0
     for ys, zs, xs, normal_i in faces:
@@ -2194,6 +2324,8 @@ def _emit_cutout(world, data, faces, total, x0, y0, z0, l_grid=None, grass_grid=
                         vertices[cursor : cursor + 4, 6:8] = h_uv
                         vertices[cursor : cursor + 4, 8] = shade[i]
                         lights[cursor : cursor + 4] = face_light[i]
+                        fluorescence[cursor : cursor + 4] = _packed_fluorescence(block)
+                        _write_fluor_uvs(fluor_uvs, cursor, 4, block, normal_i, 1)
                         slot = indices[face_i * 6 : (face_i + 1) * 6]
                         quad = np.uint32(cursor)
                         slot[0:6] = (quad, quad + 1, quad + 2, quad, quad + 2, quad + 3)
@@ -2208,6 +2340,8 @@ def _emit_cutout(world, data, faces, total, x0, y0, z0, l_grid=None, grass_grid=
             vertices[cursor : cursor + span, 6:8] = uvs
             vertices[cursor : cursor + span, 8] = np.repeat(shade.astype(np.float32), 4)
             lights[cursor : cursor + span] = np.repeat(face_light, 4, axis=0)
+            fluorescence[cursor : cursor + span] = _packed_fluorescence(block)
+            _write_fluor_uvs(fluor_uvs, cursor, span, block, normal_i, count)
 
             if getattr(block, "tint", None) == "grass" or getattr(block, "id", "") in ("tall_grass", "fern"):
                 face_color = grass_grid[zz, xx]
@@ -2223,7 +2357,56 @@ def _emit_cutout(world, data, faces, total, x0, y0, z0, l_grid=None, grass_grid=
             slot[:, 5] = quads + 3
             cursor += span
             face_i += count
-    return vertices[:cursor], indices[: face_i * 6], lights[:cursor], colors[:cursor]
+    return vertices[:cursor], indices[: face_i * 6], lights[:cursor], colors[:cursor], fluorescence[:cursor], fluor_uvs[:cursor]
+
+
+# A sheet coplanar with the fuel. Side faces stand upright. Top and bottom
+# faces lie flat. The inset keeps the sheet off the solid face beside it.
+_FIRE_SHEETS = (
+    ((1, 0, 0), (15.2, 0.0, 0.0), (15.2, 16.0, 16.0), (0, 1)),
+    ((-1, 0, 0), (0.8, 0.0, 0.0), (0.8, 16.0, 16.0), (0, 1)),
+    ((0, 0, 1), (0.0, 0.0, 15.2), (16.0, 16.0, 15.2), (4, 5)),
+    ((0, 0, -1), (0.0, 0.0, 0.8), (16.0, 16.0, 0.8), (4, 5)),
+    ((0, 1, 0), (0.0, 15.2, 0.0), (16.0, 15.2, 16.0), (2, 3)),
+    ((0, -1, 0), (0.0, 0.8, 0.0), (16.0, 0.8, 16.0), (2, 3)),
+)
+
+
+def _fire_clinging(elements, world, wx, wy, wz):
+    """Replace the standing cross with a sheet on each face that is burning.
+
+    A flame with nothing flammable around it keeps the cross, so fire on open
+    ground is still visible. A log's side gets a vertical sheet. Its top gets
+    a flat sheet.
+    """
+    if world is None:
+        return elements
+    from server.fire import is_flammable
+
+    uv = None
+    for element in elements:
+        for value in element.get("faces", {}).values():
+            uv = value
+            break
+        if uv is not None:
+            break
+    if uv is None:
+        return elements
+    sheets = []
+    for (dx, dy, dz), origin, extent, normals in _FIRE_SHEETS:
+        if not is_flammable(world.get_block(wx + dx, wy + dy, wz + dz)):
+            continue
+        sheets.append(
+            {
+                "from": [float(value) for value in origin],
+                "to": [float(value) for value in extent],
+                "faces": {normal: uv for normal in normals},
+                "cutout": True,
+            }
+        )
+    if not sheets:
+        return elements
+    return sheets
 
 
 def _boundary(element, normal_i):

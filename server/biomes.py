@@ -107,6 +107,7 @@ class Biome:
         temperature=None,
         touching=None,
         rainfall=None,
+        island=None,
     ):
         self.id = biome_id
         self.name = str(name or biome_id.replace("_", " ").title())
@@ -137,6 +138,7 @@ class Biome:
         self.temperature = tuple(temperature) if temperature is not None else None
         self.touching = tuple(touching) if touching is not None else None
         self.rainfall = None if rainfall is None else float(rainfall)
+        self.island = dict(island) if island else None
 
         trans_blend = self.transition.get("blend")
         actual_blend = blend if blend is not None else trans_blend
@@ -191,6 +193,18 @@ class Biome:
         ox, oz = float(offset[0]), float(offset[1])
         return fbm(x * scale + ox, z * scale + oz, octaves, seed + seed_offset)
 
+    def variant_noise_grid(self, x, z, seed):
+        cfg = self.variant_noise
+        shape = np.broadcast(x, z).shape
+        if not cfg:
+            return np.zeros(shape, dtype=np.float64)
+        scale = float(cfg.get("scale", 0.018))
+        octaves = int(cfg.get("octaves", 3))
+        seed_offset = int(cfg.get("seed_offset", 7331))
+        offset = cfg.get("offset", (7.3, -11.9))
+        ox, oz = float(offset[0]), float(offset[1])
+        return fbm_grid(x * scale + ox, z * scale + oz, octaves, seed + seed_offset)
+
     def matches_temperature(self, temp):
         if self.temperature is None:
             return True
@@ -234,12 +248,7 @@ class Biome:
                 return temp_mask
             return np.zeros(shape, dtype=bool)
 
-        scale = float(cfg.get("scale", 0.018))
-        octaves = int(cfg.get("octaves", 3))
-        seed_offset = int(cfg.get("seed_offset", 7331))
-        offset = cfg.get("offset", (7.3, -11.9))
-        ox, oz = float(offset[0]), float(offset[1])
-        value = fbm_grid(x * scale + ox, z * scale + oz, octaves, seed + seed_offset)
+        value = self.variant_noise_grid(x, z, seed)
         threshold = float(cfg.get("threshold", 0.5))
         if bool(cfg.get("above", True)):
             noise_mask = value >= threshold
@@ -491,6 +500,7 @@ def biome_from_mapping(fields, source, trees, decorations=None):
     if raw_variant_noise is not None and not isinstance(raw_variant_noise, dict):
         raise ValueError(f"{source}: variant_noise must be an object")
     variant_noise = dict(raw_variant_noise or {})
+    island = _island(fields.get("island"), source)
 
     raw_coast = fields.get("coast")
     if raw_coast is not None and not isinstance(raw_coast, dict):
@@ -583,6 +593,7 @@ def biome_from_mapping(fields, source, trees, decorations=None):
         temperature=temperature,
         touching=touching,
         rainfall=rainfall,
+        island=island,
     )
 
 
@@ -768,6 +779,67 @@ def biome_index_grid(x, z, seed, biomes):
             mask = (grid == base_index) & variant.variant_mask_grid(x, z, seed)
             grid[mask] = index_by_id[variant.id]
     return grid, catalog
+
+
+def _island(raw, source):
+    """Land that rises out of a parent ocean band. Absent means no lift."""
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ValueError(f"{source}: island must be an object")
+    shore = _number(raw.get("shore", 0.05), "island.shore", source)
+    core = _number(raw.get("core", 0.08), "island.core", source)
+    crest = _number(raw.get("crest", 2), "island.crest", source)
+    rise = _number(raw.get("rise", 0), "island.rise", source)
+    edge = raw.get("edge")
+    fade = raw.get("fade")
+    if shore < 0 or core <= 0 or crest < 0 or rise < 0:
+        raise ValueError(f"{source}: island sizes must stay positive")
+    island = {"shore": shore, "core": core, "crest": crest, "rise": rise}
+    if edge is not None:
+        island["edge"] = _number(edge, "island.edge", source)
+    relief = raw.get("relief")
+    if relief is not None:
+        island["relief"] = _number(relief, "island.relief", source)
+        if island["relief"] < 0:
+            raise ValueError(f"{source}: island.relief must stay positive")
+    relief_scale = raw.get("relief_scale")
+    if relief_scale is not None:
+        island["relief_scale"] = _number(relief_scale, "island.relief_scale", source)
+        if island["relief_scale"] <= 0:
+            raise ValueError(f"{source}: island.relief_scale must stay positive")
+    if fade is not None:
+        island["fade"] = _number(fade, "island.fade", source)
+        if island["fade"] <= 0:
+            raise ValueError(f"{source}: island.fade must stay positive")
+    beach = _island_beach(raw.get("beach"), source)
+    if beach is not None:
+        island["beach"] = beach
+    return island
+
+
+def _island_beach(raw, source):
+    """Sand ring on the low part of an island. Absent means the whole island uses its surface."""
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ValueError(f"{source}: island.beach must be an object")
+    surface = _block(raw.get("surface"), "beach.surface", source)
+    soil = _block(raw.get("soil", surface), "beach.soil", source)
+    subsoil = _block(raw.get("subsoil", soil), "beach.subsoil", source)
+    soil_depth = _whole(raw.get("soil_depth", 3), "beach.soil_depth", source)
+    subsoil_depth = _whole(raw.get("subsoil_depth", 3), "beach.subsoil_depth", source)
+    margin = _whole(raw.get("margin", 1), "beach.margin", source)
+    if soil_depth < 1 or subsoil_depth < 0 or margin < 0:
+        raise ValueError(f"{source}: beach depths must stay positive")
+    return {
+        "surface": surface,
+        "soil": soil,
+        "subsoil": subsoil,
+        "soil_depth": soil_depth,
+        "subsoil_depth": subsoil_depth,
+        "margin": margin,
+    }
 
 
 def _read_file(path):

@@ -1,0 +1,6 @@
+{
+  "id": "glow_cup",
+  "block": "glow_cup",
+  "chance": 0.12,
+  "surfaces": ["lichen_grass"]
+}

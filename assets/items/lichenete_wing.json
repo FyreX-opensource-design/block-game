@@ -1,0 +1,15 @@
+{
+  "id": "lichenete_wing",
+  "lang": "item.lichenete_wing",
+  "tab": ["materials"],
+  "model": "flat",
+  "texture": "lichenete_wing",
+  "max_stack": 64,
+  "left": "none",
+  "right": "none",
+  "durability": 0,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 1,
+  "food": 0
+}

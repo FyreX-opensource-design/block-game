@@ -40,7 +40,7 @@ from server.lua import load_table
 
 _ID = re.compile(r"[a-z0-9_]+")
 _LIGHT_CHANNELS = ("sky", "red", "green", "blue", "uv", "infrared")
-_GOAL_TYPES = ("panic", "wander", "melee", "spider", "shoot", "eat_grass")
+_GOAL_TYPES = ("panic", "wander", "melee", "spider", "shoot", "eat_grass", "retaliate")
 
 
 class LightBound:
@@ -144,7 +144,7 @@ class BreedRule:
 
 
 class MobDef:
-    def __init__(self, mob_id, name, health, radius, height, eye, walk_speed, run_speed, climb_speed, loot, model, goals, spawn, breed, source):
+    def __init__(self, mob_id, name, health, radius, height, eye, walk_speed, run_speed, climb_speed, loot, model, goals, spawn, breed, source, can_fly=False, fly_height=1.6):
         self.id = mob_id
         self.name = name
         self.health = float(health)
@@ -159,6 +159,8 @@ class MobDef:
         self.goals = tuple(goals)
         self.spawn = spawn
         self.breed = breed
+        self.can_fly = bool(can_fly)
+        self.fly_height = float(fly_height)
         self.source = source
 
 
@@ -418,6 +420,8 @@ def mob_from_mapping(fields, source, roots):
         _parse_spawn(fields.get("spawn") or {"group": "hostile"}, source, roots),
         _parse_breed(fields.get("breed"), source),
         str(source),
+        bool(fields.get("fly", False)),
+        _number(fields.get("fly_height", 1.6), "fly_height", source, 1.6),
     )
 
 
@@ -550,6 +554,7 @@ def build_goals(mob, definition):
         PanicGoal,
         SkeletonShootGoal,
         SpiderAttackGoal,
+        RetaliateGoal,
         WanderGoal,
         ZombieAttackGoal,
     )
@@ -563,6 +568,8 @@ def build_goals(mob, definition):
             made = WanderGoal(mob)
         elif kind == "melee":
             made = ZombieAttackGoal(mob, target_range=goal["range"], reach=goal["reach"], damage=goal["damage"])
+        elif kind == "retaliate":
+            made = RetaliateGoal(mob, target_range=goal["range"], reach=goal["reach"], damage=goal["damage"])
         elif kind == "spider":
             made = SpiderAttackGoal(mob, target_range=goal["range"], reach=goal["reach"], damage=goal["damage"])
         elif kind == "shoot":
@@ -601,6 +608,8 @@ def apply_mob_asset(mob, catalog=None):
     if definition.climb_speed is not None:
         mob.can_climb = True
         mob.climb_speed = definition.climb_speed
+    mob.can_fly = definition.can_fly
+    mob.fly_height = definition.fly_height
     mob.loot_table = definition.loot
     mob.model = definition.model
     mob.adult_radius = mob.radius
