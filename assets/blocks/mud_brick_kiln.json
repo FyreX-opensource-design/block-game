@@ -1,0 +1,22 @@
+{
+    "id": "mud_brick_kiln",
+    "lang": "block.mud_brick_kiln",
+    "station": "furnace",
+    "recipe_types": ["kilning"],
+    "cook_speed": 0.7,
+    "tab": "machines",
+    "model": "orientable",
+    "hardness": 2.5,
+    "tool": "pickaxe",
+    "mining_level": 1,
+    "loot_table": "blocks/mud_brick_kiln",
+    "properties": {
+      "rotation": "horizontal"
+    },
+    "textures": {
+      "top": "stone",
+      "bottom": "stone",
+      "side": "furnace_side",
+      "front": "furnace_front"
+    }
+  }

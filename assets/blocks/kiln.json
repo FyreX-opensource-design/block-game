@@ -3,7 +3,7 @@
     "lang": "block.kiln",
     "station": "furnace",
     "recipe_types": ["kilning"],
-    "cook_speed": 2.0,
+    "cook_speed": 1.0,
     "tab": "machines",
     "model": "orientable",
     "hardness": 3.5,

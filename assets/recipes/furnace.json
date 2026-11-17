@@ -4,10 +4,11 @@
   "pattern": [
     "###",
     "# #",
-    "###"
+    "SSS"
   ],
   "key": {
-    "#": "cobble"
+    "#": "cobble",
+    "s": "smooth_stone"
   },
   "result": {
     "item": "furnace",

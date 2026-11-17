@@ -1,0 +1,17 @@
+{
+    "id": "kiln",
+    "type": "crafting_shaped",
+    "pattern": [
+      "###",
+      "# #",
+      "ccc"
+    ],
+    "key": {
+      "#": "bricks",
+      "c": "cobble"
+    },
+    "result": {
+      "item": "kiln",
+      "count": 1
+    }
+  }
