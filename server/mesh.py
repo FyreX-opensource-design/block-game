@@ -1112,6 +1112,10 @@ def _build_chunk_mesh_inner(world, cx, cy, cz):
             elements = block.elements
         if str((block.properties or {}).get("fire") or ""):
             elements = _fire_clinging(elements, world, wx, wy, wz)
+        if block.id == "pit_kiln" or getattr(block, "base_id", "") == "pit_kiln":
+            from server.pit_kiln import pit_elements
+
+            elements = pit_elements(world, wx, wy, wz, block)
         for element in elements:
             el_tint = element.get("tint", getattr(block, "tint", None))
             is_grass_tinted = el_tint == "grass" or getattr(block, "id", "") in ("tall_grass", "fern")

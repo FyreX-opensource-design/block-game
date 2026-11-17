@@ -163,6 +163,12 @@ Multiple crafting tiers and interaction methods:
   - Fuel support for coal, charcoal, logs, planks, crafting tables, sticks, and wooden pickaxes.
 - **Flint Knapping**:
   - Right-clicking flint against hard stone surfaces knaps it into `knapped_flint`.
+- **Pit Kiln**:
+  - Dig a one-block hole with a solid floor and solid sides. Right-click in wheat or plant fiber (8), logs of one wood (3), and one stack of the item to convert.
+  - The straw and logs build up in the hole as they are added. A packed pit fills the block. The crosshair lists the counts.
+  - Light the top with a fire stick (fiber and a stick; used up), flint and steel (knapped flint and iron), or sulfuric steel (sulfur and iron, blue fire).
+  - The wood and the fire pick the result. Birch fuel and blue fire yield more charcoal. Clay becomes bricks and sand becomes glass, sooner under blue fire.
+  - Breaking the flame pauses the firing. Right-click a finished pit to take the result. Breaking the pit returns what is still inside.
 - **In-World Block-Hit Recipes**:
   - Hitting specific blocks with specific items transforms or harvests materials without breaking the block in creative mode.
 
@@ -222,7 +228,15 @@ Full survival game loop with living creatures:
 
 ---
 
-## 12. HUD Readouts & In-Game Commands
+## 12. Weather
+
+Clouds sit on a deck at y=200. Wind carries moisture across that deck and turns through the day. Hills lift the air and the downwind side dries out. A column that reaches the deck, terrain or a building, blocks the cloud and the rain under it. Most of the sky stays fair. Rain falls out of the grey masses, and dry biomes carry less of it.
+
+The simulation runs in a separate weather process. The world is the master clock, and the weather process steps on that time, so a weather server on another machine stays in step with the day. How to start it is in `docs/MULTIPLAYER.md`. A biome's `rainfall` value, from 0 to 2, is what feeds the clouds there. Plains are 1. Deserts are near 0. Oceans are wetter than 1.
+
+---
+
+## 13. HUD Readouts & In-Game Commands
 
 - **On-Screen HUD**:
   - Current coordinates: `X`, `Y`, `Z`.

@@ -1,0 +1,16 @@
+{
+  "id": "flint_and_steel",
+  "type": "crafting_shaped",
+  "pattern": [
+    "F ",
+    " I"
+  ],
+  "key": {
+    "F": "knapped_flint",
+    "I": "iron_ingot"
+  },
+  "result": {
+    "item": "flint_and_steel",
+    "count": 1
+  }
+}

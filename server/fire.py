@@ -275,6 +275,7 @@ class FireSystem:
         self.flames = {}
         self.burning = {}
         self.cooled = {}
+        self.held = set()
         self._new_flames = 0
         self._acc = 0.0
         self._cursor = 0
@@ -342,8 +343,11 @@ class FireSystem:
             if pos not in self.flames:
                 spec = fire_type(flame)
                 self.flames[pos] = (spec.roll(spec.life), str(flame), 0.0, False)
+            elif pos in self.held and str(flame) != self.flames[pos][1]:
+                self.held.discard(pos)
         else:
             self.flames.pop(pos, None)
+            self.held.discard(pos)
         if burn_seconds(block_id) is None:
             self.burning.pop(pos, None)
 
@@ -367,6 +371,11 @@ class FireSystem:
             spec = fire_type(kind)
             if self.world.get_block(*pos) != kind:
                 self.flames.pop(pos, None)
+                self.held.discard(pos)
+                continue
+            # A pit kiln holds its flame in place until the firing is done.
+            if pos in self.held:
+                self.flames[pos] = (max(spec.hold_life, 1.0), kind, 0.0, False)
                 continue
             life -= step
             age += step
@@ -404,6 +413,21 @@ class FireSystem:
                 self.burning.pop(spot, None)
         return changed
 
+    def hold(self, x, y, z, kind):
+        """Keep this flame burning in place. It does not spread or burn out."""
+        pos = (int(x), int(y), int(z))
+        kind = str(kind)
+        if kind not in FIRE_TYPES:
+            return False
+        self.held.add(pos)
+        self.cooled.pop(pos, None)
+        spec = fire_type(kind)
+        self.flames[pos] = (max(spec.hold_life, 1.0), kind, 0.0, False)
+        return True
+
+    def release(self, x, y, z):
+        self.held.discard((int(x), int(y), int(z)))
+
     def _flame_record(self, value):
         life, kind = value[0], value[1]
         age = value[2] if len(value) > 2 else 0.0
@@ -412,6 +436,7 @@ class FireSystem:
 
     def _snuff(self, pos, changed):
         self.flames.pop(pos, None)
+        self.held.discard(pos)
         block_id = self.world.get_block(*pos)
         block = BLOCKS.get(block_id)
         props = getattr(block, "properties", None) or {}

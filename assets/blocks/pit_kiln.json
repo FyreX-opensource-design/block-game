@@ -1,0 +1,19 @@
+{
+  "id": "pit_kiln",
+  "lang": "block.pit_kiln",
+  "creative": false,
+  "model": "pit_kiln",
+  "render": "cutout",
+  "solid": false,
+  "light_opacity": 0,
+  "loot_table": "blocks/pit_kiln",
+  "hardness": 0.6,
+  "mining_level": 0,
+  "sound": "wood",
+  "textures": {
+    "fiber": "wheat",
+    "log": "oak_log_side",
+    "log_top": "oak_log_top",
+    "marker": "pit_kiln"
+  }
+}

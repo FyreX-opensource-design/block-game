@@ -185,6 +185,16 @@ class Game(pyglet.window.Window):
             anchor_y="top",
             color=(255, 255, 255, 255),
         )
+        self.pit_label = pyglet.text.Label(
+            "",
+            font_size=18,
+            anchor_x="center",
+            anchor_y="bottom",
+            width=480,
+            multiline=True,
+            align="center",
+            color=(255, 244, 214, 255),
+        )
         self.world = None
         self.player = None
         self.info = None
@@ -1068,6 +1078,7 @@ class Game(pyglet.window.Window):
         try:
             self.world.update_fluids(dt)
             self.world.update_fire(dt)
+            self.world.update_pit_kilns(dt)
         finally:
             self.world.on_block_set = previous
         if changed:
@@ -3796,6 +3807,28 @@ class Game(pyglet.window.Window):
             )
         self._draw_text(scale)
 
+    def _draw_pit_label(self):
+        label = getattr(self, "pit_label", None)
+        if label is None or self.target is None or self.world is None:
+            return
+        from server.pit_kiln import pit_status
+
+        text = pit_status(
+            self.world,
+            self.target["x"],
+            self.target["y"],
+            self.target["z"],
+            self.target.get("nx", 0),
+            self.target.get("ny", 0),
+            self.target.get("nz", 0),
+        )
+        label.text = text
+        if not text:
+            return
+        label.x = self.width / 2
+        label.y = self.height / 2 + 22
+        label.draw()
+
     def _draw_text(self, scale):
         if not self._text_ok:
             return
@@ -3859,6 +3892,7 @@ class Game(pyglet.window.Window):
                 self.readout.x = 16
                 self.readout.y = self.height - 16
                 self.readout.draw()
+                self._draw_pit_label()
             elif self.mode == "loading":
                 self.status_label.text = self._status
                 self.status_label.x = self.width / 2
@@ -4441,6 +4475,9 @@ class Game(pyglet.window.Window):
         if self._handle_bucket_interaction():
             return
 
+        if self._handle_pit_kiln(hit, modifiers):
+            return
+
         if self._handle_block_hit_interaction(hit):
             return
 
@@ -4597,6 +4634,78 @@ class Game(pyglet.window.Window):
                     else:
                         self.hotbar[self.selected] = make_stack(held_id, cnt - 1)
         return True
+
+    def _handle_pit_kiln(self, hit, modifiers=0):
+        """Fill a one-block hole, light it, or take the finished stack."""
+        if hit is None or self.world is None or getattr(self.world, "pit_kilns", None) is None:
+            return False
+        is_shift = bool(modifiers & key.MOD_SHIFT) if hasattr(key, "MOD_SHIFT") else False
+        if is_shift:
+            return False
+        from server.pit_kiln import pit_cell, spend_igniter
+
+        cell = pit_cell(
+            self.world,
+            hit["x"],
+            hit["y"],
+            hit["z"],
+            hit.get("nx", 0),
+            hit.get("ny", 0),
+            hit.get("nz", 0),
+        )
+        if cell is None:
+            return False
+        kilns = self.world.pit_kilns
+        held_slot = self.hotbar[self.selected] if self.selected < len(self.hotbar) else empty_stack()
+        held_id = stack_id(held_slot)
+        creative = self.gamemode == "creative"
+        if kilns.has_output(*cell):
+            stacks = kilns.take(*cell)
+            self._give_pit_stacks(stacks, *cell)
+            self._upload_block_change(*cell)
+            self._upload_block_change(cell[0], cell[1] + 1, cell[2])
+            return True
+        if held_id and kilns.can_light(*cell, held_id):
+            if kilns.ignite(*cell, held_id):
+                if not creative:
+                    self.hotbar[self.selected] = spend_igniter(held_slot)
+                self._upload_block_change(*cell)
+                self._upload_block_change(cell[0], cell[1] + 1, cell[2])
+                return True
+        accepted = kilns.add(*cell, held_id, stack_count(held_slot)) if held_id else 0
+        if accepted:
+            if not creative:
+                left = stack_count(held_slot) - accepted
+                if left > 0:
+                    self.hotbar[self.selected] = make_stack(held_id, left, damage=stack_damage(held_slot))
+                else:
+                    self.hotbar[self.selected] = empty_stack()
+            self._upload_block_change(*cell)
+            return True
+        if self.world.get_block(*cell) == kilns.block_id:
+            return True
+        return False
+
+    def _give_pit_stacks(self, stacks, x, y, z):
+        for stack in stacks:
+            item_id = stack_id(stack)
+            count = stack_count(stack)
+            if not item_id or count <= 0:
+                continue
+            leftover = add_to_inventory(
+                [self.hotbar, self.storage],
+                item_id,
+                count,
+                damage=stack_damage(stack),
+            )
+            if leftover:
+                self._spawn_loose_item(
+                    item_id,
+                    leftover,
+                    [x + 0.5, y + 0.6, z + 0.5],
+                    [0.0, 2.0, 0.0],
+                    pickup_delay=0.2,
+                )
 
     def _handle_tool_interaction(self, hit):
         """Apply an asset-defined tool right-click to the targeted block."""
@@ -5131,6 +5240,7 @@ class Game(pyglet.window.Window):
         self.labels.labels.clear()
         self.status_label = None
         self.readout = None
+        self.pit_label = None
         gc.collect()
         while glGetError():
             pass

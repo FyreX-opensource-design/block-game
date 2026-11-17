@@ -1,0 +1,12 @@
+{
+  "block": "pit_kiln",
+  "fiber": ["wheat", "plant_fiber"],
+  "fiber_count": 8,
+  "log_count": 3,
+  "time": 20,
+  "igniters": {
+    "fire_stick": {"fire": "fire", "consume": true},
+    "flint_and_steel": {"fire": "fire", "damage": 1},
+    "sulfuric_steel": {"fire": "blue_fire", "damage": 1}
+  }
+}

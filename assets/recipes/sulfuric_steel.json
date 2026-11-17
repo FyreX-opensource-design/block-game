@@ -1,0 +1,16 @@
+{
+  "id": "sulfuric_steel",
+  "type": "crafting_shaped",
+  "pattern": [
+    "S ",
+    " I"
+  ],
+  "key": {
+    "S": "sulfur",
+    "I": "iron_ingot"
+  },
+  "result": {
+    "item": "sulfuric_steel",
+    "count": 1
+  }
+}

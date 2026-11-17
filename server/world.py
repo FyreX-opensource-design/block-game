@@ -527,6 +527,9 @@ class World:
         from server.fire import FireSystem
 
         self.fire = FireSystem(self)
+        from server.pit_kiln import PitKilnSystem
+
+        self.pit_kilns = PitKilnSystem(self)
         from server.snow import SnowSystem
 
         self.snow = SnowSystem(self)
@@ -604,6 +607,11 @@ class World:
         elif block_id is not None:
             self.furnaces[key].block_id = str(block_id)
         return self.furnaces[key]
+
+    def update_pit_kilns(self, dt):
+        kilns = getattr(self, "pit_kilns", None)
+        if kilns is not None:
+            kilns.update(dt)
 
     def update_furnaces(self, dt):
         for furnace in list(self.furnaces.values()):
@@ -1278,6 +1286,8 @@ class World:
                         scnt = stack_count(stack)
                         if sid and scnt > 0:
                             self.spawn_item(sid, count=scnt, pos=(x + 0.5, y + 0.5, z + 0.5))
+        if old_block is not None and old_block.id == "pit_kiln" and getattr(self, "pit_kilns", None) is not None:
+            self.pit_kilns.break_at(x, y, z, spawn=bool(simulate))
         if simulate and old_block and getattr(old_block, "fluid_breakable", False):
             from server.fluid import is_fluid, is_water
 
@@ -1862,6 +1872,8 @@ class World:
             self.saplings.save()
         if getattr(self, "crops", None) is not None:
             self.crops.save()
+        if getattr(self, "pit_kilns", None) is not None:
+            self.pit_kilns.save()
 
     def commit_chunk(self, chunk):
         if chunk is None:

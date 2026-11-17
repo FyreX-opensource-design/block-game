@@ -594,6 +594,7 @@ class MultiplayerServer:
             self.world.update_crops(0.02)
             changed = self.world.update_fluids(0.02)
             self.world.update_fire(0.02)
+            self.world.update_pit_kilns(0.02)
             if getattr(self.world, "on_block_set", None) is None:
                 for x, y, z, block in changed:
                     self.broadcast(

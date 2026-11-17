@@ -1,0 +1,40 @@
+{
+  "elements": [
+    {
+      "from": [1, 0, 1],
+      "to": [15, 4, 15],
+      "faces": {
+        "east": {"texture": "#fiber", "uv": [0, 0, 16, 16]},
+        "west": {"texture": "#fiber", "uv": [0, 0, 16, 16]},
+        "up": {"texture": "#fiber", "uv": [0, 0, 16, 16]},
+        "down": {"texture": "#fiber", "uv": [0, 0, 16, 16]},
+        "south": {"texture": "#fiber", "uv": [0, 0, 16, 16]},
+        "north": {"texture": "#fiber", "uv": [0, 0, 16, 16]}
+      }
+    },
+    {
+      "from": [1, 4, 2],
+      "to": [15, 7, 6],
+      "faces": {
+        "east": {"texture": "#log", "uv": [0, 0, 16, 16]},
+        "west": {"texture": "#log", "uv": [0, 0, 16, 16]},
+        "up": {"texture": "#log_top", "uv": [0, 0, 16, 16]},
+        "down": {"texture": "#log_top", "uv": [0, 0, 16, 16]},
+        "south": {"texture": "#log", "uv": [0, 0, 16, 16]},
+        "north": {"texture": "#log", "uv": [0, 0, 16, 16]}
+      }
+    },
+    {
+      "from": [6, 7, 6],
+      "to": [10, 11, 10],
+      "faces": {
+        "east": {"texture": "#marker", "uv": [0, 0, 16, 16]},
+        "west": {"texture": "#marker", "uv": [0, 0, 16, 16]},
+        "up": {"texture": "#marker", "uv": [0, 0, 16, 16]},
+        "down": {"texture": "#marker", "uv": [0, 0, 16, 16]},
+        "south": {"texture": "#marker", "uv": [0, 0, 16, 16]},
+        "north": {"texture": "#marker", "uv": [0, 0, 16, 16]}
+      }
+    }
+  ]
+}

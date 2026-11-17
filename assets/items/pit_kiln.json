@@ -1,0 +1,14 @@
+{
+  "id": "pit_kiln",
+  "lang": "block.pit_kiln",
+  "model": "block",
+  "block": "pit_kiln",
+  "max_stack": 64,
+  "left": "none",
+  "right": "none",
+  "durability": 0,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 1,
+  "food": 0
+}
