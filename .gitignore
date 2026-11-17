@@ -1,5 +1,10 @@
 __pycache__/
 *.py[cod]
 .venv/
+runtime/.venv/
+runtime/.requirements.sha256
 *.egg-info/
 .DS_Store
+block-game.exe
+block-game.pdb
+block-game.sh

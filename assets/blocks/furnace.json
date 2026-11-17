@@ -1,7 +1,7 @@
 {
   "id": "furnace",
   "lang": "block.furnace",
-  "tab": "building",
+  "tab": "machines",
   "model": "orientable",
   "hardness": 3.5,
   "tool": "pickaxe",

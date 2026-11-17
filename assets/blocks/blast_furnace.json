@@ -4,7 +4,7 @@
   "station": "furnace",
   "recipe_types": ["blasting"],
   "cook_speed": 2.0,
-  "tab": "building",
+  "tab": "machines",
   "model": "orientable",
   "hardness": 3.5,
   "tool": "pickaxe",
