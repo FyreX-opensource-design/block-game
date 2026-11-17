@@ -1,0 +1,26 @@
+{
+  "id": "lichen_cap",
+  "lang": "block.lichen_cap",
+  "tab": "natural",
+  "model": "cube",
+  "render": "cutout",
+  "hardness": 0.2,
+  "tool": "none",
+  "mining_level": 0,
+  "loot_table": "blocks/lichen_cap",
+  "textures": {
+    "top": "lichen_cap",
+    "side": "lichen_cap",
+    "bottom": "lichen_cap"
+  },
+  "properties": {
+    "leaf": true,
+    "decayable": true
+  },
+  "fluorescence": {
+    "texture": "lichen_cap_glow",
+    "start": 2,
+    "full": 7,
+    "strength": 1
+  }
+}

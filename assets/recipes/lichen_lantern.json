@@ -1,0 +1,13 @@
+{
+  "id": "lichen_lantern",
+  "type": "crafting_shaped",
+  "pattern": ["P", "E", "P"],
+  "key": {
+    "P": "lichen_planks",
+    "E": "lichenete_eye"
+  },
+  "result": {
+    "item": "lichen_lantern",
+    "count": 1
+  }
+}

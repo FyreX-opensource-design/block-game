@@ -32,6 +32,8 @@ class UndergroundBiome:
         features: Optional[Sequence[Dict[str, Any]]] = None,
         ores: Optional[Sequence[Any]] = None,
         mob_spawns: Optional[Sequence[Dict[str, Any]]] = None,
+        surface_biomes: Optional[Sequence[str]] = None,
+        always: bool = False,
         source: Optional[str] = None,
     ):
         self.id = biome_id
@@ -51,6 +53,8 @@ class UndergroundBiome:
         self.features = tuple(features or ())
         self.ores = tuple(ores or ())
         self.mob_spawns = tuple(mob_spawns) if mob_spawns is not None else None
+        self.surface_biomes = tuple(surface_biomes or ())
+        self.always = bool(always)
         self.source = source
 
     def sample(self, x: float, y: float, z: float, seed: int) -> float:
@@ -123,6 +127,8 @@ def load_underground_biomes(folder=None) -> Tuple[UndergroundBiome, ...]:
                 features=fields.get("features"),
                 ores=fields.get("ores"),
                 mob_spawns=fields.get("mob_spawns"),
+                surface_biomes=fields.get("surface_biomes"),
+                always=fields.get("always", False),
                 source=str(path),
             )
         )
@@ -135,9 +141,17 @@ def underground_biome_at(
     """Return the active UndergroundBiome at (x, y, z), or None if none exceeds threshold."""
     best_biome = None
     best_score = -1.0
+    surface_id = None
     for biome in biomes:
         if not biome.enabled or y < biome.min_y or y > biome.max_y:
             continue
+        if biome.surface_biomes:
+            if surface_id is None:
+                from server.biomes import BIOMES, placed_biome
+
+                surface_id = placed_biome(x, z, seed, BIOMES).id
+            if surface_id not in biome.surface_biomes:
+                continue
         val = biome.sample(x, y, z, seed)
         if val >= biome.threshold and (val - biome.threshold) > best_score:
             best_score = val - biome.threshold

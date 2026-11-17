@@ -1,0 +1,34 @@
+{
+  "id": "arctic_forest",
+  "name": "Arctic Forest",
+  "variant_of": "forest",
+  "precipitation": "snow",
+  "temperature": [0.0, 0.5],
+  "variant_noise": {
+    "scale": 0.0016,
+    "octaves": 1,
+    "seed_offset": 5101,
+    "offset": [18.0, -4.0],
+    "threshold": 0.5,
+    "above": true
+  },
+  "surface": "grass",
+  "soil": "dirt",
+  "soil_depth": 3,
+  "scale": 0.006,
+  "octaves": 2,
+  "seed_offset": 90,
+  "ceiling": 0.6,
+  "tree_chance": 0.016,
+  "height_offset": 1.0,
+  "height_scale": 1.0,
+  "cliff": false,
+  "transition": {
+    "blend": 0.08,
+    "curve": "smoothstep"
+  },
+  "trees": ["spruce", "tall_spruce"],
+  "decorations": [],
+  "grass_color": "#c9ddd2",
+  "foliage_color": "#b7cfc4"
+}

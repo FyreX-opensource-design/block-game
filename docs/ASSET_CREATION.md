@@ -46,6 +46,7 @@ Defines climate noise thresholds, terrain heights, surface/subsurface layers, tr
 - `trees` (list of strings): Tree IDs available in this biome (e.g. `["oak", "pine"]`).
 - `decorations` (list): Decoration features or IDs (e.g. `["tall_grass", "fern", "rose"]`).
 - `grass_color` (string or array): Hex color (`"#83b749"`) or `[r, g, b]` (0-255 or 0-1) for grass tinting.
+- `rainfall` (float, optional): How much moisture this biome feeds the clouds, from 0 to 2. Omitted biomes use `1`. Deserts sit near 0 and oceans above 1. The weather process reads this. See `docs/MULTIPLAYER.md` for where that process runs.
 - `height_offset` (float, optional): Added terrain elevation offset.
 - `height_scale` (float, optional): Multiplier on terrain elevation noise.
 - `cliff` (bool, optional): Enable cliff edge terrace effects.
@@ -381,6 +382,9 @@ Defines shaped crafting, shapeless crafting, furnace smelting, and block-hit rea
 }
 ```
 
+Pit kiln conversions are separate from these recipes. They live in
+`assets/pit_kiln/` and are described in [section 13](#13-pit-kilns).
+
 ### D. Block-Hit Recipe (In-World Right-Click / Strike)
 ```json
 {
@@ -597,4 +601,81 @@ at their personal spawn point (`/spawnpoint`), then the world spawn.
   "message": "suffocated in a block"
 }
 ```
+
+---
+
+## 13. Pit Kilns
+
+A pit kiln is a dug hole, not a placed station. The hole is one air block with a
+solid floor, solid blocks on all four sides, and air above. Right-clicking it
+packs in fiber, logs, and one item stack. Lighting the open top cooks that stack.
+Shift-right-click still places a block into the hole instead.
+
+While the pit is short of an ingredient, the straw bed and each log are drawn
+inside the hole. Once the fiber, the logs, and the item stack are all in, the
+pit fills the whole block, and it stays filled through the firing until the
+result is taken. Breaking the pit drops whatever is still inside. The crosshair
+lists the counts.
+
+`assets/pit_kiln.json` is the shared setup:
+
+- `block` (string): Block id that occupies the hole once anything has been added. Default `pit_kiln`.
+- `fiber` (list of item ids): Items that count toward the fiber. Wheat and plant fiber both qualify. The `#fiber` item tag is also accepted.
+- `fiber_count` (int): How many fiber items the pit takes. Default `8`.
+- `log_count` (int): How many logs, all of the same wood. Default `3`. A different wood is refused until those slots are full; further logs can be the item stack.
+- `time` (float): Seconds a recipe takes when it does not set its own `time`.
+- `igniters` (object): Item id to the fire it lights.
+  - `fire` (string): A fire type from `assets/fire/`. `fire` is ordinary fire. `blue_fire` is the blue flame.
+  - `consume` (bool): Use up one of the item. Fire sticks do this.
+  - `damage` (int): Durability spent per lighting. Flint and steel and sulfuric steel do this.
+
+Each file in `assets/pit_kiln/` is one conversion. The filename is the id unless
+`id` is set. `count` is how many result items each item in the stack becomes.
+
+- `input` (string): Item id or `#tag` for the stack being converted.
+- `logs` (string): Log id or `#tag` for the fuel wood. An exact id outranks a tag.
+- `fire` (string): Fire type, or `*` for any fire. An exact type outranks `*`.
+- `result` (object): `item` and `count`.
+- `time` (float, optional): Seconds this firing takes. Falls back to the shared `time`.
+
+When more than one recipe matches, the closer one wins: a named input beats a
+tag, a named log beats `#logs`, and a named fire beats `*`. Birch fuel with
+ordinary fire makes more charcoal than any log, and blue fire makes more still.
+Clay becomes bricks. Sand becomes glass. Blue fire finishes those faster.
+
+### Example (`assets/pit_kiln/charcoal.json`)
+```json
+{
+  "input": "#logs",
+  "logs": "#logs",
+  "fire": "fire",
+  "result": {"item": "charcoal", "count": 1},
+  "time": 20
+}
+```
+
+The starters are ordinary shaped recipes in `assets/recipes/`:
+
+- `fire_stick`: `#fiber` over `#sticks`, four sticks. Early game. Lights `fire` and is used up.
+- `flint_and_steel`: knapped flint and an iron ingot. Later game. Lights `fire` and spends durability.
+- `sulfuric_steel`: sulfur and an iron ingot. Lights `blue_fire` and spends durability.
+
+### Fire types (`assets/fire/` and `assets/fire.json`)
+
+A pit recipe's `fire` field names a file in `assets/fire/`. Lava lights the same
+types: a fluid's `lava` property is the fire id it starts. `assets/fire.json`
+limits the simulation (`tick_interval`, `max_new_flames`, `flame_cap`,
+`lava_per_tick`). Each fire file tunes that flame:
+
+- `priority` (int): When two fires touch a body, the higher one wins.
+- `life`, `spread_life`, `ignite_life`, `brief_life` (pair of seconds): How long a new flame, a spread flame, a lava-lit flame, and the short flame left in a burned block last.
+- `spread_chance`, `extinguish_chance` (0 to 1): Chance per tick to spread, and to go out after the burn window.
+- `burn_window` (seconds): How long a flame keeps burning the blocks it touches before it is likely to die.
+- `cooldown` (seconds): A cell that just went out cannot be lit again until this passes.
+- `hold_life` (seconds): Life restored each tick while the flame is still on fuel inside the burn window.
+
+Burn times for logs, planks, and leaves are the `times` object in
+`assets/tags/blocks/burnable.json`. Plants are not solid, so a flame replaces
+them immediately. A pit kiln's own flame stays in place for the firing and does
+not spread.
 

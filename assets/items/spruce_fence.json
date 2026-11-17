@@ -1,0 +1,14 @@
+{
+  "id": "spruce_fence",
+  "lang": "item.spruce_fence",
+  "tab": [
+    "building"
+  ],
+  "model": "block",
+  "item_model": "fence_inventory",
+  "block": "spruce_fence",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}

@@ -1,0 +1,21 @@
+{
+  "id": "lichen_planks",
+  "lang": "block.lichen_planks",
+  "tab": "building",
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "axe",
+  "mining_level": 0,
+  "sound": "wood",
+  "textures": {
+    "top": "lichen_planks",
+    "side": "lichen_planks",
+    "bottom": "lichen_planks"
+  },
+  "fluorescence": {
+    "texture": "lichen_planks_glow",
+    "start": 4,
+    "full": 12,
+    "strength": 0.5
+  }
+}

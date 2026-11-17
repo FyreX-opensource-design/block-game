@@ -1,0 +1,24 @@
+{
+  "id": "lichen_stem",
+  "lang": "block.lichen_stem",
+  "tab": ["building", "natural"],
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "axe",
+  "mining_level": 0,
+  "sound": "wood",
+  "properties": {
+    "rotation": "axis"
+  },
+  "textures": {
+    "top": "lichen_stem_top",
+    "side": "lichen_stem_side",
+    "bottom": "lichen_stem_top"
+  },
+  "fluorescence": {
+    "texture": "lichen_stem_glow",
+    "start": 2,
+    "full": 8,
+    "strength": 1
+  }
+}

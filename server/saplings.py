@@ -6,6 +6,7 @@ Every file in ``assets/saplings`` (``.json`` or ``.lua``) describes one sapling:
       "id": "oak_sapling",
       "block": "oak_sapling",                 # placed block
       "trees": ["oak", "fancy_oak", "tall_oak"],
+      "width": 1,                             # 2 means a 2x2 of saplings (4) is required
       "min_time": 900,                        # seconds before growth (15 min)
       "max_time": 1800                        # seconds before growth (30 min)
     }
@@ -22,7 +23,7 @@ from pathlib import Path
 
 import numpy as np
 
-from server.blocks import ASSETS, BLOCKS, CHUNK_SIZE, block_index, can_sustain_plant
+from server.blocks import AIR, ASSETS, BLOCKS, CHUNK_SIZE, block_index, can_sustain_plant
 from server.lua import load_table
 from server.trees import DECORATORS
 
@@ -33,7 +34,7 @@ SAVE_FILE = "saplings.json"
 
 
 class Sapling:
-    def __init__(self, sapling_id, block, trees, min_time, max_time, source):
+    def __init__(self, sapling_id, block, trees, min_time, max_time, source, width=1):
         self.id = sapling_id
         self.block = block
         self.trees = tuple(trees)
@@ -41,6 +42,7 @@ class Sapling:
         self.min_time = float(min_time)
         self.max_time = float(max_time)
         self.source = str(source)
+        self.width = int(width)
 
     def roll_delay(self):
         return random.uniform(self.min_time, self.max_time)
@@ -98,8 +100,11 @@ def sapling_from_mapping(fields, source, trees=None):
     max_time = _number(fields.get("max_time", DEFAULT_MAX_TIME), "max_time", source)
     if min_time <= 0 or max_time < min_time:
         raise ValueError(f"{source}: times must satisfy 0 < min_time <= max_time")
+    width = _whole(fields.get("width", 1), "width", source)
+    if width not in (1, 2):
+        raise ValueError(f"{source}: width must be 1 or 2")
 
-    return Sapling(sapling_id, block, resolved, min_time, max_time, source)
+    return Sapling(sapling_id, block, resolved, min_time, max_time, source, width)
 
 
 def _read_file(path):
@@ -108,6 +113,13 @@ def _read_file(path):
     if path.suffix == ".lua":
         return load_table(path)
     return None
+
+
+def _whole(value, name, source):
+    number = _number(value, name, source)
+    if int(number) != number:
+        raise ValueError(f"{source}: {name} must be a whole number")
+    return int(number)
 
 
 def _number(value, name, source):
@@ -228,6 +240,8 @@ class SaplingGrowthSystem:
         grown = []
 
         for pos, entry in list(self.timers.items()):
+            if pos not in self.timers:
+                continue
             x, y, z = pos
             # Pause timers while the sapling's chunk is unloaded.
             if self.world.chunk_key(x, y, z) not in self.world.chunks:
@@ -252,11 +266,46 @@ class SaplingGrowthSystem:
             del self.timers[pos]
             if not sapling.trees:
                 continue
+            origin = (x, y, z)
+            if sapling.width > 1:
+                origin = self._square_origin(x, y, z, sapling)
+                if origin is None:
+                    self.timers[pos] = [sapling, sapling.roll_delay()]
+                    continue
+                ox, oy, oz = origin
+                for dx in range(sapling.width):
+                    for dz in range(sapling.width):
+                        spot = (ox + dx, oy, oz + dz)
+                        self.timers.pop(spot, None)
+                        if self.world.get_block(*spot) == sapling.block:
+                            self.world.set_block(*spot, AIR)
             tree = random.choice(sapling.trees)
-            if self.world.grow_tree(x, y - 1, z, tree):
-                grown.append((x, y, z, tree.id))
+            gx, gy, gz = origin
+            if self.world.grow_tree(gx, gy - 1, gz, tree):
+                grown.append((gx, gy, gz, tree.id))
 
         return grown
+
+    def _square_origin(self, x, y, z, sapling):
+        """Return the minimum corner of a full sapling square that contains (x, y, z)."""
+        width = sapling.width
+        for ox in range(x - width + 1, x + 1):
+            for oz in range(z - width + 1, z + 1):
+                complete = True
+                for dx in range(width):
+                    for dz in range(width):
+                        if self.world.get_block(ox + dx, y, oz + dz) != sapling.block:
+                            complete = False
+                            break
+                        ground = self.world.get_block(ox + dx, y - 1, oz + dz)
+                        if not can_sustain_plant(ground, sapling.block):
+                            complete = False
+                            break
+                    if not complete:
+                        break
+                if complete:
+                    return ox, y, oz
+        return None
 
     def _scan_chunks(self):
         keys = list(self.world.chunks.keys())

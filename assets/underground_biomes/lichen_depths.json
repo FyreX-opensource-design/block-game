@@ -1,0 +1,20 @@
+{
+  "id": "lichen_depths",
+  "name": "Lichen Depths",
+  "enabled": true,
+  "always": true,
+  "surface_biomes": ["lichen_atoll"],
+  "min_y": 4,
+  "max_y": 70,
+  "scale": 0.02,
+  "octaves": 1,
+  "seed_offset": 6403,
+  "threshold": 1.1,
+  "default_stone": "lichen_stone",
+  "cave_fill": {
+    "floor": "lichen_stone",
+    "ceiling": "lichen_stone",
+    "wall": "lichen_stone"
+  },
+  "ores": ["fluor_amber"]
+}

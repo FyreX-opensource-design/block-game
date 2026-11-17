@@ -12,9 +12,19 @@
     "forest",
     "pine_forest",
     "birch_forest_hills",
+    "spruce_forest",
+    "redwood_forest",
     "river",
     "mountains"
   ],
+  "variant_noise": {
+    "scale": 0.004,
+    "octaves": 2,
+    "seed_offset": 4100,
+    "offset": [3.0, 9.0],
+    "threshold": 0.48,
+    "above": true
+  },
   "surface": "grass",
   "soil": "dirt",
   "soil_depth": 3,

@@ -1,0 +1,31 @@
+{
+  "id": "glow_cup",
+  "lang": "block.glow_cup",
+  "tab": "natural",
+  "model": "cross",
+  "render": "cutout",
+  "solid": false,
+  "hardness": 0.0,
+  "tool": "none",
+  "mining_level": 0,
+  "fluid_breakable": true,
+  "plant": true,
+  "requires_soil": true,
+  "sound": "grass",
+  "textures": {
+    "cross": "glow_cup"
+  },
+  "light": {
+    "r": 4,
+    "g": 1,
+    "b": 8,
+    "uv": 11,
+    "ir": 0
+  },
+  "fluorescence": {
+    "texture": "glow_cup_glow",
+    "start": 1,
+    "full": 4,
+    "strength": 1
+  }
+}

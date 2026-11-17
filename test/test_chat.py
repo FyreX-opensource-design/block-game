@@ -146,6 +146,19 @@ class CommandHandlerTests(unittest.TestCase):
         self.player.pos = [10.5, 64.0, -20.5]
         self.handler = CommandHandler()
 
+    def test_spawn_rejects_unregistered_mobs(self):
+        ctx = CommandContext(player=self.player, world=self.world)
+        before = len(self.world.entities)
+        handled = self.handler.execute(ctx, "/spawn not_a_mob")
+        self.assertTrue(handled)
+        self.assertEqual(len(self.world.entities), before)
+        self.assertTrue(any("Unknown mob" in r[0] for r in ctx.responses))
+
+        ctx = CommandContext(player=self.player, world=self.world)
+        handled = self.handler.execute(ctx, "/spawn pig")
+        self.assertTrue(handled)
+        self.assertTrue(any(getattr(entity, "mob_type", "") == "pig" for entity in self.world.entities))
+
     def test_help_command(self):
         ctx = CommandContext(player=self.player, world=self.world)
         handled = self.handler.execute(ctx, "/help")

@@ -1,0 +1,15 @@
+{
+  "id": "blue_lava",
+  "lang": "block.blue_lava",
+  "creative": false,
+  "model": "cube",
+  "render": "cutout",
+  "solid": false,
+  "opacity": 0.95,
+  "hardness": 100.0,
+  "tool": "none",
+  "mining_level": 0,
+  "light": {"r": 2, "g": 8, "b": 15, "uv": 8, "ir": 3},
+  "properties": {"fluid": "blue_lava", "level": 8, "lava": "blue_fire"},
+  "textures": {"top": "blue_lava", "side": "blue_lava", "bottom": "blue_lava"}
+}

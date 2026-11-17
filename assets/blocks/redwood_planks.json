@@ -1,0 +1,16 @@
+{
+  "id": "redwood_planks",
+  "lang": "block.redwood_planks",
+  "tab": "building",
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "axe",
+  "mining_level": 0,
+  "loot_table": "blocks/redwood_planks",
+  "sound": "wood",
+  "textures": {
+    "top": "redwood_planks",
+    "side": "redwood_planks",
+    "bottom": "redwood_planks"
+  }
+}

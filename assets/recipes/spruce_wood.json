@@ -1,0 +1,15 @@
+{
+  "id": "spruce_wood",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "##"
+  ],
+  "key": {
+    "#": "spruce_log"
+  },
+  "result": {
+    "item": "spruce_wood",
+    "count": 3
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "type": "entity",
+  "pools": [
+    {
+      "rolls": 1,
+      "entries": [
+        {
+          "type": "item",
+          "name": "lichenete_eye",
+          "count": [1, 2]
+        }
+      ]
+    },
+    {
+      "rolls": 1,
+      "entries": [
+        {
+          "type": "item",
+          "name": "lichenete_wing",
+          "count": [1, 2]
+        }
+      ]
+    }
+  ]
+}

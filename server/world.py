@@ -132,27 +132,36 @@ def tree_at(x, z, seed=0):
     return _tree_site(x, z, height, seed, BIOMES, lambda px, pz: terrain_height(px, pz, seed)) is not None
 
 
+def _column_surface(biome, height):
+    """Block that ends up on top of a column, including an island beach."""
+    beach = (getattr(biome, "island", None) or {}).get("beach")
+    if beach and height <= WATER_LEVEL + int(beach["margin"]):
+        return beach["surface"]
+    return biome.surface
+
+
+def _supports_tree(tree, surface_id):
+    from server.tags import has_block_tag
+
+    valid_b = getattr(tree, "valid_blocks", ("grass", "dirt", "muddy_grass", "mud"))
+    for vb in valid_b:
+        if str(vb).startswith("#"):
+            if has_block_tag(surface_id, vb[1:]):
+                return True
+        elif surface_id == vb:
+            return True
+    return surface_id in ("grass", "dirt", "muddy_grass", "mud")
+
+
 def _tree_site(x, z, height, seed, biomes, height_at):
     biome = biome_at(x, z, seed, biomes)
     if not biome.trees or hash2(x, z, seed) > biome.tree_chance or height < WATER_LEVEL:
         return None
-    from server.tags import has_block_tag
-
-    allowed = False
-    for tree in biome.trees:
-        valid_b = getattr(tree, "valid_blocks", ("grass", "dirt", "muddy_grass", "mud"))
-        for vb in valid_b:
-            if vb.startswith("#"):
-                if has_block_tag(biome.surface, vb[1:]):
-                    allowed = True
-                    break
-            elif biome.surface == vb:
-                allowed = True
-                break
-        if allowed or biome.surface in ("grass", "dirt", "muddy_grass", "mud"):
-            allowed = True
-            break
-    if not allowed:
+    choice = int(hash2(x + 3, z + 5, seed) * len(biome.trees))
+    tree = biome.trees[min(choice, len(biome.trees) - 1)]
+    # The beach replaces the biome surface, so a mushroom must not be sited
+    # there. Neighbor chunks would otherwise keep the cap and drop the stem.
+    if not _supports_tree(tree, _column_surface(biome, height)):
         return None
     for dz in (-1, 0, 1):
         for dx in (-1, 0, 1):
@@ -160,8 +169,21 @@ def _tree_site(x, z, height, seed, biomes, height_at):
                 continue
             if abs(height_at(x + dx, z + dz) - height) > 1:
                 return None
-    choice = int(hash2(x + 3, z + 5, seed) * len(biome.trees))
-    return biome.trees[min(choice, len(biome.trees) - 1)]
+    return tree
+
+
+def _block_is_snow(block_id):
+    block = BLOCKS.get(block_id) if not isinstance(block_id, int) else block_from_index(block_id)
+    if block is None:
+        return False
+    return bool((block.properties or {}).get("snow_layers"))
+
+
+def _trunk_can_replace(stored, leaves_index):
+    """Trunks replace air, leaves, and snow so a layer does not erase the bottom log."""
+    if stored == 0 or stored == leaves_index:
+        return True
+    return _block_is_snow(stored)
 
 
 def tree_blocks(tree, x, ground, z, seed):
@@ -182,7 +204,7 @@ def tree_blocks(tree, x, ground, z, seed):
 
     shape = getattr(tree, "shape", "blob").lower()
 
-    if shape in ("conifer", "pine", "spruce", "cone"):
+    if shape in ("conifer", "pine", "cone"):
         # Conifer / Pine shape: tall trunk with tiered tapering foliage
         for i in range(1, trunk + 1):
             set_trunk(x, ground + i, z, tree.trunk)
@@ -202,6 +224,51 @@ def tree_blocks(tree, x, ground, z, seed):
                     if dx == 0 and dz == 0:
                         continue
                     if cur_r > 1 and abs(dx) == cur_r and abs(dz) == cur_r:
+                        continue
+                    set_air(x + dx, y, z + dz, tree.leaves)
+
+    elif shape == "spruce":
+        # Fuller than pine: drooping shelves that shrink toward a bare tip.
+        for i in range(1, trunk + 1):
+            set_trunk(x, ground + i, z, tree.trunk)
+        set_air(x, ground + trunk + 1, z, tree.leaves)
+        leaf_start = ground + max(2, trunk - tree.leaf_down)
+        for y in range(leaf_start, ground + trunk + 1):
+            dy_from_top = (ground + trunk) - y
+            if dy_from_top == 0:
+                cur_r = 1
+            else:
+                cur_r = max(1, tree.radius - (dy_from_top // 3))
+                if dy_from_top % 3 != 1:
+                    cur_r = max(1, cur_r - 1)
+            for dz in range(-cur_r, cur_r + 1):
+                for dx in range(-cur_r, cur_r + 1):
+                    if dx == 0 and dz == 0:
+                        continue
+                    if cur_r > 1 and abs(dx) == cur_r and abs(dz) == cur_r:
+                        continue
+                    set_air(x + dx, y, z + dz, tree.leaves)
+
+    elif shape in ("redwood", "giant"):
+        # 2x2 trunk. (x, z) is the north-west corner; foliage is centered on the trunk.
+        columns = ((0, 0), (1, 0), (0, 1), (1, 1))
+        for i in range(1, trunk + 1):
+            for dx, dz in columns:
+                set_trunk(x + dx, ground + i, z + dz, tree.trunk)
+        top = ground + trunk
+        for dx, dz in columns:
+            set_air(x + dx, top + 1, z + dz, tree.leaves)
+        leaf_start = ground + max(4, trunk - tree.leaf_down)
+        for y in range(leaf_start, top + 1):
+            dy_from_top = top - y
+            cur_r = 2 if dy_from_top <= 1 else min(tree.radius, 2 + dy_from_top // 3)
+            for dz in range(-cur_r + 1, cur_r + 1):
+                for dx in range(-cur_r + 1, cur_r + 1):
+                    if (dx, dz) in columns:
+                        continue
+                    if max(abs(dx - 0.5), abs(dz - 0.5)) > cur_r:
+                        continue
+                    if cur_r > 2 and abs(dx - 0.5) > cur_r - 1 and abs(dz - 0.5) > cur_r - 1:
                         continue
                     set_air(x + dx, y, z + dz, tree.leaves)
 
@@ -290,6 +357,23 @@ def tree_blocks(tree, x, ground, z, seed):
             for dz in range(-cur_r, cur_r + 1):
                 for dx in range(-cur_r, cur_r + 1):
                     if cur_r > 1 and abs(dx) == cur_r and abs(dz) == cur_r:
+                        continue
+                    set_air(x + dx, top + dy, z + dz, tree.leaves)
+
+    elif shape in ("mushroom", "toadstool"):
+        # A stalk with a flat cap. The underside is only the rim, so the stalk stays visible.
+        for i in range(1, trunk + 1):
+            set_trunk(x, ground + i, z, tree.trunk)
+        top = ground + trunk
+        for dy in range(-tree.leaf_down, tree.leaf_up + 1):
+            cur_r = tree.radius if dy <= 0 else max(1, tree.radius - dy)
+            for dz in range(-cur_r, cur_r + 1):
+                for dx in range(-cur_r, cur_r + 1):
+                    if dx == 0 and dz == 0 and dy <= 0:
+                        continue
+                    if abs(dx) == cur_r and abs(dz) == cur_r:
+                        continue
+                    if dy < 0 and max(abs(dx), abs(dz)) < max(1, cur_r - 1):
                         continue
                     set_air(x + dx, top + dy, z + dz, tree.leaves)
 
@@ -383,6 +467,8 @@ class World:
         self.seed = int(seed)
         self.store = store
         self.day_time = float(day_time)
+        self.weather = None
+        self.weather_at = 0.0
         self.caves = load_caves() if caves is None else tuple(caves)
         self.biomes = BIOMES if biomes is None else tuple(biomes)
         self.ores = load_ores() if ores is None else tuple(ores)
@@ -403,6 +489,7 @@ class World:
         self.columns = set()
         self.column_max = {}
         self.players = {}
+        self.remote_players = {}
         self.entities = []
         self.pending_hurts = []
         # Optional hook so a host (the multiplayer server) can announce new
@@ -434,6 +521,18 @@ class World:
         from server.crops import CropGrowthSystem
 
         self.crops = CropGrowthSystem(self)
+        from server.lichen import LichenGrowthSystem
+
+        self.lichen = LichenGrowthSystem(self)
+        from server.fire import FireSystem
+
+        self.fire = FireSystem(self)
+        from server.pit_kiln import PitKilnSystem
+
+        self.pit_kilns = PitKilnSystem(self)
+        from server.snow import SnowSystem
+
+        self.snow = SnowSystem(self)
         self._singleplayer_player = None
         if load_entities and self.store is not None:
             self.load_entities()
@@ -509,12 +608,21 @@ class World:
             self.furnaces[key].block_id = str(block_id)
         return self.furnaces[key]
 
+    def update_pit_kilns(self, dt):
+        kilns = getattr(self, "pit_kilns", None)
+        if kilns is not None:
+            kilns.update(dt)
+
     def update_furnaces(self, dt):
         for furnace in list(self.furnaces.values()):
             was_lit = furnace.is_lit
             furnace.tick(dt)
             if furnace.is_lit != was_lit and getattr(self, "lighting", None) is not None:
-                self.lighting.on_block_changed(furnace.x, furnace.y, furnace.z, was_emitter=True)
+                self.lighting.on_block_changed(
+                    furnace.x, furnace.y, furnace.z,
+                    was_emitter=True,
+                    light_decreased=not furnace.is_lit,
+                )
 
     def update_fluids(self, dt):
         fluid = getattr(self, "fluid", None)
@@ -528,6 +636,7 @@ class World:
         finally:
             if lighting is not None:
                 lighting.end_batch()
+                lighting.drain_pending_light(1)
 
     def update_leaves(self, dt):
         if getattr(self, "leaf_decay", None) is not None:
@@ -539,6 +648,12 @@ class World:
             return self.transformations.update(dt)
         return []
 
+    def update_snow(self, dt):
+        snow = getattr(self, "snow", None)
+        if snow is None:
+            return []
+        return snow.update(dt)
+
     def update_saplings(self, dt):
         if getattr(self, "saplings", None) is not None:
             return self.saplings.update(dt)
@@ -548,6 +663,30 @@ class World:
         if getattr(self, "crops", None) is not None:
             return self.crops.update(dt)
         return []
+
+    def update_lichen(self, dt):
+        lichen = getattr(self, "lichen", None)
+        if lichen is None:
+            return []
+        return lichen.update(dt)
+
+    def update_fire(self, dt):
+        fire = getattr(self, "fire", None)
+        if fire is None:
+            return []
+        lighting = getattr(self, "lighting", None)
+        if lighting is not None:
+            lighting.begin_batch()
+        # One tree can turn dozens of leaves into flames. Recomputing light on
+        # every cell is the hitch; the batch relights each section once.
+        self._fire_light_batch = True
+        try:
+            return fire.update(dt)
+        finally:
+            self._fire_light_batch = False
+            if lighting is not None:
+                lighting.end_batch()
+                lighting.drain_pending_light(1)
 
     def _notify_entity_spawn(self, entity):
         callback = getattr(self, "on_entity_spawn", None)
@@ -570,8 +709,9 @@ class World:
         self._notify_entity_spawn(entity)
         return entity
 
-    def spawn_mob(self, mob_or_type, pos=None, vel=None, yaw=0.0, pitch=0.0):
-        from server.entity import Cow, Mob, Pig, Sheep, Zombie, Spider
+    def spawn_mob(self, mob_or_type, pos=None, vel=None, yaw=0.0, pitch=0.0, baby=False, after_init=None):
+        from server.entity import AssetMob, Cow, DesertSkeleton, DesertSpider, DesertZombie, Mob, Pig, Sheep, Skeleton, Spider, Zombie
+        from server.mobs import MOBS
 
         if isinstance(mob_or_type, (Mob, Pig, Sheep, Zombie, Spider, Cow)):
             mob = mob_or_type
@@ -585,16 +725,30 @@ class World:
             mob = Sheep(pos=pos, vel=vel, yaw=yaw, pitch=pitch)
         elif str(mob_or_type) == "zombie":
             mob = Zombie(pos=pos, vel=vel, yaw=yaw, pitch=pitch)
+        elif str(mob_or_type) == "desert_zombie":
+            mob = DesertZombie(pos=pos, vel=vel, yaw=yaw, pitch=pitch)
         elif str(mob_or_type) == "spider":
             mob = Spider(pos=pos, vel=vel, yaw=yaw, pitch=pitch)
+        elif str(mob_or_type) == "desert_spider":
+            mob = DesertSpider(pos=pos, vel=vel, yaw=yaw, pitch=pitch)
+        elif str(mob_or_type) == "skeleton":
+            mob = Skeleton(pos=pos, vel=vel, yaw=yaw, pitch=pitch)
+        elif str(mob_or_type) == "desert_skeleton":
+            mob = DesertSkeleton(pos=pos, vel=vel, yaw=yaw, pitch=pitch)
+        elif str(mob_or_type) in MOBS:
+            mob = AssetMob(str(mob_or_type), pos=pos, vel=vel, yaw=yaw, pitch=pitch)
         else:
-            mob = Mob(mob_type=str(mob_or_type), pos=pos, vel=vel, yaw=yaw, pitch=pitch)
+            return None
+        if after_init is not None:
+            after_init(mob)
+        if baby and hasattr(mob, "make_baby"):
+            mob.make_baby()
         mob.world = self
         self.entities.append(mob)
         self._notify_entity_spawn(mob)
         return mob
 
-    def spawn_arrow(self, arrow_id, pos=None, vel=None, damage=1.0, power=1.0, gravity=12.0, effects=(), owner="", age=0.0):
+    def spawn_arrow(self, arrow_id, pos=None, vel=None, damage=1.0, power=1.0, gravity=12.0, effects=(), owner="", age=0.0, recoverable=True):
         from server.entity import ArrowEntity
 
         entity = ArrowEntity(
@@ -607,6 +761,7 @@ class World:
             effects=effects,
             owner=owner,
             age=age,
+            recoverable=recoverable,
         )
         self.entities.append(entity)
         self._notify_entity_spawn(entity)
@@ -849,7 +1004,11 @@ class World:
             return self.set_block(x, y, z, SUB_CELL_BLOCK)
 
         if getattr(self, "lighting", None) is not None:
-            self.lighting.on_block_changed(x, y, z, was_emitter=was_lit_furnace)
+            self.lighting.on_block_changed(
+                x, y, z,
+                was_emitter=was_lit_furnace,
+                light_decreased=was_lit_furnace,
+            )
         if getattr(self, "on_block_set", None) is not None:
             self.on_block_set(x, y, z, SUB_CELL_BLOCK)
         return True
@@ -905,6 +1064,12 @@ class World:
                 # Open front and sides allow water flow
                 return False
 
+        from server.fluid import lets_fluid_through
+
+        dx, dy, dz = flow_dir if flow_dir is not None else (0, 0, 0)
+        if lets_fluid_through(self, x, y, z, dx, dy, dz):
+            return False
+
         return True
 
     def blocks_movement(self, x, y, z):
@@ -944,6 +1109,11 @@ class World:
         b_obj = BLOCKS.get(block_id)
         if b_obj is None or not b_obj.solid:
             return []
+
+        layers = int((b_obj.properties or {}).get("snow_layers") or 0)
+        if layers > 0:
+            height = min(1.0, layers / 8.0)
+            return [(float(x), float(y), float(z), float(x + 1), float(y) + height, float(z + 1))]
 
         from server.blocks import (
             door_bounds,
@@ -1116,6 +1286,8 @@ class World:
                         scnt = stack_count(stack)
                         if sid and scnt > 0:
                             self.spawn_item(sid, count=scnt, pos=(x + 0.5, y + 0.5, z + 0.5))
+        if old_block is not None and old_block.id == "pit_kiln" and getattr(self, "pit_kilns", None) is not None:
+            self.pit_kilns.break_at(x, y, z, spawn=bool(simulate))
         if simulate and old_block and getattr(old_block, "fluid_breakable", False):
             from server.fluid import is_fluid, is_water
 
@@ -1148,8 +1320,29 @@ class World:
             old_em = em_lut[old_idx]
             new_em = em_lut[stored]
             if was_lit_furnace or op_lut[old_idx] != op_lut[stored] or np.any(old_em != new_em):
-                was_emitter = bool(was_lit_furnace or np.any(old_em > 0) or np.any(new_em > 0))
-                self.lighting.on_block_changed(x, y, z, was_emitter=was_emitter)
+                light_decreased = bool(was_lit_furnace or np.any(old_em > new_em))
+                was_emitter = bool(light_decreased or np.any(old_em > 0) or np.any(new_em > 0))
+                opacity_delta = int(op_lut[stored]) - int(op_lut[old_idx])
+                # Fluids only nudge opacity. Rebuilding every lit section for
+                # that nudge is what stuttered while lava spread.
+                full_relight = light_decreased or abs(opacity_delta) > 2
+                if getattr(self, "_fire_light_batch", False):
+                    # New flames relight the edited section only. A flame going
+                    # out has to clear the neighborhood, or the glow stays in
+                    # the chunks it spilled into.
+                    self.lighting.on_block_changed(
+                        x, y, z,
+                        was_emitter=True,
+                        light_decreased=light_decreased,
+                        full_relight=light_decreased,
+                    )
+                else:
+                    self.lighting.on_block_changed(
+                        x, y, z,
+                        was_emitter=was_emitter,
+                        light_decreased=light_decreased,
+                        full_relight=full_relight,
+                    )
         if getattr(self, "on_block_set", None) is not None:
             self.on_block_set(x, y, z, block_id if block_id not in ("", None) else AIR)
         if not simulate:
@@ -1161,14 +1354,21 @@ class World:
             self.fluid.schedule(x, y, z)
         if getattr(self, "leaf_decay", None) is not None and old_block:
             from server.tags import has_block_tag
+            new_props = getattr(BLOCKS.get(block_id), "properties", None) or {}
+            became_fire = bool(new_props.get("fire"))
             if has_block_tag(old_block.id, "logs") or "log" in old_block.id:
                 self.leaf_decay.schedule_neighbors(x, y, z, radius=5)
-            elif has_block_tag(old_block.id, "leaves") or "leaves" in old_block.id:
+            elif (
+                not became_fire
+                and (has_block_tag(old_block.id, "leaves") or "leaves" in old_block.id)
+            ):
                 self.leaf_decay.schedule_neighbors(x, y, z, radius=2)
         if getattr(self, "saplings", None) is not None:
             self.saplings.on_block_set(x, y, z, block_id if block_id not in ("", None) else AIR)
         if getattr(self, "crops", None) is not None:
             self.crops.on_block_set(x, y, z, block_id if block_id not in ("", None) else AIR)
+        if getattr(self, "fire", None) is not None:
+            self.fire.on_block_set(x, y, z, block_id if block_id not in ("", None) else AIR)
         if simulate and old_block:
             from server.blocks import get_door_info, get_tall_plant_info
             old_d_info = get_door_info(old_block)
@@ -1201,8 +1401,16 @@ class World:
         self.notify_neighbors_falling(x, y, z)
         self.check_plant_support(x, y + 1, z)
         self.check_door_support(x, y + 1, z)
-        for tx, ty, tz in ((x, y + 1, z), (x + 1, y, z), (x - 1, y, z), (x, y, z + 1), (x, y, z - 1)):
+        for tx, ty, tz in (
+            (x, y + 1, z),
+            (x, y - 1, z),
+            (x + 1, y, z),
+            (x - 1, y, z),
+            (x, y, z + 1),
+            (x, y, z - 1),
+        ):
             self.check_torch_support(tx, ty, tz)
+            self.check_vine_support(tx, ty, tz)
         return True
 
     def check_door_support(self, x, y, z):
@@ -1221,6 +1429,27 @@ class World:
                     if count > 0:
                         self.spawn_item(drop_id, count=count, pos=(x + 0.5, y + 0.5, z + 0.5))
                 self.set_block(x, y, z, AIR)
+
+    def check_vine_support(self, x, y, z):
+        if y <= 0 or y >= WORLD_HEIGHT:
+            return
+        from server.blocks import BLOCKS, vine_block_id, vine_info, vine_supported_mask
+        from server.loot import get_block_drops
+
+        info = vine_info(self.get_block(x, y, z))
+        if info is None or info["mask"] == 0:
+            return
+        kept = vine_supported_mask(self, x, y, z, info["mask"])
+        if kept == info["mask"]:
+            return
+        if kept == 0:
+            drops = get_block_drops(BLOCKS.get(info["base_id"]))
+            for drop_id, count in drops:
+                if count > 0:
+                    self.spawn_item(drop_id, count=count, pos=(x + 0.5, y + 0.2, z + 0.5))
+            self.set_block(x, y, z, AIR)
+            return
+        self.set_block(x, y, z, vine_block_id(info["base_id"], kept))
 
     def check_torch_support(self, x, y, z):
         if y <= 0 or y >= WORLD_HEIGHT:
@@ -1643,6 +1872,8 @@ class World:
             self.saplings.save()
         if getattr(self, "crops", None) is not None:
             self.crops.save()
+        if getattr(self, "pit_kilns", None) is not None:
+            self.pit_kilns.save()
 
     def commit_chunk(self, chunk):
         if chunk is None:
@@ -1755,6 +1986,12 @@ class World:
             data[cover_mask & columns & (levels >= soil_top)] = block_index(biome.soil)
             data[cover_mask & columns & (levels < soil_top)] = block_index(biome.subsoil)
             data[top_mask & columns] = block_index(biome.surface)
+            if getattr(biome, "precipitation", "rain") == "snow":
+                sy = surface - y0 + 1
+                cover = columns & (surface > WATER_LEVEL) & (sy >= 0) & (sy < CHUNK_SIZE)
+                if np.any(cover):
+                    lz, lx = np.nonzero(cover)
+                    data[np.asarray(sy[lz, lx], dtype=np.intp), lz, lx] = block_index("snow_layer")
 
         chunk_xx = xx[margin : margin + CHUNK_SIZE, margin : margin + CHUNK_SIZE]
         chunk_zz = zz[margin : margin + CHUNK_SIZE, margin : margin + CHUNK_SIZE]
@@ -1809,6 +2046,7 @@ class World:
                 w_idx_3d = np.broadcast_to(w_idx_2d, data.shape)
                 data[water_mask] = w_idx_3d[water_mask]
 
+        self._lay_island_beaches(data, catalog, here, levels, tops, surface)
         self._place_ores(data, x0, y0, z0, ub_active=ub_active)
         self._carve_caves(data, x0, y0, z0, heights, sub_top=sub_top, ub_active=ub_active)
         self._place_features(data, x0, y0, z0, heights, sample)
@@ -1854,8 +2092,12 @@ class World:
         if not getattr(self, "underground_biomes", None):
             return active
         y1 = y0 + CHUNK_SIZE - 1
+        locked = []
         for ub in self.underground_biomes:
             if not ub.enabled or y0 > ub.max_y or y1 < ub.min_y:
+                continue
+            if getattr(ub, "surface_biomes", ()):
+                locked.append(ub)
                 continue
             noise = fbm3_grid(
                 xs * ub.scale,
@@ -1867,7 +2109,57 @@ class World:
             mask = (noise >= ub.threshold) & (ys >= ub.min_y) & (ys <= ub.max_y)
             if np.any(mask):
                 active[ub.id] = (ub, mask)
+        # A surface-locked biome replaces whatever noise biome was under that island.
+        for ub in locked:
+            from server.biomes import biome_index_grid
+
+            span = np.arange(CHUNK_SIZE)
+            zz, xx = np.meshgrid(z0 + span, x0 + span, indexing="ij")
+            indices, catalog = biome_index_grid(xx, zz, self.seed, self.biomes)
+            wanted = np.zeros(indices.shape, dtype=bool)
+            allowed = set(ub.surface_biomes)
+            for index, biome in enumerate(catalog):
+                if biome.id in allowed:
+                    wanted |= indices == index
+            if not np.any(wanted):
+                continue
+            columns = wanted.reshape(1, CHUNK_SIZE, CHUNK_SIZE)
+            mask = columns & (ys >= ub.min_y) & (ys <= ub.max_y)
+            if not ub.always:
+                noise = fbm3_grid(
+                    xs * ub.scale,
+                    ys * ub.scale,
+                    zs * ub.scale,
+                    ub.octaves,
+                    self.seed + ub.seed_offset,
+                )
+                mask = mask & (noise >= ub.threshold)
+            if np.any(mask):
+                active[ub.id] = (ub, mask)
         return active
+
+    def _lay_island_beaches(self, data, catalog, here, levels, tops, surface):
+        """Swap the low rim of an island for the beach blocks named in its asset."""
+        for index, biome in enumerate(catalog):
+            beach = (getattr(biome, "island", None) or {}).get("beach")
+            if not beach:
+                continue
+            shore = (here == index) & (surface <= (WATER_LEVEL + int(beach["margin"])))
+            if not np.any(shore):
+                continue
+            depth = int(beach["soil_depth"])
+            sub_depth = int(beach["subsoil_depth"])
+            sand = block_index(beach["surface"])
+            soil = block_index(beach["soil"])
+            sub = block_index(beach["subsoil"])
+            col = shore.reshape(1, CHUNK_SIZE, CHUNK_SIZE)
+            sand_floor = tops - depth
+            sub_floor = sand_floor - sub_depth
+            filled = levels <= tops
+            data[col & (levels == tops) & (levels > 0)] = sand
+            data[col & filled & (levels < tops) & (levels >= sand_floor) & (levels > 0)] = soil
+            if sub_depth:
+                data[col & filled & (levels < sand_floor) & (levels >= sub_floor) & (levels > 0)] = sub
 
     def _place_ores(self, data, x0, y0, z0, exclude_mask=None, ub_active=None):
         if not self.ores:
@@ -2373,11 +2665,164 @@ class World:
                                         data[shore_y - y0, lz, lx] = block_index(shore)
                                         if y0 <= shore_y - 1 < y0 + CHUNK_SIZE:
                                             data[shore_y - 1 - y0, lz, lx] = block_index("mud")
+            elif feat.type == "pool":
+                if feat.chance > 0:
+                    self._place_surface_pool(data, x0, y0, z0, feat, sample)
+                if feat.underground_chance > 0:
+                    self._place_underground_pool(data, x0, y0, z0, feat, sample)
+
+    def _feature_salt(self, feat):
+        return sum(ord(ch) for ch in feat.id) * 131
+
+    def _place_surface_pool(self, data, x0, y0, z0, feat, sample):
+        fluid_idx = block_index(feat.fluid)
+        if fluid_idx is None:
+            return
+        salt = self._feature_salt(feat)
+        cx = x0 // CHUNK_SIZE
+        cz = z0 // CHUNK_SIZE
+        for ncz in (cz - 1, cz, cz + 1):
+            for ncx in (cx - 1, cx, cx + 1):
+                orig_x = ncx * CHUNK_SIZE
+                orig_z = ncz * CHUNK_SIZE
+                roll = hash2(orig_x + 17, orig_z - 29, self.seed + salt)
+                if roll > feat.chance:
+                    continue
+                rel_cx = 4 + int(hash2(orig_x + 3, orig_z + 7, self.seed + salt + 1) * 8)
+                rel_cz = 4 + int(hash2(orig_x + 11, orig_z - 13, self.seed + salt + 2) * 8)
+                center_wx = orig_x + rel_cx
+                center_wz = orig_z + rel_cz
+                center_y = terrain_height(center_wx, center_wz, self.seed, self.biomes)
+                if center_y <= WATER_LEVEL + 1 or center_y >= WORLD_HEIGHT - 10:
+                    continue
+                biome = biome_at(center_wx, center_wz, self.seed, self.biomes)
+                if feat.biomes and biome.id not in feat.biomes:
+                    continue
+                span = max(0, feat.radius_max - feat.radius_min)
+                radius = feat.radius_min + int(hash2(center_wx + 5, center_wz - 5, self.seed + salt) * (span + 1))
+                radius = max(1, radius)
+                samples = [
+                    terrain_height(center_wx + dx, center_wz + dz, self.seed, self.biomes)
+                    for dx, dz in ((0, 0), (radius, 0), (-radius, 0), (0, radius), (0, -radius))
+                ]
+                if max(samples) - min(samples) > 3:
+                    continue
+                self._fill_pool_columns(
+                    data, x0, y0, z0, feat, sample, center_wx, center_wz, min(samples), radius, fluid_idx, salt, surface=True
+                )
+
+    def _place_underground_pool(self, data, x0, y0, z0, feat, sample):
+        fluid_idx = block_index(feat.fluid)
+        if fluid_idx is None:
+            return
+        salt = self._feature_salt(feat) + 9000
+        roll = hash2(x0 + 3, z0 - 5, self.seed + salt + y0)
+        if roll > feat.underground_chance:
+            return
+        span = max(0, feat.radius_max - feat.radius_min)
+        radius = max(1, feat.radius_min + int(hash2(x0, z0, self.seed + salt) * (span + 1)))
+        inset = radius + 1
+        if inset >= CHUNK_SIZE - inset:
+            return
+        floors = []
+        for ly in range(1, CHUNK_SIZE - 1):
+            wy = y0 + ly
+            for lz in range(inset, CHUNK_SIZE - inset):
+                for lx in range(inset, CHUNK_SIZE - inset):
+                    if int(data[ly, lz, lx]) != 0:
+                        continue
+                    below = int(data[ly - 1, lz, lx])
+                    if below == 0:
+                        continue
+                    ground = sample(lx, lz)
+                    if wy >= ground - 5 or wy < 4:
+                        continue
+                    floors.append((lx, ly, lz))
+        if not floors:
+            return
+        lx, ly, lz = floors[int(hash2(x0 + ly, z0, self.seed + salt) * len(floors)) % len(floors)]
+        self._fill_pool_columns(
+            data,
+            x0,
+            y0,
+            z0,
+            feat,
+            sample,
+            x0 + lx,
+            z0 + lz,
+            y0 + ly - 1,
+            radius,
+            fluid_idx,
+            salt,
+            surface=False,
+        )
+
+    def _fill_pool_columns(self, data, x0, y0, z0, feat, sample, center_wx, center_wz, surface_y, radius, fluid_idx, salt, surface):
+        from server.fluid import is_fluid
+
+        depth = max(1, int(feat.depth))
+        beds = feat.bed_blocks or ("stone",)
+        shores = feat.shore_blocks or ("stone",)
+        for lz in range(CHUNK_SIZE):
+            wz = z0 + lz
+            dz = wz - center_wz
+            for lx in range(CHUNK_SIZE):
+                wx = x0 + lx
+                dx = wx - center_wx
+                dist = math.sqrt(dx * dx + dz * dz) / max(1, radius)
+                if dist > 1.35:
+                    continue
+                if surface:
+                    local_g = sample(lx, lz)
+                    if dist <= 1.0:
+                        bowl = max(1, round(depth * (1.0 - dist * dist)))
+                        floor_y = surface_y - bowl
+                        top_fill = min(surface_y, local_g)
+                        for y in range(floor_y, top_fill + 1):
+                            if y0 <= y < y0 + CHUNK_SIZE:
+                                data[y - y0, lz, lx] = fluid_idx
+                        for y in range(top_fill + 1, local_g + 2):
+                            if y0 <= y < y0 + CHUNK_SIZE:
+                                data[y - y0, lz, lx] = 0
+                        bed_y = floor_y - 1
+                        if y0 <= bed_y < y0 + CHUNK_SIZE:
+                            bed = beds[int(hash2(wx, wz, self.seed + salt) * len(beds)) % len(beds)]
+                            bed_idx = block_index(bed)
+                            if bed_idx is not None:
+                                data[bed_y - y0, lz, lx] = bed_idx
+                    else:
+                        shore_y = local_g
+                        if y0 <= shore_y < y0 + CHUNK_SIZE:
+                            shore = shores[int(hash2(wx, wz, self.seed + salt + 4) * len(shores)) % len(shores)]
+                            shore_idx = block_index(shore)
+                            if shore_idx is not None:
+                                data[shore_y - y0, lz, lx] = shore_idx
+                    continue
+                bowl = max(1, round(depth * (1.0 - min(1.0, dist) * min(1.0, dist)))) if dist <= 1.0 else 0
+                if bowl <= 0:
+                    continue
+                for step in range(bowl):
+                    y = surface_y - step
+                    if y0 <= y < y0 + CHUNK_SIZE:
+                        current = block_from_index(int(data[y - y0, lz, lx]))
+                        if current is not None and is_fluid(current.id) and current.id != feat.fluid:
+                            continue
+                        data[y - y0, lz, lx] = fluid_idx
+                bed_y = surface_y - bowl
+                if y0 <= bed_y < y0 + CHUNK_SIZE:
+                    bed = beds[int(hash2(wx, wz, self.seed + salt) * len(beds)) % len(beds)]
+                    bed_idx = block_index(bed)
+                    if bed_idx is not None:
+                        current = block_from_index(int(data[bed_y - y0, lz, lx]))
+                        if current is None or not is_fluid(current.id):
+                            data[bed_y - y0, lz, lx] = bed_idx
 
     def _remember(self, chunk):
         key = (chunk.cx, chunk.cy, chunk.cz)
         self.chunks[key] = chunk
         self.dirty.add(key)
+        if getattr(self, "fire", None) is not None:
+            self.fire.scan_chunk(chunk)
         column = (chunk.cx, chunk.cz)
         self.columns.add(column)
         if chunk.cy > self.column_max.get(column, -1):
@@ -2482,6 +2927,11 @@ class World:
         )
         if decorator is None:
             return None
+        # A redwood's other three trunk columns have to stay in this chunk.
+        if str(getattr(decorator, "shape", "")).lower() == "redwood" and (
+            x % CHUNK_SIZE == CHUNK_SIZE - 1 or z % CHUNK_SIZE == CHUNK_SIZE - 1
+        ):
+            return None
         if any(cave.opens(x, height, z, height, self.seed) for cave in self.caves):
             return None
         return decorator
@@ -2490,21 +2940,13 @@ class World:
         if 0 <= lx < CHUNK_SIZE and 0 <= lz < CHUNK_SIZE and y0 <= ground < y0 + CHUNK_SIZE:
             under = int(data[ground - y0, lz, lx])
             under_b = block_from_index(under)
-            under_id = under_b.id if under_b else ""
-            valid_b = getattr(tree, "valid_blocks", ("grass", "dirt", "muddy_grass", "mud"))
-            from server.tags import has_block_tag
-
-            is_valid = False
-            for vb in valid_b:
-                if vb.startswith("#"):
-                    if has_block_tag(under_id, vb[1:]):
-                        is_valid = True
-                        break
-                elif under_id == vb:
-                    is_valid = True
-                    break
-            if not is_valid and under_id not in ("grass", "dirt", "muddy_grass", "mud"):
-                return
+            surface_id = under_b.id if under_b else ""
+        else:
+            # The stem stands in another chunk. Judge the same surface that
+            # chunk will see, or its cap is left behind with nothing under it.
+            surface_id = _column_surface(biome_at(wx, wz, self.seed, self.biomes), ground)
+        if not _supports_tree(tree, surface_id):
+            return
 
         x0 = wx - lx
         z0 = wz - lz
@@ -2528,7 +2970,7 @@ class World:
                 continue
             if replace:
                 cur = int(data[by - y0, z, x])
-                if cur == 0 or cur == leaves_index:
+                if _trunk_can_replace(cur, leaves_index):
                     data[by - y0, z, x] = block_index(block_id)
             elif data[by - y0, z, x] == 0:
                 data[by - y0, z, x] = block_index(block_id)
@@ -2548,7 +2990,7 @@ class World:
                 return
             current = self.get_block(bx, by, bz)
             if replace:
-                if current not in (AIR, leaves_id):
+                if current not in (AIR, leaves_id) and not _block_is_snow(current):
                     return
             elif current != AIR:
                 return
@@ -2560,7 +3002,7 @@ class World:
         return changed
 
     def _place_decorations(self, data, x0, y0, z0, sample, blocked_below=None, blocked_above=None):
-        from server.blocks import get_tall_plant_info
+        from server.blocks import get_tall_plant_info, is_vine
 
         for lz in range(CHUNK_SIZE):
             wz = z0 + lz
@@ -2656,6 +3098,25 @@ class World:
                         if upper_chunk is not None and upper_chunk.data[0, lz, lx] not in (0, upper_idx):
                             continue
                         data[dec_y - y0, lz, lx] = b_idx
+                elif is_vine(chosen):
+                    from server.blocks import vine_bit_for_normal, vine_block_id
+
+                    carpet = block_index(vine_block_id(chosen, 32))
+                    if carpet is not None and y0 <= dec_y < y0 + CHUNK_SIZE and data[dec_y - y0, lz, lx] == 0:
+                        data[dec_y - y0, lz, lx] = carpet
+                    # A drop beside the column gets a sheet on that exposed face.
+                    for dx, dz in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                        nx = lx + dx
+                        nz = lz + dz
+                        if nx < 0 or nz < 0 or nx >= CHUNK_SIZE or nz >= CHUNK_SIZE:
+                            continue
+                        if sample(nx, nz) >= gy:
+                            continue
+                        if y0 <= gy < y0 + CHUNK_SIZE and data[gy - y0, nz, nx] == 0:
+                            sheet = block_index(vine_block_id(chosen, vine_bit_for_normal((dx, 0, dz))))
+                            if sheet is not None:
+                                data[gy - y0, nz, nx] = sheet
+                                break
                 elif chosen == "cactus":
                     c_height = 1 + int(hash2(wx, wz, self.seed + 777) * 3)
                     c_height = min(3, max(1, c_height))

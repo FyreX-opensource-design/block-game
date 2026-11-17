@@ -23,6 +23,18 @@
     "birch_log_z",
     "birch_wood",
     "birch_wood_x",
-    "birch_wood_z"
+    "birch_wood_z",
+    "spruce_log",
+    "spruce_log_x",
+    "spruce_log_z",
+    "spruce_wood",
+    "spruce_wood_x",
+    "spruce_wood_z",
+    "redwood_log",
+    "redwood_log_x",
+    "redwood_log_z",
+    "redwood_wood",
+    "redwood_wood_x",
+    "redwood_wood_z"
   ]
 }

@@ -1,0 +1,22 @@
+{
+  "id": "fluor_lichen",
+  "lang": "block.fluor_lichen",
+  "tab": ["building", "natural"],
+  "model": "vine",
+  "render": "cutout",
+  "solid": false,
+  "hardness": 0.0,
+  "tool": "none",
+  "mining_level": 0,
+  "fluid_breakable": true,
+  "sound": "grass",
+  "textures": {
+    "side": "fluor_lichen"
+  },
+  "fluorescence": {
+    "texture": "fluor_lichen_glow",
+    "start": 1,
+    "full": 5,
+    "strength": 1
+  }
+}

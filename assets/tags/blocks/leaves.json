@@ -7,6 +7,10 @@
     "acacia_leaves",
     "acacia_leaves_persistent",
     "birch_leaves",
-    "birch_leaves_persistent"
+    "birch_leaves_persistent",
+    "spruce_leaves",
+    "spruce_leaves_persistent",
+    "redwood_leaves",
+    "redwood_leaves_persistent"
   ]
 }

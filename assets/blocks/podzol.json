@@ -1,0 +1,17 @@
+{
+  "id": "podzol",
+  "lang": "block.podzol",
+  "tab": "natural",
+  "model": "cube",
+  "soil": true,
+  "hardness": 0.5,
+  "tool": "shovel",
+  "mining_level": 0,
+  "loot_table": "blocks/podzol",
+  "sound": "dirt",
+  "textures": {
+    "top": "podzol_top",
+    "side": "podzol_side",
+    "bottom": "dirt"
+  }
+}

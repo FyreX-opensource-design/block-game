@@ -35,7 +35,9 @@ class SaplingTests(unittest.TestCase):
         saplings = {sapling.id: sapling for sapling in load_saplings()}
         tree_ids = {tree.id for tree in DECORATORS}
 
-        self.assertEqual(set(saplings), {"oak_sapling", "pine_sapling", "birch_sapling"})
+        self.assertEqual(set(saplings), {"oak_sapling", "pine_sapling", "birch_sapling", "spruce_sapling", "redwood_sapling"})
+        self.assertEqual(saplings["redwood_sapling"].width, 2)
+        self.assertEqual(saplings["spruce_sapling"].width, 1)
         self.assertEqual(saplings["oak_sapling"].block, "oak_sapling")
         self.assertEqual(set(saplings["oak_sapling"].tree_ids), {"oak", "fancy_oak", "tall_oak"})
         self.assertEqual(saplings["pine_sapling"].tree_ids, ("pine",))
@@ -46,7 +48,7 @@ class SaplingTests(unittest.TestCase):
             self.assertLessEqual(sapling.max_time, 30 * 60)
 
     def test_sapling_blocks_and_items_are_registered(self):
-        for sapling_id in ("oak_sapling", "pine_sapling", "birch_sapling"):
+        for sapling_id in ("oak_sapling", "pine_sapling", "birch_sapling", "spruce_sapling", "redwood_sapling"):
             block = BLOCKS[sapling_id]
             self.assertFalse(block.solid)
             self.assertTrue(block.cutout)

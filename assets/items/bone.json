@@ -1,0 +1,15 @@
+{
+  "id": "bone",
+  "name": "Bone",
+  "tab": ["materials"],
+  "model": "flat",
+  "texture": "bone",
+  "max_stack": 64,
+  "left": "none",
+  "right": "none",
+  "durability": 0,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 2,
+  "lang": "item.bone"
+}

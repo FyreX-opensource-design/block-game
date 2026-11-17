@@ -138,6 +138,9 @@ def match_grid(ids, recipes, recipe_types=None):
     window = _window(norm_ids)
     filled = [index for index, block_id in enumerate(norm_ids) if block_id]
     allowed_types = set(recipe_types) if recipe_types else set(CRAFTING_TYPES)
+    # A tag recipe such as "#logs -> planks" matches every wood. Remember it, but
+    # prefer a later recipe that names the ingredient exactly.
+    tagged = None
     for recipe in recipes:
         if recipe.type not in allowed_types:
             continue
@@ -150,11 +153,15 @@ def match_grid(ids, recipes, recipe_types=None):
             if _pattern_matches(pattern, _mirror(recipe.pattern)):
                 return recipe.result, recipe.count, mirrored
             continue
-        else:
-            actual_items = [norm_ids[index] for index in filled]
-            if _shapeless_matches(actual_items, recipe.ingredients):
-                return recipe.result, recipe.count, filled
-    return None
+        actual_items = [norm_ids[index] for index in filled]
+        if not _shapeless_matches(actual_items, recipe.ingredients):
+            continue
+        if any(str(ingredient).startswith("#") for ingredient in recipe.ingredients):
+            if tagged is None:
+                tagged = (recipe.result, recipe.count, filled)
+            continue
+        return recipe.result, recipe.count, filled
+    return tagged
 
 
 def craft_match(ids, recipe_types=None):

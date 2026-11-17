@@ -60,6 +60,7 @@ class Player:
         self.input = Input()
         self.actual_speed = None
         self.uuid = ""
+        self.held_item = ""
         self.skin = None
         self.gamemode = None
         # Personal spawn point set with /spawnpoint; used on join and /home.
@@ -68,10 +69,13 @@ class Player:
         self.max_health = float(DEFAULT_MAX_HEALTH)
         self.health = float(DEFAULT_MAX_HEALTH)
         self.hurt_time = 0.0
+        self.fire_kind = ""
         self.dead = False
+        self.death_cause = ""
         self._fall_peak = None
         self._suffocation_timer = 0.0
         self._cactus_timer = 0.0
+        self._lava_timer = 0.0
         # Hunger system (survival only)
         self.max_hunger = 20.0
         self.hunger = 20.0
@@ -218,6 +222,7 @@ class Player:
         self._fall_peak = None
         self._suffocation_timer = 0.0
         self._cactus_timer = 0.0
+        self._lava_timer = 0.0
         self._starve_timer = 0.0
         self._regen_timer = 0.0
 
@@ -286,6 +291,12 @@ class Player:
         """
         events = []
         self.hurt_time = max(0.0, self.hurt_time - max(0.0, float(dt)))
+        try:
+            from server.fire import body_flame
+
+            self.fire_kind = body_flame(self.world, self.pos, self.radius, self.height)
+        except Exception:
+            self.fire_kind = ""
         if not self.survival or self.dead:
             self.reset_damage_state()
             return events
@@ -355,6 +366,24 @@ class Player:
         else:
             self._cactus_timer = 0.0
 
+        lava = get_damage_type("lava")
+        if lava is not None and self.fire_kind:
+            interval = max(0.05, lava.interval)
+            if self._lava_timer <= 0.0:
+                dealt = self.take_damage(lava.damage, lava)
+                if dealt > 0:
+                    events.append(DamageEvent(lava, dealt, self.dead))
+                self._lava_timer = interval
+            else:
+                self._lava_timer -= max(0.0, float(dt))
+                while self._lava_timer <= 0.0 and not self.dead:
+                    dealt = self.take_damage(lava.damage, lava)
+                    if dealt > 0:
+                        events.append(DamageEvent(lava, dealt, self.dead))
+                    self._lava_timer += interval
+        else:
+            self._lava_timer = 0.0
+
         # Natural health regeneration when well-fed (hunger >= 18)
         if self.hunger >= 18.0 and self.health < self.max_health:
             self._regen_timer += max(0.0, float(dt))
@@ -408,12 +437,15 @@ class Player:
         self.saturation = 5.0
         self.exhaustion = 0.0
         self.dead = False
+        self.death_cause = ""
         self.hurt_time = 0.0
         self.on_ground = False
         self.reset_damage_state()
         return list(self.pos)
 
-    def collides_at(self, px, py, pz):
+    def collides_blocks(self, px, py, pz):
+        if self.world is None:
+            return False
         if isinstance(getattr(self.world, "chunks", None), dict) and hasattr(self.world, "collides_box"):
             return self.world.collides_box(
                 px - self.radius,
@@ -437,6 +469,23 @@ class Player:
                         return True
         return False
 
+    def collides_at(self, px, py, pz):
+        if self.collides_blocks(px, py, pz):
+            return True
+        from server.collision import hits_body
+
+        return hits_body(self, px, py, pz, self.world)
+
+    def _axis_blocked(self, axis, value):
+        x, y, z = self.pos
+        if axis == 0:
+            x = value
+        elif axis == 1:
+            y = value
+        else:
+            z = value
+        return self.collides_at(x, y, z)
+
     def sweep(self, axis, delta):
         if delta == 0:
             return False
@@ -445,16 +494,15 @@ class Player:
         while abs(left) > 1e-8:
             step = math.copysign(min(abs(left), max_step), left)
             start = self.pos[axis]
-            self.pos[axis] = start + step
-            if not self.collides_at(*self.pos):
+            if not self._axis_blocked(axis, start + step):
+                self.pos[axis] = start + step
                 left -= step
                 continue
             lo = 0.0
             hi = step
             for _ in range(14):
                 mid = (lo + hi) * 0.5
-                self.pos[axis] = start + mid
-                if self.collides_at(*self.pos):
+                if self._axis_blocked(axis, start + mid):
                     hi = mid
                 else:
                     lo = mid
@@ -463,11 +511,10 @@ class Player:
             return True
         return False
 
-    def step_up(self, dx, dz):
-        start_x, start_y, start_z = self.pos
-        self.pos[1] = start_y + 1
+    def _climb(self, start_x, start_y, start_z, dx, dz, lift):
+        self.pos[1] = start_y + lift
         if self.collides_at(*self.pos):
-            self.pos[1] = start_y
+            self.pos[0], self.pos[1], self.pos[2] = start_x, start_y, start_z
             return False
         self.sweep(0, dx)
         self.sweep(2, dz)
@@ -475,8 +522,24 @@ class Player:
         if moved < max(0.02, math.hypot(dx, dz) * 0.35):
             self.pos[0], self.pos[1], self.pos[2] = start_x, start_y, start_z
             return False
-        self.sweep(1, -1.05)
+        self.sweep(1, -(lift + 0.05))
+        # Back on the floor we started from means the move did not climb.
+        # Snow on that same floor only raises the feet a little, and that still counts.
+        if self.pos[1] < start_y + 0.05:
+            self.pos[0], self.pos[1], self.pos[2] = start_x, start_y, start_z
+            return False
         return True
+
+    def step_up(self, dx, dz):
+        start_x, start_y, start_z = self.pos
+        if self._climb(start_x, start_y, start_z, dx, dz, 1.0):
+            return True
+        from server.snow import snow_rise
+
+        extra = snow_rise(self.world, start_x, start_y + 1.0, start_z, dx, dz, self.radius)
+        if extra <= 1e-4:
+            return False
+        return self._climb(start_x, start_y, start_z, dx, dz, 1.0 + extra)
 
     def move_horizontal(self, dx, dz):
         start_x, start_y, start_z = self.pos
@@ -502,12 +565,30 @@ class Player:
         max_y = math.floor(self.pos[1] + self.height - 1e-4)
         min_z = math.floor(self.pos[2] - self.radius)
         max_z = math.floor(self.pos[2] + self.radius - 1e-6)
-        from server.fluid import is_water
+        from server.fluid import is_fluid
 
         for y in range(min_y, max_y + 1):
             for z in range(min_z, max_z + 1):
                 for x in range(min_x, max_x + 1):
-                    if is_water(self.world.get_block(x, y, z)):
+                    if is_fluid(self.world.get_block(x, y, z)):
+                        return True
+        return False
+
+    def in_lava(self):
+        if self.world is None:
+            return False
+        from server.fluid import is_lava
+
+        min_x = math.floor(self.pos[0] - self.radius)
+        max_x = math.floor(self.pos[0] + self.radius - 1e-6)
+        min_y = math.floor(self.pos[1])
+        max_y = math.floor(self.pos[1] + self.height - 1e-4)
+        min_z = math.floor(self.pos[2] - self.radius)
+        max_z = math.floor(self.pos[2] + self.radius - 1e-6)
+        for y in range(min_y, max_y + 1):
+            for z in range(min_z, max_z + 1):
+                for x in range(min_x, max_x + 1):
+                    if is_lava(self.world.get_block(x, y, z)):
                         return True
         return False
 
@@ -570,9 +651,9 @@ class Player:
             is_down = getattr(inp, "down", False) or getattr(inp, "sneak", False)
             if inp.jump:
                 head_y = math.floor(self.pos[1] + self.eye)
-                from server.fluid import is_water
+                from server.fluid import is_fluid
 
-                head_in_water = is_water(self.world.get_block(math.floor(self.pos[0]), head_y, math.floor(self.pos[2])))
+                head_in_water = is_fluid(self.world.get_block(math.floor(self.pos[0]), head_y, math.floor(self.pos[2])))
                 if not head_in_water:
                     self.vel[1] = max(self.vel[1], 5.5)
                 else:
@@ -652,6 +733,10 @@ class Player:
             self.on_ground = grounded or hit_ground
             if self.on_ground and self.vel[1] < 0:
                 self.vel[1] = 0.0
+
+        from server.collision import separate_from_bodies
+
+        separate_from_bodies(self, self.world)
 
         if self.on_ground and self.world is not None:
             by = math.floor(self.pos[1] - 0.05)

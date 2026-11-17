@@ -7,7 +7,15 @@ from PIL import Image
 
 from server.biomes import biome_at, BIOMES
 from server.blocks import AIR, ASSETS, STONE
-from server.cow_model import COW_PARTS, CowMeshes, build_cow_meshes, cow_pose
+from server.cow_model import (
+    COW_PARTS,
+    PIXEL,
+    CowMeshes,
+    build_cow_meshes,
+    cow_part_matrix,
+    cow_pose,
+    transform_vertices,
+)
 from server.entity import Cow, Pig, Sheep, entity_from_dict
 from server.fluid import get_bucket_fluid, get_filled_bucket, get_fluid_def, is_fluid, is_fluid_source
 from server.items import ITEMS
@@ -55,6 +63,18 @@ class CowTests(unittest.TestCase):
         self.assertLess(skin.getpixel((1, 25))[0], 80)
         self.assertLess(skin.getpixel((22, 25))[0], 80)
         self.assertLess(skin.getpixel((25, 25))[0], 80)
+
+    def test_tail_stays_behind_the_rump_while_walking(self):
+        meshes = build_cow_meshes()
+        rear = (COW_PARTS["body"]["pivot"][2] + COW_PARTS["body"]["box"][5]) * PIXEL
+        for time in (0.0, 0.2, 0.5, 1.0, 1.7):
+            poses = cow_pose(time, 2.0, 0.0)
+            self.assertLess(poses["tail"][0], 0.0)
+            posed = transform_vertices(
+                meshes["tail"][0],
+                cow_part_matrix([0.0, 0.0, 0.0], 0.0, "tail", pitch=poses["tail"][0]),
+            )
+            self.assertGreaterEqual(float(posed.reshape(-1, 8)[:, 2].min()), rear - 1e-4)
 
     def test_cow_drops_beef_and_leather_and_beef_cooks(self):
         world = World(seed=1, caves=[])

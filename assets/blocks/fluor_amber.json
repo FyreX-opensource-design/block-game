@@ -1,0 +1,23 @@
+{
+  "id": "fluor_amber",
+  "lang": "block.fluor_amber",
+  "tab": [
+    "building"
+  ],
+  "model": "cube",
+  "hardness": 1.2,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "sound": "stone",
+  "textures": {
+    "top": "fluor_amber",
+    "side": "fluor_amber",
+    "bottom": "fluor_amber"
+  },
+  "fluorescence": {
+    "texture": "fluor_amber_glow",
+    "start": 4,
+    "full": 10,
+    "strength": 1
+  }
+}

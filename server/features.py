@@ -21,6 +21,7 @@ class ConfiguredFeature:
         self.bed_blocks = tuple(str(b) for b in data.get("bed_blocks", ["dirt", "gravel", "clay"]))
         self.shore_blocks = tuple(str(b) for b in data.get("shore_blocks", ["mud", "muddy_grass"]))
         self.biomes = tuple(str(b) for b in data.get("biomes", ()))
+        self.underground_chance = float(data.get("underground_chance", 0.0))
 
 
 def load_features(folder=None):

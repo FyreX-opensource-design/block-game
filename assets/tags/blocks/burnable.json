@@ -1,0 +1,9 @@
+{
+  "values": ["#logs", "#planks", "#leaves"],
+  "times": {
+    "logs": 12,
+    "planks": 8,
+    "leaves": 4,
+    "default": 8
+  }
+}

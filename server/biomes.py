@@ -106,6 +106,10 @@ class Biome:
         subsoil_depth=0.0,
         temperature=None,
         touching=None,
+        rainfall=None,
+        island=None,
+        precipitation="rain",
+        priority=0,
     ):
         self.id = biome_id
         self.name = str(name or biome_id.replace("_", " ").title())
@@ -135,6 +139,10 @@ class Biome:
         self.subsoil_depth = float(subsoil_depth)
         self.temperature = tuple(temperature) if temperature is not None else None
         self.touching = tuple(touching) if touching is not None else None
+        self.rainfall = None if rainfall is None else float(rainfall)
+        self.precipitation = str(precipitation or "rain")
+        self.island = dict(island) if island else None
+        self.priority = int(priority)
 
         trans_blend = self.transition.get("blend")
         actual_blend = blend if blend is not None else trans_blend
@@ -189,6 +197,18 @@ class Biome:
         ox, oz = float(offset[0]), float(offset[1])
         return fbm(x * scale + ox, z * scale + oz, octaves, seed + seed_offset)
 
+    def variant_noise_grid(self, x, z, seed):
+        cfg = self.variant_noise
+        shape = np.broadcast(x, z).shape
+        if not cfg:
+            return np.zeros(shape, dtype=np.float64)
+        scale = float(cfg.get("scale", 0.018))
+        octaves = int(cfg.get("octaves", 3))
+        seed_offset = int(cfg.get("seed_offset", 7331))
+        offset = cfg.get("offset", (7.3, -11.9))
+        ox, oz = float(offset[0]), float(offset[1])
+        return fbm_grid(x * scale + ox, z * scale + oz, octaves, seed + seed_offset)
+
     def matches_temperature(self, temp):
         if self.temperature is None:
             return True
@@ -218,10 +238,11 @@ class Biome:
             return value >= threshold
         return value <= threshold
 
-    def variant_mask_grid(self, x, z, seed):
+    def variant_mask_grid(self, x, z, seed, temp_grid=None):
         shape = np.broadcast(x, z).shape
         if self.temperature is not None:
-            temp_grid = temperature_grid(x, z, seed)
+            if temp_grid is None:
+                temp_grid = temperature_grid(x, z, seed)
             temp_mask = self.temperature_mask_grid(temp_grid)
         else:
             temp_mask = np.ones(shape, dtype=bool)
@@ -232,12 +253,7 @@ class Biome:
                 return temp_mask
             return np.zeros(shape, dtype=bool)
 
-        scale = float(cfg.get("scale", 0.018))
-        octaves = int(cfg.get("octaves", 3))
-        seed_offset = int(cfg.get("seed_offset", 7331))
-        offset = cfg.get("offset", (7.3, -11.9))
-        ox, oz = float(offset[0]), float(offset[1])
-        value = fbm_grid(x * scale + ox, z * scale + oz, octaves, seed + seed_offset)
+        value = self.variant_noise_grid(x, z, seed)
         threshold = float(cfg.get("threshold", 0.5))
         if bool(cfg.get("above", True)):
             noise_mask = value >= threshold
@@ -246,7 +262,9 @@ class Biome:
         return temp_mask & noise_mask
 
     def variant_at(self, x, z, seed):
-        for variant in self.variants:
+        # Snow covers the whole cold region, including cells another variant would claim.
+        # A higher priority then claims its mask before the remaining variants.
+        for variant in _variant_order(self.variants):
             if variant.matches(x, z, seed):
                 return variant
         return self
@@ -484,11 +502,15 @@ def biome_from_mapping(fields, source, trees, decorations=None):
     variant_of = fields.get("variant_of")
     if variant_of is not None and (not isinstance(variant_of, str) or _ID.fullmatch(variant_of) is None):
         raise ValueError(f"{source}: variant_of must be a biome id")
+    priority = _whole(fields.get("priority", 0), "priority", source)
+    if priority < 0:
+        raise ValueError(f"{source}: priority must be non-negative")
 
     raw_variant_noise = fields.get("variant_noise")
     if raw_variant_noise is not None and not isinstance(raw_variant_noise, dict):
         raise ValueError(f"{source}: variant_noise must be an object")
     variant_noise = dict(raw_variant_noise or {})
+    island = _island(fields.get("island"), source)
 
     raw_coast = fields.get("coast")
     if raw_coast is not None and not isinstance(raw_coast, dict):
@@ -522,6 +544,17 @@ def biome_from_mapping(fields, source, trees, decorations=None):
             temperature = (min_t, max_t)
         else:
             raise ValueError(f"{source}: temperature must be [min, max] or an object with min and max")
+
+    raw_precip = fields.get("precipitation", "rain")
+    if raw_precip not in ("rain", "snow"):
+        raise ValueError(f"{source}: precipitation must be rain or snow")
+
+    raw_rainfall = fields.get("rainfall")
+    rainfall = None
+    if raw_rainfall is not None:
+        rainfall = _number(raw_rainfall, "rainfall", source)
+        if rainfall < 0.0 or rainfall > 2.0:
+            raise ValueError(f"{source}: rainfall must be between 0 and 2")
 
     raw_touching = fields.get("touching", fields.get("adjacent_to"))
     touching = None
@@ -573,6 +606,10 @@ def biome_from_mapping(fields, source, trees, decorations=None):
         subsoil_depth=subsoil_depth,
         temperature=temperature,
         touching=touching,
+        rainfall=rainfall,
+        island=island,
+        precipitation=raw_precip,
+        priority=priority,
     )
 
 
@@ -721,8 +758,7 @@ def biome_at(x, z, seed, biomes, y=None, underground_biomes=None):
         rb = river_biome_at(x, y, z, seed, biomes)
         if rb is not None:
             return rb
-    sample = climate_at(x, z, seed, biomes)
-    return pick_biome(sample, biomes).variant_at(x, z, seed)
+    return placed_biome(x, z, seed, biomes)
 
 
 def pick_biome(sample, biomes):
@@ -740,12 +776,78 @@ def all_biomes(biomes):
     return tuple(result)
 
 
+def _variant_order(variants):
+    """Snow wins first, then a higher priority, then the remaining variants by id."""
+    return sorted(
+        variants,
+        key=lambda variant: (
+            getattr(variant, "precipitation", "rain") != "snow",
+            -int(getattr(variant, "priority", 0) or 0),
+            variant.id,
+        ),
+    )
+
+
+def _parent_id(biome):
+    return biome.variant_of or biome.id
+
+
+def _warm_variant(biome):
+    temperature = biome.temperature
+    return temperature is not None and temperature[0] >= 0.5
+
+
+def _bridge_targets(biomes):
+    """Cold plains, arctic forest, and redwood, plus the climate line where the first two meet."""
+    cold = arctic = redwood = None
+    plains_ceiling = highland_ceiling = None
+    for biome in biomes:
+        if biome.id == "plains":
+            plains_ceiling = biome.ceiling
+            cold = next((variant for variant in biome.variants if variant.id == "cold_plains"), None)
+        elif biome.id == "highland_plains":
+            highland_ceiling = biome.ceiling
+        elif biome.id == "forest":
+            arctic = next((variant for variant in biome.variants if variant.id == "arctic_forest"), None)
+            redwood = next((variant for variant in biome.variants if variant.id == "redwood_forest"), None)
+    midpoint = None
+    if plains_ceiling is not None and highland_ceiling is not None:
+        midpoint = (plains_ceiling + highland_ceiling) * 0.5
+    return cold, arctic, redwood, midpoint
+
+
+def _bridge_point(x, z, seed, biomes, chosen, sample):
+    """Join a snow region across the highland strip, and let redwood cover the pine band."""
+    cold, arctic, redwood, midpoint = _bridge_targets(biomes)
+    parent = _parent_id(chosen)
+    if cold is not None and arctic is not None and midpoint is not None and not _warm_variant(chosen):
+        if parent in ("lowland_plains", "highland_plains") and cold.matches(x, z, seed):
+            if parent == "lowland_plains" or sample <= midpoint:
+                return cold
+            return arctic
+    if redwood is not None and parent == "pine_forest" and redwood.matches(x, z, seed):
+        return redwood
+    return chosen
+
+
+def placed_biome(x, z, seed, biomes, sample=None):
+    """Surface biome, including snow and redwood regions that cross a climate band."""
+    if sample is None:
+        sample = climate_at(x, z, seed, biomes)
+    chosen = pick_biome(sample, biomes).variant_at(x, z, seed)
+    return _bridge_point(x, z, seed, biomes, chosen, sample)
+
+
 def biome_index_grid(x, z, seed, biomes):
     """Return a grid of indices into ``all_biomes(biomes)`` for each coordinate."""
     biomes = tuple(biomes)
     catalog = all_biomes(biomes)
     index_by_id = {biome.id: index for index, biome in enumerate(catalog)}
     climate = climate_grid(x, z, seed, biomes)
+    # Every temperature-gated variant used to rebuild this same field.
+    temp_grid = None
+    if any(variant.temperature is not None for biome in biomes for variant in biome.variants):
+        temp_grid = temperature_grid(x, z, seed)
     grid = np.full(climate.shape, index_by_id[biomes[-1].id], dtype=np.int16)
     assigned = np.zeros(climate.shape, dtype=bool)
     for biome in biomes:
@@ -754,10 +856,114 @@ def biome_index_grid(x, z, seed, biomes):
         assigned |= mask
     for base in biomes:
         base_index = index_by_id[base.id]
-        for variant in base.variants:
-            mask = (grid == base_index) & variant.variant_mask_grid(x, z, seed)
+        ordinary = [
+            variant
+            for variant in _variant_order(base.variants)
+            if getattr(variant, "precipitation", "rain") != "snow"
+        ]
+        snowed = [variant for variant in base.variants if getattr(variant, "precipitation", "rain") == "snow"]
+        for variant in ordinary:
+            mask = (grid == base_index) & variant.variant_mask_grid(x, z, seed, temp_grid)
             grid[mask] = index_by_id[variant.id]
+        if not snowed:
+            continue
+        owned = grid == base_index
+        for variant in base.variants:
+            owned |= grid == index_by_id[variant.id]
+        for variant in snowed:
+            mask = owned & variant.variant_mask_grid(x, z, seed, temp_grid)
+            grid[mask] = index_by_id[variant.id]
+            owned &= ~mask
+    _bridge_grid(grid, catalog, index_by_id, x, z, seed, biomes, climate, temp_grid)
     return grid, catalog
+
+
+def _bridge_grid(grid, catalog, index_by_id, x, z, seed, biomes, climate, temp_grid=None):
+    """Same cross-band join as ``placed_biome``, for a whole chunk."""
+    cold, arctic, redwood, midpoint = _bridge_targets(biomes)
+    if cold is not None and arctic is not None and midpoint is not None:
+        snow = cold.variant_mask_grid(x, z, seed, temp_grid)
+        lowland = []
+        highland = []
+        for biome in catalog:
+            if _warm_variant(biome):
+                continue
+            parent = _parent_id(biome)
+            if parent == "lowland_plains":
+                lowland.append(index_by_id[biome.id])
+            elif parent == "highland_plains":
+                highland.append(index_by_id[biome.id])
+        if lowland:
+            grid[np.isin(grid, lowland) & snow] = index_by_id[cold.id]
+        if highland:
+            host = np.isin(grid, highland) & snow
+            grid[host & (climate <= midpoint)] = index_by_id[cold.id]
+            grid[host & (climate > midpoint)] = index_by_id[arctic.id]
+    if redwood is not None:
+        pine = [index_by_id[biome.id] for biome in catalog if _parent_id(biome) == "pine_forest"]
+        if pine:
+            grid[np.isin(grid, pine) & redwood.variant_mask_grid(x, z, seed, temp_grid)] = index_by_id[redwood.id]
+
+
+def _island(raw, source):
+    """Land that rises out of a parent ocean band. Absent means no lift."""
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ValueError(f"{source}: island must be an object")
+    shore = _number(raw.get("shore", 0.05), "island.shore", source)
+    core = _number(raw.get("core", 0.08), "island.core", source)
+    crest = _number(raw.get("crest", 2), "island.crest", source)
+    rise = _number(raw.get("rise", 0), "island.rise", source)
+    edge = raw.get("edge")
+    fade = raw.get("fade")
+    if shore < 0 or core <= 0 or crest < 0 or rise < 0:
+        raise ValueError(f"{source}: island sizes must stay positive")
+    island = {"shore": shore, "core": core, "crest": crest, "rise": rise}
+    if edge is not None:
+        island["edge"] = _number(edge, "island.edge", source)
+    relief = raw.get("relief")
+    if relief is not None:
+        island["relief"] = _number(relief, "island.relief", source)
+        if island["relief"] < 0:
+            raise ValueError(f"{source}: island.relief must stay positive")
+    relief_scale = raw.get("relief_scale")
+    if relief_scale is not None:
+        island["relief_scale"] = _number(relief_scale, "island.relief_scale", source)
+        if island["relief_scale"] <= 0:
+            raise ValueError(f"{source}: island.relief_scale must stay positive")
+    if fade is not None:
+        island["fade"] = _number(fade, "island.fade", source)
+        if island["fade"] <= 0:
+            raise ValueError(f"{source}: island.fade must stay positive")
+    beach = _island_beach(raw.get("beach"), source)
+    if beach is not None:
+        island["beach"] = beach
+    return island
+
+
+def _island_beach(raw, source):
+    """Sand ring on the low part of an island. Absent means the whole island uses its surface."""
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ValueError(f"{source}: island.beach must be an object")
+    surface = _block(raw.get("surface"), "beach.surface", source)
+    soil = _block(raw.get("soil", surface), "beach.soil", source)
+    subsoil = _block(raw.get("subsoil", soil), "beach.subsoil", source)
+    soil_depth = _whole(raw.get("soil_depth", 3), "beach.soil_depth", source)
+    subsoil_depth = _whole(raw.get("subsoil_depth", 3), "beach.subsoil_depth", source)
+    margin = _whole(raw.get("margin", 1), "beach.margin", source)
+    if soil_depth < 1 or subsoil_depth < 0 or margin < 0:
+        raise ValueError(f"{source}: beach depths must stay positive")
+    return {
+        "surface": surface,
+        "soil": soil,
+        "subsoil": subsoil,
+        "soil_depth": soil_depth,
+        "subsoil_depth": subsoil_depth,
+        "margin": margin,
+    }
 
 
 def _read_file(path):

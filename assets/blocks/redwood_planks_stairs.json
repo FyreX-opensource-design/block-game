@@ -1,0 +1,19 @@
+{
+  "id": "redwood_planks_stairs",
+  "lang": "block.redwood_planks_stairs",
+  "type": "stairs",
+  "tab": [
+    "building"
+  ],
+  "model": "stairs",
+  "hardness": 2.0,
+  "tool": "axe",
+  "mining_level": 0,
+  "sound": "wood",
+  "loot_table": "blocks/redwood_planks_stairs",
+  "textures": {
+    "top": "redwood_planks",
+    "side": "redwood_planks",
+    "bottom": "redwood_planks"
+  }
+}

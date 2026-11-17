@@ -67,9 +67,30 @@ class ItemEntity:
                         return True
         return False
 
+    def in_lava(self, world):
+        if world is None:
+            return False
+        from server.fluid import is_lava
+
+        min_x = math.floor(self.pos[0] - self.radius)
+        max_x = math.floor(self.pos[0] + self.radius)
+        min_y = math.floor(self.pos[1])
+        max_y = math.floor(self.pos[1] + self.height)
+        min_z = math.floor(self.pos[2] - self.radius)
+        max_z = math.floor(self.pos[2] + self.radius)
+        for y in range(min_y, max_y + 1):
+            for z in range(min_z, max_z + 1):
+                for x in range(min_x, max_x + 1):
+                    if is_lava(world.get_block(x, y, z)):
+                        return True
+        return False
+
     def update(self, dt, world=None):
         self.age += dt
         self.despawn_timer -= dt
+        if world is not None and self.in_lava(world):
+            self.count = 0
+            return
         if self.pickup_delay > 0:
             self.pickup_delay = max(0.0, self.pickup_delay - dt)
 
@@ -499,6 +520,7 @@ class Mob:
         self.health = float(health)
         self.max_health = float(max_health)
         self.hurt_time = 0.0
+        self.fire_kind = ""
         self.panic_timer = 0.0
         self.panic_source = None
         self.desired_speed = 0.0
@@ -508,6 +530,15 @@ class Mob:
         self.idle_time = 0.0
         self.radius = 0.45
         self.height = 0.9
+        self.adult_radius = self.radius
+        self.adult_height = self.height
+        self.age = 0.0
+        self.love_time = 0.0
+        self.grow_time = 1200.0
+        self.love_duration = 30.0
+        self.breed_cooldown = 300.0
+        self.breed_food = ()
+        self.baby_count = (1, 1)
         self.alive = True
         self.on_ground = False
         self.is_remote = False
@@ -518,10 +549,70 @@ class Mob:
         self.despawn_timer = 999999.0
         self.loot_table = f"entities/{mob_type}"
         self.goals = None
+        self.can_fly = False
+        self.fly_height = 1.6
+        self.fly_target_y = None
+        self.aggro = None
 
     @property
     def is_mob(self):
         return True
+
+    @property
+    def is_baby(self):
+        return self.age < 0.0
+
+    def accepts_food(self, item_id):
+        if not self.breed_food or not item_id:
+            return False
+        from server.tags import matches_ingredient
+
+        return any(matches_ingredient(pattern, item_id) for pattern in self.breed_food)
+
+    def feed(self, item_id):
+        """Offer food. Returns ``love``, ``grow``, or ``\"\"`` when nothing is eaten."""
+        if not self.alive or not self.accepts_food(item_id):
+            return ""
+        if self.is_baby:
+            remaining = -self.age
+            self.age += remaining * 0.1
+            if self.age >= 0.0:
+                self.grow_up()
+            return "grow"
+        if self.love_time > 0.0 or self.age > 0.0:
+            return ""
+        self.love_time = float(self.love_duration)
+        return "love"
+
+    def make_baby(self):
+        self.age = -float(self.grow_time)
+        self.love_time = 0.0
+        self._apply_growth_size()
+
+    def grow_up(self):
+        self.age = 0.0
+        self.love_time = 0.0
+        self._apply_growth_size()
+
+    def _apply_growth_size(self):
+        scale = 0.5 if self.is_baby else 1.0
+        self.radius = self.adult_radius * scale
+        self.height = self.adult_height * scale
+
+    def _tick_breeding(self, dt):
+        if self.love_time > 0.0:
+            self.love_time = max(0.0, self.love_time - dt)
+        if self.age < 0.0:
+            self.age = min(0.0, self.age + dt)
+            if self.age >= 0.0:
+                self.grow_up()
+        elif self.age > 0.0:
+            self.age = max(0.0, self.age - dt)
+
+    def restore_breeding(self, data):
+        self.age = float(data.get("age", 0.0) or 0.0)
+        self.love_time = float(data.get("love", data.get("love_time", 0.0)) or 0.0)
+        self._apply_growth_size()
 
     def in_panic(self):
         return self.panic_timer > 0
@@ -536,6 +627,9 @@ class Mob:
 
         if attacker is not None and hasattr(attacker, "pos"):
             self.panic_source = [attacker.pos[0], attacker.pos[1], attacker.pos[2]]
+            # Creative players are not a fight. Leave any real target alone.
+            if getattr(attacker, "survival", True):
+                self.aggro = attacker
         elif knockback_dir is not None:
             self.panic_source = [self.pos[0] - knockback_dir[0], self.pos[1], self.pos[2] - knockback_dir[1]]
 
@@ -575,7 +669,8 @@ class Mob:
                         pos=[self.pos[0], self.pos[1] + 0.3, self.pos[2]],
                     )
 
-    def collides_at(self, px, py, pz, world):
+    def collides_blocks(self, px, py, pz, world=None):
+        world = world if world is not None else getattr(self, "world", None)
         if world is None:
             return False
         if _has_box_collision(world):
@@ -601,6 +696,15 @@ class Mob:
                         return True
         return False
 
+    def collides_at(self, px, py, pz, world, bodies=True):
+        if self.collides_blocks(px, py, pz, world):
+            return True
+        if not bodies:
+            return False
+        from server.collision import hits_body
+
+        return hits_body(self, px, py, pz, world)
+
     def is_touching_cactus(self, world=None, margin=0.05):
         w = world or getattr(self, "world", None)
         if w is None:
@@ -622,6 +726,16 @@ class Mob:
                         return True
         return False
 
+    def _axis_blocked(self, axis, value, world):
+        x, y, z = self.pos
+        if axis == 0:
+            x = value
+        elif axis == 1:
+            y = value
+        else:
+            z = value
+        return self.collides_at(x, y, z, world)
+
     def sweep(self, axis, delta, world):
         if delta == 0 or world is None:
             return False
@@ -630,16 +744,15 @@ class Mob:
         while abs(left) > 1e-8:
             step = math.copysign(min(abs(left), max_step), left)
             start = self.pos[axis]
-            self.pos[axis] = start + step
-            if not self.collides_at(*self.pos, world):
+            if not self._axis_blocked(axis, start + step, world):
+                self.pos[axis] = start + step
                 left -= step
                 continue
             lo = 0.0
             hi = step
             for _ in range(12):
                 mid = (lo + hi) * 0.5
-                self.pos[axis] = start + mid
-                if self.collides_at(*self.pos, world):
+                if self._axis_blocked(axis, start + mid, world):
                     hi = mid
                 else:
                     lo = mid
@@ -648,13 +761,10 @@ class Mob:
             return True
         return False
 
-    def step_up(self, dx, dz, world):
-        if world is None:
-            return False
-        start_x, start_y, start_z = self.pos
-        self.pos[1] = start_y + 1.05
+    def _climb(self, start_x, start_y, start_z, dx, dz, world, lift):
+        self.pos[1] = start_y + lift
         if self.collides_at(*self.pos, world):
-            self.pos[1] = start_y
+            self.pos[0], self.pos[1], self.pos[2] = start_x, start_y, start_z
             return False
         self.sweep(0, dx, world)
         self.sweep(2, dz, world)
@@ -662,8 +772,26 @@ class Mob:
         if moved < max(0.02, math.hypot(dx, dz) * 0.35):
             self.pos[0], self.pos[1], self.pos[2] = start_x, start_y, start_z
             return False
-        self.sweep(1, -1.1, world)
+        self.sweep(1, -(lift + 0.05), world)
+        # Back on the floor we started from means the move did not climb.
+        # Snow on that same floor only raises the feet a little, and that still counts.
+        if self.pos[1] < start_y + 0.05:
+            self.pos[0], self.pos[1], self.pos[2] = start_x, start_y, start_z
+            return False
         return True
+
+    def step_up(self, dx, dz, world):
+        if world is None:
+            return False
+        start_x, start_y, start_z = self.pos
+        if self._climb(start_x, start_y, start_z, dx, dz, world, 1.05):
+            return True
+        from server.snow import snow_rise
+
+        extra = snow_rise(world, start_x, start_y + 1.05, start_z, dx, dz, self.radius)
+        if extra <= 1e-4:
+            return False
+        return self._climb(start_x, start_y, start_z, dx, dz, world, 1.05 + extra)
 
     def move_horizontal(self, dx, dz, world, avoid_hazards=False):
         if world is None:
@@ -702,6 +830,21 @@ class Mob:
             self.sweep(0, dx, world)
             self.sweep(2, dz, world)
 
+    def _hover_floor(self, world):
+        """The ground under a flying mob, or its own feet when the drop is deep."""
+        if world is None:
+            return self.pos[1]
+        bx = math.floor(self.pos[0])
+        bz = math.floor(self.pos[2])
+        start = math.floor(self.pos[1])
+        for drop in range(0, 12):
+            gy = start - drop
+            if gy < 0:
+                break
+            if world.is_solid(bx, gy, bz):
+                return float(gy + 1)
+        return self.pos[1]
+
     def in_water(self, world):
         if world is None:
             return False
@@ -720,6 +863,24 @@ class Mob:
                         return True
         return False
 
+    def in_lava(self, world):
+        if world is None:
+            return False
+        from server.fluid import is_lava
+
+        min_x = math.floor(self.pos[0] - self.radius)
+        max_x = math.floor(self.pos[0] + self.radius - 1e-6)
+        min_y = math.floor(self.pos[1])
+        max_y = math.floor(self.pos[1] + self.height - 1e-4)
+        min_z = math.floor(self.pos[2] - self.radius)
+        max_z = math.floor(self.pos[2] + self.radius - 1e-6)
+        for y in range(min_y, max_y + 1):
+            for z in range(min_z, max_z + 1):
+                for x in range(min_x, max_x + 1):
+                    if is_lava(world.get_block(x, y, z)):
+                        return True
+        return False
+
     def update(self, dt, world=None):
         if not self.alive:
             return
@@ -733,6 +894,9 @@ class Mob:
             self.panic_timer = max(0.0, self.panic_timer - dt)
         if getattr(self, "regrow_cooldown", 0.0) > 0:
             self.regrow_cooldown = max(0.0, self.regrow_cooldown - dt)
+
+        if not getattr(self, "is_remote", False):
+            self._tick_breeding(dt)
 
         if getattr(self, "is_remote", False):
             target_pos = getattr(self, "target_pos", None)
@@ -824,6 +988,14 @@ class Mob:
                 self.vel[0] = 0.0
             if abs(self.vel[2]) < 0.01 and flow_z == 0.0:
                 self.vel[2] = 0.0
+        elif getattr(self, "can_fly", False):
+            goal_y = getattr(self, "fly_target_y", None)
+            if goal_y is None:
+                goal_y = self._hover_floor(world) + float(getattr(self, "fly_height", 1.6))
+            self.vel[1] = max(-3.0, min(3.0, (goal_y - self.pos[1]) * 3.0))
+            climb = float(goal_y) - self.pos[1]
+            self.pitch = max(-0.6, min(0.6, climb * 0.35))
+            self.target_pitch = self.pitch
         else:
             self.vel[1] = max(TERMINAL_VELOCITY, self.vel[1] - GRAVITY * dt)
 
@@ -854,14 +1026,32 @@ class Mob:
             self.pos[1] += self.vel[1] * dt
             self.pos[2] += self.vel[2] * dt
 
-        # Walk animation tracking
+        from server.collision import separate_from_bodies
+
+        separate_from_bodies(self, world)
+
+        # Walk animation tracking. Fliers keep flapping while they climb, dive, or hover.
         hspeed = math.hypot(self.vel[0], self.vel[2])
-        if self.on_ground and hspeed > 0.05:
+        if getattr(self, "can_fly", False):
+            speed = max(0.55, math.hypot(self.vel[0], self.vel[1], self.vel[2]))
+            self.walk_time += dt * speed * 2.5
+        elif self.on_ground and hspeed > 0.05:
             self.walk_time += dt * hspeed * 2.5
 
         # Cactus contact damage
         if world is not None and self.is_touching_cactus(world):
             self.take_damage(1.0, world=world)
+
+        self.fire_kind = ""
+        if world is not None:
+            from server.fire import body_flame
+
+            self.fire_kind = body_flame(world, self.pos, self.radius, self.height)
+        if self.fire_kind:
+            from server.damage import get_damage_type
+
+            burn = get_damage_type("lava")
+            self.take_damage(burn.damage if burn is not None else 4.0, world=world)
 
         # Void despawn
         if self.pos[1] < -32.0:
@@ -879,6 +1069,8 @@ class Mob:
             "health": round(self.health, 2),
             "max_health": round(self.max_health, 2),
             "hurt_time": round(self.hurt_time, 2),
+            "age": round(self.age, 2),
+            "love": round(self.love_time, 2),
         }
 
     @classmethod
@@ -892,6 +1084,16 @@ class Mob:
             return Sheep.from_dict(data)
         if mob_type == "zombie":
             return Zombie.from_dict(data)
+        if mob_type == "desert_zombie":
+            return DesertZombie.from_dict(data)
+        if mob_type == "spider":
+            return Spider.from_dict(data)
+        if mob_type == "desert_spider":
+            return DesertSpider.from_dict(data)
+        if mob_type == "skeleton":
+            return Skeleton.from_dict(data)
+        if mob_type == "desert_skeleton":
+            return DesertSkeleton.from_dict(data)
         mob = cls(
             mob_type=mob_type,
             pos=data.get("pos"),
@@ -904,6 +1106,7 @@ class Mob:
             uuid_val=data.get("uuid"),
         )
         mob.hurt_time = float(data.get("hurt_time", 0.0))
+        mob.restore_breeding(data)
         return mob
 
 
@@ -936,13 +1139,16 @@ class Pig(Mob):
         self.run_speed = 2.8
         self.radius = 0.45
         self.height = 0.9
+        from server.mobs import apply_mob_asset
 
-        # Initialize Goal system
-        from server.ai import GoalSelector, PanicGoal, WanderGoal
+        if not apply_mob_asset(self):
+            from server.ai import GoalSelector, PanicGoal, WanderGoal
 
-        self.goals = GoalSelector()
-        self.goals.add_goal(1, PanicGoal(self, speed_mult=2.3))
-        self.goals.add_goal(2, WanderGoal(self))
+            self.goals = GoalSelector()
+            self.goals.add_goal(1, PanicGoal(self, speed_mult=2.3))
+            self.goals.add_goal(2, WanderGoal(self))
+        self.adult_radius = self.radius
+        self.adult_height = self.height
 
     @classmethod
     def from_dict(cls, data):
@@ -957,6 +1163,7 @@ class Pig(Mob):
             uuid_val=data.get("uuid"),
         )
         pig.hurt_time = float(data.get("hurt_time", 0.0))
+        pig.restore_breeding(data)
         return pig
 
 
@@ -989,16 +1196,20 @@ class Cow(Mob):
         self.run_speed = 2.4
         self.radius = 0.5
         self.height = 1.4
+        from server.mobs import apply_mob_asset
 
-        from server.ai import GoalSelector, PanicGoal, WanderGoal
+        if not apply_mob_asset(self):
+            from server.ai import GoalSelector, PanicGoal, WanderGoal
 
-        self.goals = GoalSelector()
-        self.goals.add_goal(1, PanicGoal(self, speed_mult=2.1))
-        self.goals.add_goal(2, WanderGoal(self))
+            self.goals = GoalSelector()
+            self.goals.add_goal(1, PanicGoal(self, speed_mult=2.1))
+            self.goals.add_goal(2, WanderGoal(self))
+        self.adult_radius = self.radius
+        self.adult_height = self.height
 
     def milk(self, bucket_id):
         """Return the milk-bucket item for an empty bucket, or None."""
-        if not self.alive:
+        if not self.alive or self.is_baby:
             return None
         from server.fluid import get_filled_bucket, is_empty_bucket
 
@@ -1019,6 +1230,7 @@ class Cow(Mob):
             uuid_val=data.get("uuid"),
         )
         cow.hurt_time = float(data.get("hurt_time", 0.0))
+        cow.restore_breeding(data)
         return cow
 
 
@@ -1096,12 +1308,17 @@ class Sheep(Mob):
         self.color = str(color) if color in SHEEP_WOOL_BLOCKS else "white"
         self.regrow_cooldown = float(regrow_cooldown)
 
-        from server.ai import EatGrassGoal, GoalSelector, PanicGoal, WanderGoal
+        from server.mobs import apply_mob_asset
 
-        self.goals = GoalSelector()
-        self.goals.add_goal(1, PanicGoal(self, speed_mult=2.3))
-        self.goals.add_goal(2, EatGrassGoal(self))
-        self.goals.add_goal(3, WanderGoal(self))
+        if not apply_mob_asset(self):
+            from server.ai import EatGrassGoal, GoalSelector, PanicGoal, WanderGoal
+
+            self.goals = GoalSelector()
+            self.goals.add_goal(1, PanicGoal(self, speed_mult=2.3))
+            self.goals.add_goal(2, EatGrassGoal(self))
+            self.goals.add_goal(3, WanderGoal(self))
+        self.adult_radius = self.radius
+        self.adult_height = self.height
 
     @property
     def wool_block(self):
@@ -1176,6 +1393,7 @@ class Sheep(Mob):
             uuid_val=data.get("uuid"),
         )
         sheep.hurt_time = float(data.get("hurt_time", 0.0))
+        sheep.restore_breeding(data)
         return sheep
 
 
@@ -1192,9 +1410,11 @@ class Zombie(Mob):
         max_health=20.0,
         entity_id=None,
         uuid_val=None,
+        mob_type="zombie",
+        name="Zombie",
     ):
         super().__init__(
-            mob_type="zombie",
+            mob_type=mob_type,
             pos=pos,
             vel=vel,
             yaw=yaw,
@@ -1204,20 +1424,23 @@ class Zombie(Mob):
             entity_id=entity_id,
             uuid_val=uuid_val,
         )
-        self.name = "Zombie"
+        self.name = name
         self.walk_speed = 1.2
         self.run_speed = 2.4
         self.radius = 0.35
         self.height = 1.95
         self.attack_damage = 3.0
         self.attack_range = 1.5
-        self.loot_table = "entities/zombie"
+        self.loot_table = f"entities/{mob_type}"
 
-        from server.ai import GoalSelector, WanderGoal, ZombieAttackGoal
+        from server.mobs import apply_mob_asset
 
-        self.goals = GoalSelector()
-        self.goals.add_goal(1, ZombieAttackGoal(self, target_range=16.0, reach=1.5, damage=3.0))
-        self.goals.add_goal(2, WanderGoal(self))
+        if not apply_mob_asset(self):
+            from server.ai import GoalSelector, WanderGoal, ZombieAttackGoal
+
+            self.goals = GoalSelector()
+            self.goals.add_goal(1, ZombieAttackGoal(self, target_range=16.0, reach=1.5, damage=3.0))
+            self.goals.add_goal(2, WanderGoal(self))
 
     def in_panic(self):
         return False
@@ -1248,6 +1471,34 @@ class Zombie(Mob):
         return zombie
 
 
+class DesertZombie(Zombie):
+    """Zombie that walks the desert. Same hunt, dried hide."""
+
+    def __init__(
+        self,
+        pos=None,
+        vel=None,
+        yaw=0.0,
+        pitch=0.0,
+        health=20.0,
+        max_health=20.0,
+        entity_id=None,
+        uuid_val=None,
+    ):
+        super().__init__(
+            pos=pos,
+            vel=vel,
+            yaw=yaw,
+            pitch=pitch,
+            health=health,
+            max_health=max_health,
+            entity_id=entity_id,
+            uuid_val=uuid_val,
+            mob_type="desert_zombie",
+            name="Desert Zombie",
+        )
+
+
 class Spider(Mob):
     """Hostile spider mob that can climb walls and ceilings.
 
@@ -1266,9 +1517,11 @@ class Spider(Mob):
         max_health=16.0,
         entity_id=None,
         uuid_val=None,
+        mob_type="spider",
+        name="Spider",
     ):
         super().__init__(
-            mob_type="spider",
+            mob_type=mob_type,
             pos=pos,
             vel=vel,
             yaw=yaw,
@@ -1278,7 +1531,7 @@ class Spider(Mob):
             entity_id=entity_id,
             uuid_val=uuid_val,
         )
-        self.name = "Spider"
+        self.name = name
         self.walk_speed = 1.4
         self.run_speed = 3.0
         self.climb_speed = 2.4
@@ -1286,16 +1539,19 @@ class Spider(Mob):
         self.height = 0.8
         self.attack_damage = 2.5
         self.attack_range = 1.8
-        self.loot_table = "entities/spider"
+        self.loot_table = f"entities/{mob_type}"
         self.climbing = False
         self.on_ceiling = False
         self.can_climb = True
 
-        from server.ai import GoalSelector, WanderGoal, SpiderAttackGoal
+        from server.mobs import apply_mob_asset
 
-        self.goals = GoalSelector()
-        self.goals.add_goal(1, SpiderAttackGoal(self, target_range=16.0, reach=1.8, damage=2.5))
-        self.goals.add_goal(2, WanderGoal(self))
+        if not apply_mob_asset(self):
+            from server.ai import GoalSelector, SpiderAttackGoal, WanderGoal
+
+            self.goals = GoalSelector()
+            self.goals.add_goal(1, SpiderAttackGoal(self, target_range=16.0, reach=1.8, damage=2.5))
+            self.goals.add_goal(2, WanderGoal(self))
 
     def in_panic(self):
         return False
@@ -1512,6 +1768,143 @@ class Spider(Mob):
         return spider
 
 
+class DesertSpider(Spider):
+    """Spider that lives in the desert. Same climb and hunt, sand-colored hide."""
+
+    def __init__(
+        self,
+        pos=None,
+        vel=None,
+        yaw=0.0,
+        pitch=0.0,
+        health=16.0,
+        max_health=16.0,
+        entity_id=None,
+        uuid_val=None,
+    ):
+        super().__init__(
+            pos=pos,
+            vel=vel,
+            yaw=yaw,
+            pitch=pitch,
+            health=health,
+            max_health=max_health,
+            entity_id=entity_id,
+            uuid_val=uuid_val,
+            mob_type="desert_spider",
+            name="Desert Spider",
+        )
+
+
+class Skeleton(Mob):
+    """Hostile archer. Draws a bow and shoots at players out to about 14 blocks."""
+
+    def __init__(
+        self,
+        pos=None,
+        vel=None,
+        yaw=0.0,
+        pitch=0.0,
+        health=20.0,
+        max_health=20.0,
+        entity_id=None,
+        uuid_val=None,
+        mob_type="skeleton",
+        name="Skeleton",
+    ):
+        super().__init__(
+            mob_type=mob_type,
+            pos=pos,
+            vel=vel,
+            yaw=yaw,
+            pitch=pitch,
+            health=health,
+            max_health=max_health,
+            entity_id=entity_id,
+            uuid_val=uuid_val,
+        )
+        self.name = name
+        self.walk_speed = 1.1
+        self.run_speed = 2.1
+        self.radius = 0.35
+        self.height = 1.95
+        self.eye = 1.62
+        self.attack_damage = 0.0
+        self.attack_range = 16.0
+        self.bow_pull = 0.0
+        self.loot_table = f"entities/{mob_type}"
+
+        from server.mobs import apply_mob_asset
+
+        if not apply_mob_asset(self):
+            from server.ai import GoalSelector, SkeletonShootGoal, WanderGoal
+
+            self.goals = GoalSelector()
+            self.goals.add_goal(1, SkeletonShootGoal(self))
+            self.goals.add_goal(2, WanderGoal(self))
+
+    def in_panic(self):
+        return False
+
+    def take_damage(self, amount, attacker=None, knockback_dir=None, world=None):
+        res = super().take_damage(amount, attacker=attacker, knockback_dir=knockback_dir, world=world)
+        self.panic_timer = 0.0
+        if attacker is not None and self.goals is not None:
+            for _, goal in self.goals.goals:
+                if hasattr(goal, "target"):
+                    goal.target = attacker
+        return res
+
+    def to_dict(self):
+        data = super().to_dict()
+        data["bow_pull"] = round(float(self.bow_pull), 3)
+        return data
+
+    @classmethod
+    def from_dict(cls, data):
+        skeleton = cls(
+            pos=data.get("pos"),
+            vel=data.get("vel"),
+            yaw=data.get("yaw", 0.0),
+            pitch=data.get("pitch", 0.0),
+            health=data.get("health", 20.0),
+            max_health=data.get("max_health", 20.0),
+            entity_id=data.get("id"),
+            uuid_val=data.get("uuid"),
+        )
+        skeleton.hurt_time = float(data.get("hurt_time", 0.0))
+        skeleton.bow_pull = float(data.get("bow_pull", 0.0) or 0.0)
+        return skeleton
+
+
+class DesertSkeleton(Skeleton):
+    """Skeleton that haunts the desert. Same bow, sun-bleached bones."""
+
+    def __init__(
+        self,
+        pos=None,
+        vel=None,
+        yaw=0.0,
+        pitch=0.0,
+        health=20.0,
+        max_health=20.0,
+        entity_id=None,
+        uuid_val=None,
+    ):
+        super().__init__(
+            pos=pos,
+            vel=vel,
+            yaw=yaw,
+            pitch=pitch,
+            health=health,
+            max_health=max_health,
+            entity_id=entity_id,
+            uuid_val=uuid_val,
+            mob_type="desert_skeleton",
+            name="Desert Skeleton",
+        )
+
+
 class ArrowEntity:
     """A flying arrow. Bows set its speed; the arrow asset sets damage and effects."""
 
@@ -1527,6 +1920,7 @@ class ArrowEntity:
         owner="",
         age=0.0,
         entity_id=None,
+        recoverable=True,
     ):
         if entity_id is None:
             self.id = ItemEntity._next_id
@@ -1544,6 +1938,7 @@ class ArrowEntity:
         self.gravity = float(gravity)
         self.effects = tuple(dict(effect) for effect in (effects or ()))
         self.owner = str(owner or "")
+        self.recoverable = bool(recoverable)
         self.age = float(age)
         self.lifetime = 8.0
         self.alive = True
@@ -1639,7 +2034,7 @@ class ArrowEntity:
         for entity in getattr(world, "entities", ()):
             if entity is self or not getattr(entity, "is_mob", False) or not getattr(entity, "alive", True):
                 continue
-            if entity.id in self.ignored:
+            if entity.id in self.ignored or str(getattr(entity, "uuid", "")) == self.owner:
                 continue
             found = _segment_hits_body(origin, dx, dy, dz, limit, entity.pos, entity.radius, entity.height)
             if found is not None and found[0] < best_t:
@@ -1686,6 +2081,8 @@ class ArrowEntity:
         if dealt <= 0:
             self.ignored.add(player.uuid)
             return
+        if getattr(player, "dead", False):
+            player.death_cause = self._death_cause(world)
         vx, vz = self.vel[0], self.vel[2]
         length = math.hypot(vx, vz) or 1.0
         player.vel[0] = (vx / length) * 5.5
@@ -1699,8 +2096,19 @@ class ArrowEntity:
             pending.append({"uuid": player.uuid, "vel": list(player.vel)})
         self.alive = False
 
+    def _death_cause(self, world):
+        name = ""
+        for entity in getattr(world, "entities", ()):
+            if str(getattr(entity, "uuid", "")) == self.owner:
+                name = str(getattr(entity, "name", "") or "")
+                break
+        if not name:
+            return "shot by an arrow"
+        article = "an" if name[:1].lower() in "aeiou" else "a"
+        return f"shot by {article} {name}"
+
     def _drop(self, world):
-        if world is None or not hasattr(world, "spawn_item"):
+        if not self.recoverable or world is None or not hasattr(world, "spawn_item"):
             return
         world.spawn_item(
             self.arrow_id,
@@ -1722,6 +2130,7 @@ class ArrowEntity:
             "gravity": self.gravity,
             "effects": [dict(effect) for effect in self.effects],
             "owner": self.owner,
+            "recoverable": self.recoverable,
             "age": round(self.age, 3),
         }
 
@@ -1738,6 +2147,7 @@ class ArrowEntity:
             owner=data.get("owner", ""),
             age=data.get("age", 0),
             entity_id=data.get("id"),
+            recoverable=data.get("recoverable", True),
         )
         return arrow
 
@@ -1773,6 +2183,60 @@ def _segment_hits_body(origin, dx, dy, dz, limit, feet, radius, height):
     return best_t, best_point
 
 
+class AssetMob(Mob):
+    """A mob whose stats, goals, and model come from assets/mobs."""
+
+    def __init__(
+        self,
+        mob_type,
+        pos=None,
+        vel=None,
+        yaw=0.0,
+        pitch=0.0,
+        health=None,
+        max_health=None,
+        entity_id=None,
+        uuid_val=None,
+    ):
+        from server.mobs import MOBS, apply_mob_asset
+
+        definition = MOBS[str(mob_type)]
+        if health is None:
+            health = definition.health
+        if max_health is None:
+            max_health = definition.health
+        super().__init__(
+            mob_type=str(mob_type),
+            pos=pos,
+            vel=vel,
+            yaw=yaw,
+            pitch=pitch,
+            health=health,
+            max_health=max_health,
+            entity_id=entity_id,
+            uuid_val=uuid_val,
+        )
+        self.name = definition.name
+        apply_mob_asset(self)
+
+    @classmethod
+    def from_dict(cls, data):
+        mob = cls(
+            data.get("type", data.get("mob_type")),
+            pos=data.get("pos"),
+            vel=data.get("vel"),
+            yaw=data.get("yaw", 0.0),
+            pitch=data.get("pitch", 0.0),
+            health=data.get("health"),
+            max_health=data.get("max_health"),
+            entity_id=data.get("id"),
+            uuid_val=data.get("uuid"),
+        )
+        mob.hurt_time = float(data.get("hurt_time", 0.0))
+        mob.restore_breeding(data)
+        return mob
+
+
 def entity_from_dict(data):
     etype = data.get("type")
     if etype == "arrow":
@@ -1787,8 +2251,20 @@ def entity_from_dict(data):
         return Sheep.from_dict(data)
     elif etype == "zombie" or data.get("mob_type") == "zombie":
         return Zombie.from_dict(data)
+    elif etype == "desert_zombie" or data.get("mob_type") == "desert_zombie":
+        return DesertZombie.from_dict(data)
     elif etype == "spider" or data.get("mob_type") == "spider":
         return Spider.from_dict(data)
+    elif etype == "desert_spider" or data.get("mob_type") == "desert_spider":
+        return DesertSpider.from_dict(data)
+    elif etype == "skeleton" or data.get("mob_type") == "skeleton":
+        return Skeleton.from_dict(data)
+    elif etype == "desert_skeleton" or data.get("mob_type") == "desert_skeleton":
+        return DesertSkeleton.from_dict(data)
+    from server.mobs import MOBS
+
+    if etype in MOBS or data.get("mob_type") in MOBS:
+        return AssetMob.from_dict(data)
     elif etype == "mob":
         return Mob.from_dict(data)
     return ItemEntity.from_dict(data)

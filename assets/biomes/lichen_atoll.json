@@ -1,0 +1,59 @@
+{
+  "id": "lichen_atoll",
+  "name": "Lichen Atoll",
+  "variant_of": "ocean",
+  "inland": false,
+  "valid_spawn": false,
+  "variant_noise": {
+    "scale": 0.012,
+    "octaves": 2,
+    "seed_offset": 6403,
+    "offset": [28.4, -15.7],
+    "threshold": 0.7,
+    "above": true
+  },
+  "island": {
+    "shore": 0.08,
+    "core": 0.16,
+    "rise": 2,
+    "crest": 5,
+    "relief": 4,
+    "relief_scale": 0.032,
+    "edge": 62,
+    "fade": 0.08,
+    "beach": {
+      "surface": "lichen_sand",
+      "soil": "lichen_sand",
+      "subsoil": "lichen_sandstone",
+      "soil_depth": 3,
+      "subsoil_depth": 3,
+      "margin": 2
+    }
+  },
+  "surface": "lichen_grass",
+  "soil": "lichen_soil",
+  "soil_depth": 3,
+  "scale": 0.006,
+  "octaves": 2,
+  "seed_offset": 90,
+  "ceiling": 0.3,
+  "tree_chance": 0.045,
+  "trees": ["lichen_mushroom"],
+  "decorations": [
+    {
+      "feature": "glow_cup",
+      "chance": 0.12
+    },
+    {
+      "feature": "spore_frond",
+      "chance": 0.08
+    },
+    {
+      "feature": "fluor_lichen",
+      "chance": 0.22
+    }
+  ],
+  "grass_color": "#6fbf78",
+  "foliage_color": "#8a6a98",
+  "rainfall": 1.2
+}

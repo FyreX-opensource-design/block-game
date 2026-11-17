@@ -1,0 +1,41 @@
+{
+  "id": "redwood_forest",
+  "name": "Redwood Forest",
+  "variant_of": "forest",
+  "priority": 5,
+  "temperature": [0.0, 0.5],
+  "touching": [
+    "pine_forest",
+    "spruce_forest",
+    "river",
+    "mountains"
+  ],
+  "variant_noise": {
+    "scale": 0.0015,
+    "octaves": 1,
+    "seed_offset": 6400,
+    "offset": [-6.0, 4.0],
+    "threshold": 0.48,
+    "above": true
+  },
+  "surface": "podzol",
+  "soil": "dirt",
+  "soil_depth": 3,
+  "scale": 0.006,
+  "octaves": 2,
+  "seed_offset": 90,
+  "ceiling": 0.6,
+  "min_size": 200,
+  "tree_chance": 0.004,
+  "height_offset": 1.0,
+  "height_scale": 1.0,
+  "cliff": false,
+  "transition": {
+    "blend": 0.08,
+    "curve": "smoothstep"
+  },
+  "trees": ["redwood"],
+  "decorations": ["double_tall_grass", "double_fern", "fern", "tall_grass"],
+  "grass_color": "#2f5a32",
+  "foliage_color": "#245438"
+}

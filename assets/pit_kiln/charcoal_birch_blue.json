@@ -1,0 +1,7 @@
+{
+  "input": "#logs",
+  "logs": "birch_log",
+  "fire": "blue_fire",
+  "result": {"item": "charcoal", "count": 3},
+  "time": 10
+}

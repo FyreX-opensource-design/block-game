@@ -1,0 +1,10 @@
+{
+  "id": "black_lava",
+  "lang": "block.black_lava",
+  "model": "block",
+  "block": "black_lava",
+  "max_stack": 64,
+  "left": "none",
+  "right": "none",
+  "durability": 0
+}

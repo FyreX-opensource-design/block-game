@@ -1,0 +1,15 @@
+{
+  "id": "lava",
+  "lang": "block.lava",
+  "creative": false,
+  "model": "cube",
+  "render": "cutout",
+  "solid": false,
+  "opacity": 0.95,
+  "hardness": 100.0,
+  "tool": "none",
+  "mining_level": 0,
+  "light": {"r": 15, "g": 6, "b": 1, "uv": 0, "ir": 12},
+  "properties": {"fluid": "lava", "level": 8, "lava": "fire"},
+  "textures": {"top": "lava", "side": "lava", "bottom": "lava"}
+}

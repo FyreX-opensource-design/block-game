@@ -1,0 +1,14 @@
+{
+  "id": "redwood_log",
+  "lang": "block.redwood_log",
+  "tab": [
+    "building",
+    "natural"
+  ],
+  "model": "block",
+  "block": "redwood_log",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}

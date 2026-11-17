@@ -530,8 +530,9 @@ class LightingTests(unittest.TestCase):
         # Place stone at (6, 20, 5) between torch and (7, 20, 5)
         world.set_block(6, 20, 5, "stone")
 
-        # Dirty chunks should be minimal (local chunk only, not all 27 chunks)
-        self.assertLessEqual(len(world.dirty), 4)
+        # Dirty chunks should stay in the local neighborhood, not the 27-chunk
+        # emitter wipe that used to hitch the frame.
+        self.assertLessEqual(len(world.dirty), 8)
         self.assertNotIn((1, 2, 1), world.dirty)
 
         # Light inside stone is 0

@@ -1,0 +1,16 @@
+{
+  "id": "blue_fire",
+  "lang": "block.blue_fire",
+  "tab": "natural",
+  "model": "cross",
+  "render": "cutout",
+  "solid": false,
+  "hardness": 0.0,
+  "tool": "none",
+  "mining_level": 0,
+  "fluid_breakable": true,
+  "light": {"r": 2, "g": 10, "b": 15, "uv": 6, "ir": 2},
+  "properties": {"fire": "blue_fire"},
+  "animation": ["blue_fire", "blue_fire_2", "blue_fire_3", "blue_fire_4"],
+  "textures": {"cross": "blue_fire"}
+}

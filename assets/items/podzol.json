@@ -1,0 +1,11 @@
+{
+  "id": "podzol",
+  "lang": "block.podzol",
+  "tab": "natural",
+  "model": "block",
+  "block": "podzol",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}

@@ -1,0 +1,12 @@
+{
+  "id": "redwood_trapdoor",
+  "lang": "item.redwood_trapdoor",
+  "tab": "building",
+  "model": "flat",
+  "texture": "redwood_trapdoor",
+  "block": "redwood_trapdoor",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}

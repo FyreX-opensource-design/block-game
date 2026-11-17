@@ -1,0 +1,14 @@
+{
+  "id": "redwood_fence",
+  "lang": "item.redwood_fence",
+  "tab": [
+    "building"
+  ],
+  "model": "block",
+  "item_model": "fence_inventory",
+  "block": "redwood_fence",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}

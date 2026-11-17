@@ -1,0 +1,16 @@
+{
+  "id": "fire_stick",
+  "type": "crafting_shaped",
+  "pattern": [
+    "F",
+    "X"
+  ],
+  "key": {
+    "F": "#fiber",
+    "X": "#sticks"
+  },
+  "result": {
+    "item": "fire_stick",
+    "count": 4
+  }
+}

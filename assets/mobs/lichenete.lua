@@ -1,0 +1,77 @@
+return {
+  id = "lichenete",
+  name = "Lichenete",
+  health = 8,
+  radius = 0.45,
+  height = 0.9,
+  eye = 0.7,
+  walk_speed = 1.6,
+  run_speed = 3.2,
+  fly = true,
+  fly_height = 1.8,
+  loot = "entities/lichenete",
+  model = {
+    type = "lua",
+    texture = "entity/lichenete.png",
+    texture_size = { 32, 32 },
+    parts = {
+      {
+        name = "body",
+        pivot = { 0, 8, 0 },
+        box = { -3, 5, -3, 3, 11, 3 },
+        pose = "still",
+        uv = {
+          north = { 0, 8, 6, 14 }, south = { 6, 8, 12, 14 },
+          east = { 12, 8, 18, 14 }, west = { 18, 8, 24, 14 },
+          up = { 0, 0, 6, 6 }, down = { 6, 0, 12, 6 },
+        },
+      },
+      {
+        name = "wing_l",
+        pivot = { -3, 9, 0 },
+        box = { -10, 7, -1, -3, 12, 1 },
+        pose = "swing",
+        uv = {
+          north = { 0, 16, 7, 21 }, south = { 0, 16, 7, 21 },
+          east = { 7, 16, 9, 21 }, west = { 7, 16, 9, 21 },
+          up = { 0, 21, 7, 23 }, down = { 0, 23, 7, 25 },
+        },
+      },
+      {
+        name = "wing_r",
+        pivot = { 3, 9, 0 },
+        box = { 3, 7, -1, 10, 12, 1 },
+        pose = "-swing",
+        uv = {
+          north = { 0, 16, 7, 21 }, south = { 0, 16, 7, 21 },
+          east = { 7, 16, 9, 21 }, west = { 7, 16, 9, 21 },
+          up = { 0, 21, 7, 23 }, down = { 0, 23, 7, 25 },
+        },
+      },
+      {
+        name = "eye",
+        pivot = { 0, 9, -3 },
+        box = { -2, 8, -4, 2, 11, -3 },
+        pose = "look",
+        uv = {
+          north = { 20, 0, 24, 3 }, south = { 20, 0, 24, 3 },
+          east = { 24, 0, 25, 3 }, west = { 24, 0, 25, 3 },
+          up = { 20, 3, 24, 4 }, down = { 20, 4, 24, 5 },
+        },
+      },
+    },
+  },
+  goals = {
+    { priority = 1, type = "retaliate", damage = 2, reach = 1.3, range = 12 },
+    { priority = 2, type = "wander" },
+  },
+  spawn = {
+    group = "passive",
+    weight = 8,
+    biomes = { "lichen_atoll" },
+    blocks = { "lichen_grass", "lichen_soil" },
+    headroom = 2,
+    group_size = { 1, 2 },
+    light = { uv = { min = 4 } },
+  },
+}

@@ -1,0 +1,15 @@
+{
+  "id": "spruce_trapdoor",
+  "type": "crafting_shaped",
+  "pattern": [
+    "###",
+    "###"
+  ],
+  "key": {
+    "#": "spruce_planks"
+  },
+  "result": {
+    "item": "spruce_trapdoor",
+    "count": 2
+  }
+}

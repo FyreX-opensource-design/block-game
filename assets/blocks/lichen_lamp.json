@@ -1,0 +1,16 @@
+{
+  "id": "lichen_lamp",
+  "lang": "block.lichen_lamp",
+  "tab": ["building"],
+  "model": "cube",
+  "hardness": 1.2,
+  "tool": "pickaxe",
+  "mining_level": 0,
+  "sound": "stone",
+  "textures": {
+    "top": "lichen_lamp",
+    "side": "lichen_lamp",
+    "bottom": "lichen_lamp"
+  },
+  "light": {"r": 6, "g": 1, "b": 12, "uv": 15, "ir": 0}
+}

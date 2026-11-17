@@ -1,0 +1,16 @@
+{
+  "id": "flint_and_steel",
+  "lang": "item.flint_and_steel",
+  "tab": "tools",
+  "model": "flat",
+  "texture": "flint_and_steel",
+  "max_stack": 1,
+  "left": "none",
+  "right": "none",
+  "durability": 64,
+  "mining_level": 0,
+  "mining_speed": 1,
+  "attack": 1,
+  "food": 0,
+  "repair": "iron_ingot"
+}

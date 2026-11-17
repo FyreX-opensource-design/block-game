@@ -70,6 +70,8 @@ def is_position_hazardous(world, px: float, py: float, pz: float, max_fall: int 
 
 def is_direction_safe(mob, yaw: float, world=None, lookahead: float = 1.0, max_fall: int = 4) -> bool:
     """Return True if moving along `yaw` from mob's current position avoids fluids and falls > max_fall."""
+    if getattr(mob, "can_fly", False):
+        return True
     if world is None:
         world = getattr(mob, "world", None)
     if world is None:
@@ -346,8 +348,69 @@ class EatGrassGoal(Goal):
                 self.mob.desired_speed = 0.0
 
 
+def _fly_space_clear(world, x, y, z, height, radius, origin_y=None):
+    """True when the body can sit here, and the column from its current height is open."""
+    if world is None:
+        return True
+    from server.fluid import is_fluid
+
+    solid = getattr(world, "blocks_movement", None) or world.is_solid
+    feet = y if origin_y is None else min(y, origin_y)
+    head = (y if origin_y is None else max(y, origin_y)) + height
+    min_y = math.floor(feet)
+    max_y = math.floor(head - 1e-4)
+    min_x = math.floor(x - radius)
+    max_x = math.floor(x + radius - 1e-6)
+    min_z = math.floor(z - radius)
+    max_z = math.floor(z + radius - 1e-6)
+    for by in range(min_y, max_y + 1):
+        for bz in range(min_z, max_z + 1):
+            for bx in range(min_x, max_x + 1):
+                if solid(bx, by, bz):
+                    return False
+                if is_fluid(world.get_block(bx, by, bz)):
+                    return False
+    return True
+
+
+def pick_fly_altitude(mob, world):
+    """A new cruise height above the ground, higher or lower than where the mob is now."""
+    preferred = float(getattr(mob, "fly_height", 1.6))
+    if world is None:
+        floor = mob.pos[1] - preferred
+    else:
+        floor = mob._hover_floor(world)
+        # No ground within the scan: wander around the current height instead of climbing away.
+        if floor >= mob.pos[1] - 0.05:
+            floor = mob.pos[1] - preferred
+    low = max(1.0, preferred * 0.5)
+    high = max(low + 4.0, preferred * 4.0)
+    height = float(getattr(mob, "height", 1.0))
+    radius = float(getattr(mob, "radius", 0.4))
+    x, z = mob.pos[0], mob.pos[2]
+    current = float(mob.pos[1])
+    spare = None
+    for _ in range(8):
+        y = floor + random.uniform(low, high)
+        if not _fly_space_clear(world, x, y, z, height, radius, current):
+            continue
+        if abs(y - current) >= 1.25:
+            return y
+        spare = y
+    if spare is not None:
+        return spare
+    fallback = floor + low
+    if _fly_space_clear(world, x, fallback, z, height, radius, current):
+        return fallback
+    return current
+
+
 class WanderGoal(Goal):
-    """Idle wandering: pauses for random intervals, then walks in a random direction."""
+    """Idle wandering: pauses for random intervals, then walks in a random direction.
+
+    Flying mobs also pick a new altitude each time they pause or set off, so they
+    climb and descend instead of holding one height above the ground.
+    """
 
     def __init__(self, mob):
         super().__init__(mob)
@@ -355,6 +418,24 @@ class WanderGoal(Goal):
         self.timer = random.uniform(1.0, 3.0)
         self.target_yaw = getattr(mob, "yaw", 0.0)
         self.stuck_timer = 0.0
+        self._cruise_y = None
+
+    def _flying(self):
+        return getattr(self.mob, "can_fly", False)
+
+    def _new_cruise(self):
+        if not self._flying():
+            return
+        self._cruise_y = pick_fly_altitude(self.mob, getattr(self.mob, "world", None))
+        self.mob.fly_target_y = self._cruise_y
+
+    def _hold_cruise(self):
+        if not self._flying():
+            return
+        if self._cruise_y is None:
+            self._new_cruise()
+            return
+        self.mob.fly_target_y = self._cruise_y
 
     def can_start(self) -> bool:
         return getattr(self.mob, "panic_timer", 0.0) <= 0
@@ -366,12 +447,15 @@ class WanderGoal(Goal):
         self.state = "idle"
         self.timer = random.uniform(1.5, 4.0)
         self.mob.desired_speed = 0.0
+        self._cruise_y = None
+        self._new_cruise()
 
     def stop(self):
         self.mob.desired_speed = 0.0
 
     def tick(self, dt: float):
         self.timer -= dt
+        self._hold_cruise()
 
         if self.state == "idle":
             self.mob.desired_speed = 0.0
@@ -387,6 +471,7 @@ class WanderGoal(Goal):
                     self.target_yaw = safe_yaw
                     self.mob.target_yaw = self.target_yaw
                     self.stuck_timer = 0.0
+                    self._new_cruise()
                 else:
                     self.timer = random.uniform(1.0, 2.5)
 
@@ -400,6 +485,7 @@ class WanderGoal(Goal):
                     self.state = "idle"
                     self.timer = random.uniform(1.5, 3.5)
                     self.mob.desired_speed = 0.0
+                    self._new_cruise()
                     return
 
             self.mob.desired_speed = getattr(self.mob, "walk_speed", 1.2)
@@ -414,6 +500,7 @@ class WanderGoal(Goal):
                     self.state = "idle"
                     self.timer = random.uniform(1.5, 3.5)
                     self.mob.desired_speed = 0.0
+                    self._new_cruise()
             else:
                 self.stuck_timer = max(0.0, self.stuck_timer - dt)
 
@@ -421,6 +508,58 @@ class WanderGoal(Goal):
                 self.state = "idle"
                 self.timer = random.uniform(2.0, 5.0)
                 self.mob.desired_speed = 0.0
+                self._new_cruise()
+
+
+class RetaliateGoal(Goal):
+    """Stays calm until something hits it, then chases that attacker."""
+
+    def __init__(self, mob, target_range=12.0, reach=1.4, damage=2.0, cooldown=1.0):
+        super().__init__(mob)
+        self.attack = None
+        self.target_range = float(target_range)
+        self.reach = float(reach)
+        self.damage = float(damage)
+        self.cooldown = float(cooldown)
+
+    def _attacker(self):
+        target = getattr(self.mob, "aggro", None)
+        if target is None or not getattr(target, "alive", True) or getattr(target, "dead", False):
+            return None
+        if not getattr(target, "survival", True):
+            return None
+        mx, my, mz = self.mob.pos
+        px, py, pz = target.pos
+        if (px - mx) ** 2 + (py - my) ** 2 + (pz - mz) ** 2 > self.target_range ** 2:
+            return None
+        return target
+
+    def can_start(self) -> bool:
+        return self._attacker() is not None
+
+    def can_continue(self) -> bool:
+        return self._attacker() is not None
+
+    def start(self):
+        if self.attack is None:
+            self.attack = ZombieAttackGoal(
+                self.mob, target_range=self.target_range, reach=self.reach, damage=self.damage, cooldown=self.cooldown
+            )
+        self.attack.target = self._attacker()
+        self.attack.start()
+
+    def stop(self):
+        if self.attack is not None:
+            self.attack.stop()
+
+    def tick(self, dt: float):
+        target = self._attacker()
+        if target is None:
+            self.mob.desired_speed = 0.0
+            return
+        self.attack.target = target
+        self.mob.fly_target_y = target.pos[1] + 0.3
+        self.attack.tick(dt)
 
 
 class ZombieAttackGoal(Goal):
@@ -501,6 +640,8 @@ class ZombieAttackGoal(Goal):
             self.attack_timer = max(0.0, self.attack_timer - dt)
 
         # Re-evaluate target or track current target
+        if self.target is not None and not getattr(self.target, "survival", True):
+            self.target = None
         if self.target is None or not getattr(self.target, "alive", True):
             self.target = self._find_closest_player()
             if self.target is None:
@@ -538,6 +679,8 @@ class ZombieAttackGoal(Goal):
 
     def _execute_attack(self, target):
         target.take_damage(self.damage)
+        if getattr(target, "dead", False):
+            target.death_cause = f"slain by a {getattr(self.mob, 'name', 'Zombie')}"
         mx, my, mz = self.mob.pos
         px, py, pz = target.pos
         dx = px - mx
@@ -572,6 +715,87 @@ class ZombieAttackGoal(Goal):
                 })
                 if getattr(target, "dead", False):
                     server._respawn_client_player(target_client, target, cause="slain by Zombie")
+
+
+class SkeletonShootGoal(ZombieAttackGoal):
+    """Keep a bow on the player: close to bow range, then draw and loose an arrow."""
+
+    def __init__(self, mob, target_range=16.0, preferred=14.0, bow_id="wood_bow", arrow_id="arrow"):
+        super().__init__(mob, target_range=target_range, reach=preferred, damage=0.0, cooldown=1.6)
+        self.preferred = float(preferred)
+        self.bow_id = bow_id
+        self.arrow_id = arrow_id
+        self.draw = 0.0
+        self.reload = 0.0
+
+    def stop(self):
+        super().stop()
+        self.draw = 0.0
+        self.mob.bow_pull = 0.0
+
+    def tick(self, dt: float):
+        if self.target is None or not getattr(self.target, "alive", True) or getattr(self.target, "dead", False):
+            self.target = self._find_closest_player()
+            if self.target is None:
+                self.mob.desired_speed = 0.0
+                self.mob.bow_pull = 0.0
+                self.draw = 0.0
+                return
+
+        from server.ranged import ARROWS, BOWS, aim_direction, fire_arrow, shot_origin
+
+        bow = BOWS.get(self.bow_id)
+        arrow = ARROWS.get(self.arrow_id)
+        mx, my, mz = self.mob.pos
+        px, py, pz = self.target.pos
+        eye = float(getattr(self.target, "eye", 1.62) or 1.62)
+        aim_y = py + eye * 0.85
+        origin_y = my + float(getattr(self.mob, "eye", 1.62) or 1.62)
+        dx = px - mx
+        dy = aim_y - origin_y
+        dz = pz - mz
+        dist_xz = math.hypot(dx, dz)
+        if dist_xz > 0.05:
+            self.mob.target_yaw = math.atan2(-dx, -dz)
+        self.mob.pitch = max(-1.2, min(1.2, math.atan2(dy, max(dist_xz, 0.05))))
+        self.mob.target_pitch = self.mob.pitch
+
+        blocked = False
+        world = getattr(self.mob, "world", None)
+        if world is not None and dist_xz > 1.0 and hasattr(world, "raycast"):
+            hit = world.raycast(mx, origin_y, mz, dx, dy, dz, dist_xz, solid_only=True)
+            if hit is not None and float(hit.get("dist", dist_xz)) < dist_xz - 0.4:
+                blocked = True
+
+        if self.reload > 0.0:
+            self.reload = max(0.0, self.reload - dt)
+
+        if dist_xz > self.preferred or blocked or bow is None or arrow is None:
+            self.mob.desired_speed = getattr(self.mob, "run_speed", 2.1)
+            self.draw = 0.0
+            self.mob.bow_pull = 0.0
+            return
+
+        self.mob.desired_speed = 0.0
+        if self.reload > 0.0:
+            self.draw = 0.0
+            self.mob.bow_pull = 0.0
+            return
+        draw_time = bow.draw_time if bow.draw_time else 0.9
+        self.draw += dt
+        self.mob.bow_pull = min(1.0, self.draw / draw_time)
+        if self.draw < draw_time:
+            return
+        self.draw = 0.0
+        self.mob.bow_pull = 0.0
+        if world is None:
+            return
+        direction = aim_direction(bow, 1.0, (dx, dy, dz))
+        origin = shot_origin(self.mob.pos, getattr(self.mob, "eye", 1.62), direction)
+        fire_arrow(
+            world, bow, arrow, origin, direction, 1.0, owner=str(self.mob.uuid), recoverable=False
+        )
+        self.reload = random.uniform(1.25, 2.0)
 
 
 class SpiderAttackGoal(Goal):
@@ -699,6 +923,8 @@ class SpiderAttackGoal(Goal):
 
     def _execute_attack(self, target):
         target.take_damage(self.damage)
+        if getattr(target, "dead", False):
+            target.death_cause = f"slain by a {getattr(self.mob, 'name', 'Spider')}"
         mx, my, mz = self.mob.pos
         px, py, pz = target.pos
         dx = px - mx
@@ -733,5 +959,303 @@ class SpiderAttackGoal(Goal):
                 })
                 if getattr(target, "dead", False):
                     server._respawn_client_player(target_client, target, cause="slain by Spider")
+
+
+class BreedGoal(Goal):
+    """Walk toward another animal of the same kind that has been fed, then have young."""
+
+    def __init__(self, mob, mate_range=8.0, meet_distance=1.3):
+        super().__init__(mob)
+        self.mate_range = float(mate_range)
+        self.meet_distance = float(meet_distance)
+        self.mate = None
+
+    def _mate(self):
+        mob = self.mob
+        world = getattr(mob, "world", None)
+        if world is None or mob.love_time <= 0.0 or mob.is_baby:
+            return None
+        best = None
+        best_dist = self.mate_range
+        mx, my, mz = mob.pos
+        for entity in world.entities:
+            if entity is mob or not getattr(entity, "is_mob", False):
+                continue
+            if not getattr(entity, "alive", True) or entity.mob_type != mob.mob_type:
+                continue
+            if getattr(entity, "love_time", 0.0) <= 0.0 or getattr(entity, "is_baby", False):
+                continue
+            dist = math.sqrt((entity.pos[0] - mx) ** 2 + (entity.pos[1] - my) ** 2 + (entity.pos[2] - mz) ** 2)
+            if dist < best_dist:
+                best = entity
+                best_dist = dist
+        return best
+
+    def can_start(self):
+        self.mate = self._mate()
+        return self.mate is not None
+
+    def can_continue(self):
+        if self.mob.love_time <= 0.0 or self.mob.is_baby:
+            return False
+        mate = self.mate
+        if mate is None or not getattr(mate, "alive", False) or getattr(mate, "love_time", 0.0) <= 0.0:
+            self.mate = self._mate()
+        return self.mate is not None
+
+    def stop(self):
+        self.mob.desired_speed = 0.0
+        self.mate = None
+
+    def tick(self, dt):
+        mate = self.mate
+        if mate is None:
+            self.mob.desired_speed = 0.0
+            return
+        dx = mate.pos[0] - self.mob.pos[0]
+        dy = mate.pos[1] - self.mob.pos[1]
+        dz = mate.pos[2] - self.mob.pos[2]
+        dist = math.hypot(dx, dz)
+        if dist <= self.meet_distance and abs(dy) < 1.25:
+            if self.mob.id <= mate.id:
+                give_birth(self.mob, mate)
+            self.mob.desired_speed = 0.0
+            return
+        self.mob.target_yaw = math.atan2(-dx, -dz)
+        self.mob.desired_speed = self.mob.walk_speed
+
+
+class TemptGoal(Goal):
+    """Walk toward a player holding this animal's breeding food, and stop short of them."""
+
+    def __init__(self, mob, follow_range=10.0, stop_distance=2.5):
+        super().__init__(mob)
+        self.follow_range = float(follow_range)
+        self.stop_distance = float(stop_distance)
+        self.player = None
+
+    def _players(self):
+        world = getattr(self.mob, "world", None)
+        if world is None:
+            return []
+        found = []
+        players = getattr(world, "players", None)
+        if isinstance(players, dict):
+            found.extend(players.values())
+        single = getattr(world, "_singleplayer_player", None)
+        if single is not None and all(single is not other for other in found):
+            found.append(single)
+        return found
+
+    def _holder(self):
+        mob = self.mob
+        if not getattr(mob, "breed_food", ()) or not hasattr(mob, "accepts_food"):
+            return None
+        best = None
+        best_dist = self.follow_range
+        mx, my, mz = mob.pos
+        for player in self._players():
+            if getattr(player, "dead", False) or not getattr(player, "pos", None):
+                continue
+            held = getattr(player, "held_item", "") or ""
+            if not mob.accepts_food(held):
+                continue
+            dx = player.pos[0] - mx
+            dy = player.pos[1] - my
+            dz = player.pos[2] - mz
+            if abs(dy) > 4.0:
+                continue
+            dist = math.hypot(dx, dz)
+            if dist <= best_dist:
+                best = player
+                best_dist = dist
+        return best
+
+    def can_start(self) -> bool:
+        self.player = self._holder()
+        return self.player is not None
+
+    def tick(self, dt: float):
+        player = self.player
+        mob = self.mob
+        if player is None:
+            mob.desired_speed = 0.0
+            return
+        dx = player.pos[0] - mob.pos[0]
+        dz = player.pos[2] - mob.pos[2]
+        dist = math.hypot(dx, dz)
+        face = math.atan2(-dx, -dz) if dist > 1e-4 else mob.yaw
+        if dist <= self.stop_distance:
+            mob.target_yaw = face
+            mob.desired_speed = 0.0
+            return
+        safe = pick_safe_yaw(mob, face, lookahead=1.2)
+        if safe is None:
+            mob.desired_speed = 0.0
+            return
+        mob.target_yaw = safe
+        mob.desired_speed = mob.walk_speed
+
+
+_PEN_TALL = None
+_PEN_FLUID = None
+
+
+def _pen_block_sets():
+    """Block ids a mob cannot stand on, and ids that count as fluid. Built once."""
+    global _PEN_TALL, _PEN_FLUID
+    if _PEN_TALL is not None:
+        return _PEN_TALL, _PEN_FLUID
+    from server.blocks import BLOCKS, is_fence, is_fence_gate, is_wall, is_waterlogged_slab, is_waterlogged_vertical_slab
+    from server.fluid import FLUID_LEVELS
+
+    tall = set()
+    fluid = set(FLUID_LEVELS)
+    for block_id, block in BLOCKS.items():
+        if is_fence(block) or is_wall(block) or is_fence_gate(block):
+            tall.add(block_id)
+        props = getattr(block, "properties", None) or {}
+        if props.get("fluid") or is_waterlogged_slab(block_id) or is_waterlogged_vertical_slab(block_id):
+            fluid.add(block_id)
+    _PEN_TALL = tall
+    _PEN_FLUID = fluid
+    return tall, fluid
+
+
+def is_penned(world, mob, limit=16.0):
+    """True when no walkable path from the mob reaches more than `limit` blocks away.
+
+    A missing chunk counts as open ground, so an animal at the edge of the loaded
+    world is not treated as fenced in. An animal that is not standing on loaded
+    ground is not penned either. Open ground bails out after a straight walk, so
+    a distant herd does not flood-fill on the frame it is checked.
+    """
+    from collections import deque
+
+    from server.blocks import AIR, BLOCKS
+
+    tall, fluid = _pen_block_sets()
+    get_block = world.get_block
+    blocks = BLOCKS
+    chunk_key = world.chunk_key
+    chunks = world.chunks
+    limit_sq = float(limit) * float(limit)
+    span = max(1, math.ceil(float(getattr(mob, "height", 0.9)) - 1e-3))
+
+    def loaded(x, y, z):
+        return chunk_key(x, y, z) in chunks
+
+    def standable(x, y, z):
+        ground_id = get_block(x, y - 1, z)
+        ground = blocks.get(ground_id)
+        if ground is None or not ground.solid or ground_id in tall or ground_id in fluid:
+            return False
+        for dy in range(span):
+            block_id = get_block(x, y + dy, z)
+            if block_id == AIR:
+                continue
+            if block_id in fluid:
+                return False
+            block = blocks.get(block_id)
+            if block is not None and block.solid:
+                return False
+        return True
+
+    def farther(x, z):
+        return (x - sx) * (x - sx) + (z - sz) * (z - sz) > limit_sq
+
+    sx = math.floor(mob.pos[0])
+    sy = math.floor(mob.pos[1] + 1e-3)
+    sz = math.floor(mob.pos[2])
+    if not loaded(sx, sy, sz):
+        return False
+    if not standable(sx, sy, sz):
+        if loaded(sx, sy - 1, sz) and standable(sx, sy - 1, sz):
+            sy -= 1
+        else:
+            return False
+
+    # A clear line in any cardinal direction means the animal is not shut in.
+    for dx, dz in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+        x, y, z = sx, sy, sz
+        for _ in range(int(limit) + 2):
+            nx, nz = x + dx, z + dz
+            if not loaded(nx, y, nz):
+                return False
+            nxt = None
+            for ny in (y, y + 1, y - 1, y - 2, y - 3, y - 4):
+                if ny < 1:
+                    continue
+                if standable(nx, ny, nz):
+                    nxt = ny
+                    break
+            if nxt is None:
+                break
+            x, y, z = nx, nxt, nz
+            if farther(x, z):
+                return False
+
+    start = (sx, sy, sz)
+    seen = {start}
+    queue = deque([start])
+    while queue:
+        x, y, z = queue.popleft()
+        if farther(x, z):
+            return False
+        for dx, dz in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            nx, nz = x + dx, z + dz
+            if not loaded(nx, y, nz):
+                return False
+            for ny in (y, y + 1, y - 1, y - 2, y - 3, y - 4):
+                if ny < 1 or (nx, ny, nz) in seen:
+                    continue
+                if not standable(nx, ny, nz):
+                    continue
+                if farther(nx, nz):
+                    return False
+                seen.add((nx, ny, nz))
+                queue.append((nx, ny, nz))
+                break
+        if len(seen) > 2048:
+            return False
+    return True
+
+
+def give_birth(parent, mate):
+    """Clear love mode, start the breeding cooldown, and spawn the young."""
+    parent.love_time = 0.0
+    mate.love_time = 0.0
+    parent.age = float(parent.breed_cooldown)
+    mate.age = float(mate.breed_cooldown)
+    world = getattr(parent, "world", None)
+    if world is None:
+        return []
+    lo, hi = parent.baby_count
+    count = random.randint(int(lo), int(hi))
+    babies = []
+    for _ in range(count):
+        angle = random.random() * math.tau
+        pos = [
+            (parent.pos[0] + mate.pos[0]) * 0.5 + math.cos(angle) * 0.35,
+            parent.pos[1],
+            (parent.pos[2] + mate.pos[2]) * 0.5 + math.sin(angle) * 0.35,
+        ]
+
+        def paint(mob, parent=parent, mate=mate):
+            if hasattr(parent, "color") and hasattr(mob, "color"):
+                source = parent if random.random() < 0.5 else mate
+                mob.color = getattr(source, "color", mob.color)
+                mob.sheared = False
+
+        babies.append(
+            world.spawn_mob(
+                parent.mob_type,
+                pos=pos,
+                yaw=random.uniform(-math.pi, math.pi),
+                baby=True,
+                after_init=paint,
+            )
+        )
+    return babies
 
 

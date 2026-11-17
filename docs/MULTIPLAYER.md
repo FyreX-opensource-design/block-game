@@ -43,6 +43,7 @@ When started, the server automatically detects your local network interface IPs 
 | `--seed` | `None` | Integer seed for deterministic terrain generation (random if omitted). |
 | `--gamemode` | `survival` | Default game mode for joining players: `survival` or `creative`. |
 | `--saves-dir` | `saves/` | Custom directory path for world saves and databases. |
+| `--no-spawn-weather` | off | Do not start a local weather process. The world waits for one to connect. |
 
 ### Stopping the Server
 Press `Ctrl+C` in the server terminal to cleanly flush all modified chunks, save player inventories, and disconnect clients.
@@ -159,5 +160,51 @@ Many mobile phones (Android / iOS) enforce **AP Isolation** on their Wi-Fi hotsp
    ./.venv/bin/python3 play.py --connect 10.42.0.1:25565
    ```
 *(When finished, stop the hotspot with `nmcli connection down Hotspot`)*.
+
+---
+
+## 8. Weather Server
+
+Clouds and rain run in their own process. The world server is the clock. The weather process connects in, follows that clock, and sends the cloud deck and the rain back. It never dials out from the world, and it is not a player. Only one weather process can be attached. If the connection drops, it tries again.
+
+The process is separate so it can sit in its own cgroup, on this machine or another one.
+
+### With a dedicated world server
+
+`play.py --server` starts a local weather process aimed at that server. The console prints the address it is following.
+
+```bash
+# World server, and a weather process on the same machine
+./.venv/bin/python3 play.py --server --port 25565
+
+# World server only. Start the weather process yourself.
+./.venv/bin/python3 play.py --server --no-spawn-weather
+./.venv/bin/python3 -m server.weather_server --world 127.0.0.1:25565
+```
+
+A weather process on another machine uses the world server's host and game port, the same port players use:
+
+```bash
+./.venv/bin/python3 -m server.weather_server --world 192.168.1.50:25565
+```
+
+It opens with a `weather_hello` packet. The world answers with the seed and the time, then keeps the two clocks aligned. Built and dug columns around players are sent about twice a second. The weather process already knows the generated terrain from the seed, and uses those columns where the ground has changed.
+
+### With a singleplayer world
+
+Entering a world opens a weather link and starts a local weather process. The console prints the link address. `--no-weather` skips both. `--no-spawn-weather` opens the link and waits.
+
+```bash
+# Listen on every interface at a fixed port, and do not start the process here
+./.venv/bin/python3 play.py --no-spawn-weather --weather-port 25566
+```
+
+From the other machine:
+
+```bash
+./.venv/bin/python3 -m server.weather_server --world 192.168.1.50:25566
+```
+
+Without `--weather-port`, the link binds to `127.0.0.1` on a free port, so only a process on this machine can reach it. A non-zero `--weather-port` binds `0.0.0.0` on that port. A client that joined a dedicated server does not start its own weather link. That world's server already owns it.
 
 

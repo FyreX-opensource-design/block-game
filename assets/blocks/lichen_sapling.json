@@ -1,0 +1,23 @@
+{
+  "id": "lichen_sapling",
+  "lang": "block.lichen_sapling",
+  "tab": "natural",
+  "model": "cross",
+  "render": "cutout",
+  "solid": false,
+  "hardness": 0.0,
+  "tool": "none",
+  "mining_level": 0,
+  "fluid_breakable": true,
+  "plant": true,
+  "requires_soil": true,
+  "textures": {
+    "cross": "lichen_sapling"
+  },
+  "fluorescence": {
+    "texture": "lichen_sapling_glow",
+    "start": 1,
+    "full": 5,
+    "strength": 1
+  }
+}

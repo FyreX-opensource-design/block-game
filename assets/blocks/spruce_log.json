@@ -1,0 +1,22 @@
+{
+  "id": "spruce_log",
+  "lang": "block.spruce_log",
+  "tab": [
+    "building",
+    "natural"
+  ],
+  "model": "cube",
+  "hardness": 2.0,
+  "tool": "axe",
+  "mining_level": 0,
+  "loot_table": "blocks/spruce_log",
+  "sound": "wood",
+  "properties": {
+    "rotation": "axis"
+  },
+  "textures": {
+    "top": "spruce_log_top",
+    "side": "spruce_log_side",
+    "bottom": "spruce_log_top"
+  }
+}

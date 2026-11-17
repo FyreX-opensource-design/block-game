@@ -148,6 +148,10 @@ class MultiplayerServer:
         self.catalog = WorldCatalog(saves_dir) if saves_dir is not None or world is None else None
         self.command_handler = CommandHandler()
         self.clients = {}  # uuid -> RemoteClient
+        self.weather_client = None
+        self.weather_session = None
+        self.weather_proc = None
+        self._weather_seq = 0
         self.pending_clients = []  # unauthenticated RemoteClients
         self.running = False
         self.server_sock = None
@@ -313,6 +317,9 @@ class MultiplayerServer:
         self.server_sock.listen(16)
         self.server_sock.setblocking(False)
         self.running = True
+        from server.weather_link import WeatherSession
+
+        self.weather_session = WeatherSession(self.world)
 
         self._thread = threading.Thread(target=self._run_loop, daemon=True)
         self._thread.start()
@@ -340,6 +347,16 @@ class MultiplayerServer:
                 self.catalog.write(self.world_info)
         for client in list(self.clients.values()):
             self._save_player_data(client)
+        if self.weather_proc is not None:
+            self.weather_proc.terminate()
+            try:
+                self.weather_proc.wait(timeout=1.0)
+            except Exception:
+                pass
+            self.weather_proc = None
+        if self.weather_client is not None:
+            self.weather_client.close()
+            self.weather_client = None
         for client in list(self.clients.values()) + list(self.pending_clients):
             try:
                 send_packet(client.sock, {"type": "disconnect", "reason": "Server closed"})
@@ -365,7 +382,10 @@ class MultiplayerServer:
     def tick(self):
         if self.server_sock is not None and self.running:
             all_socks = [self.server_sock]
-            active_clients = [c for c in self.pending_clients + list(self.clients.values()) if c.alive and getattr(c, "sock", None) is not None]
+            tracked = self.pending_clients + list(self.clients.values())
+            if self.weather_client is not None:
+                tracked.append(self.weather_client)
+            active_clients = [c for c in tracked if c.alive and getattr(c, "sock", None) is not None]
             client_by_sock = {c.sock: c for c in active_clients}
             all_socks.extend(client_by_sock.keys())
 
@@ -437,6 +457,7 @@ class MultiplayerServer:
             self._update_player_falling()
             prev_entities = {e.id: e for e in self.world.entities}
             self.world.advance_time(0.02)
+            self._tick_weather(0.02)
             self._time_sync_timer += 0.02
             if self._time_sync_timer >= 2.0:
                 self._time_sync_timer = 0.0
@@ -568,9 +589,12 @@ class MultiplayerServer:
                                     self.clients[c_uuid].send(prog_msg)
             self.world.update_leaves(0.02)
             self.world.update_transformations(0.02)
+            self.world.update_snow(0.02)
             self.world.update_saplings(0.02)
             self.world.update_crops(0.02)
             changed = self.world.update_fluids(0.02)
+            self.world.update_fire(0.02)
+            self.world.update_pit_kilns(0.02)
             if getattr(self.world, "on_block_set", None) is None:
                 for x, y, z, block in changed:
                     self.broadcast(
@@ -678,14 +702,61 @@ class MultiplayerServer:
                 for event in events:
                     if event.fatal and event.message:
                         cause = event.message
+                if not cause:
+                    cause = str(getattr(player, "death_cause", "") or "")
                 self._respawn_client_player(client, player, cause)
             elif events or getattr(client, "_last_synced_health", None) != player.health or getattr(client, "_last_synced_hunger", None) != player.hunger:
                 client._last_synced_health = player.health
                 client._last_synced_hunger = player.hunger
                 self._send_player_health(client, player)
 
+    def _tick_weather(self, dt):
+        session = self.weather_session
+        client = self.weather_client
+        if session is None or client is None or not client.alive:
+            return
+        from server.weather_link import weather_focus
+
+        session.tick(dt, weather_focus(self.world))
+        for packet in session.take_outgoing():
+            client.send(packet)
+        if session.state_seq != self._weather_seq:
+            self._weather_seq = session.state_seq
+            relay = session.client_packet()
+            if relay is not None:
+                self.broadcast(relay)
+
+    def _attach_weather(self, client):
+        if self.weather_client is not None and self.weather_client is not client and self.weather_client.alive:
+            client.send({"type": "disconnect", "reason": "A weather server is already connected"})
+            client.close()
+            return
+        if client in self.pending_clients:
+            self.pending_clients.remove(client)
+        client.role = "weather"
+        self.weather_client = client
+        if self.weather_session is None and self.world is not None:
+            from server.weather_link import WeatherSession
+
+            self.weather_session = WeatherSession(self.world)
+        if self.weather_session is None:
+            client.close()
+            return
+        self.weather_session.sync_left = 0.0
+        self.weather_session.map_left = 0.0
+        client.send(self.weather_session.welcome())
+
     def _handle_packet(self, client, packet):
         p_type = packet.get("type")
+        if p_type == "weather_hello":
+            self._attach_weather(client)
+            return
+        if getattr(client, "role", "player") == "weather":
+            if self.weather_session is not None:
+                self.weather_session.on_packet(packet)
+                for reply in self.weather_session.take_outgoing():
+                    client.send(reply)
+            return
         if p_type == "login":
             uuid = str(packet.get("uuid", "")).strip()
             if not uuid:
@@ -856,6 +927,7 @@ class MultiplayerServer:
                 player.vel = list(client.vel)
                 player.yaw = client.yaw
                 player.pitch = client.pitch
+                player.held_item = client.held_item
 
             # Keep in-memory player record up to date
             previous = self.players_data.get(client.uuid) or {}
@@ -1148,6 +1220,8 @@ class MultiplayerServer:
                                     self.broadcast({"type": "mobs_update", "mobs": [entity.to_dict()]})
                             elif hasattr(entity, "dye") and entity.dye(item_id):
                                 self.broadcast({"type": "mobs_update", "mobs": [entity.to_dict()]})
+                        if hasattr(entity, "feed") and entity.feed(item_id):
+                            self.broadcast({"type": "mobs_update", "mobs": [entity.to_dict()]})
 
         elif p_type == "chat":
             text = str(packet.get("message", "")).strip()
@@ -1275,19 +1349,23 @@ class MultiplayerServer:
             pkt["type"] = "spawn_arrow"
             self.broadcast(pkt)
         elif getattr(entity, "is_mob", False):
-            self.broadcast(
-                {
-                    "type": "spawn_mob",
-                    "id": entity.id,
-                    "uuid": getattr(entity, "uuid", None),
-                    "mob_type": entity.mob_type,
-                    "pos": entity.pos,
-                    "vel": entity.vel,
-                    "yaw": entity.yaw,
-                    "pitch": entity.pitch,
-                    "health": entity.health,
-                }
-            )
+            packet = {
+                "type": "spawn_mob",
+                "id": entity.id,
+                "uuid": getattr(entity, "uuid", None),
+                "mob_type": entity.mob_type,
+                "pos": entity.pos,
+                "vel": entity.vel,
+                "yaw": entity.yaw,
+                "pitch": entity.pitch,
+                "health": entity.health,
+                "age": float(getattr(entity, "age", 0.0) or 0.0),
+                "love": float(getattr(entity, "love_time", 0.0) or 0.0),
+            }
+            if hasattr(entity, "color"):
+                packet["color"] = entity.color
+                packet["sheared"] = bool(getattr(entity, "sheared", False))
+            self.broadcast(packet)
         elif hasattr(entity, "item"):
             pkt = {
                 "type": "spawn_item",
@@ -1308,6 +1386,13 @@ class MultiplayerServer:
                 client.send(packet)
 
     def _disconnect_client(self, client):
+        if getattr(client, "role", "player") == "weather" or client is self.weather_client:
+            client.close()
+            if client in self.pending_clients:
+                self.pending_clients.remove(client)
+            if self.weather_client is client:
+                self.weather_client = None
+            return
         self._save_player_data(client)
         client.close()
         self.open_furnaces.pop(client.uuid, None)
@@ -1338,6 +1423,11 @@ def main(argv=None):
     parser.add_argument("--seed", type=int, default=None, help="World generation seed (random if omitted)")
     parser.add_argument("--gamemode", default="survival", choices=["survival", "creative"], help="Default server game mode (default: survival)")
     parser.add_argument("--saves-dir", default=None, help="Custom world storage directory")
+    parser.add_argument(
+        "--no-spawn-weather",
+        action="store_true",
+        help="Do not start a local weather process; wait for one to connect",
+    )
     args = parser.parse_args(argv)
 
     server = MultiplayerServer(
@@ -1351,6 +1441,17 @@ def main(argv=None):
     server.start()
     print(f"Block Game server running on port {server.actual_port} (World: {server.world_name}, Seed: {server.seed})")
     print(f"  • Connect on this device: 127.0.0.1:{server.actual_port}")
+    weather_target = f"127.0.0.1:{server.actual_port}"
+    if args.no_spawn_weather:
+        print(f"  • Weather: waiting for a weather server aimed at this world")
+    else:
+        from server.weather_server import spawn_weather_process
+
+        server.weather_proc = spawn_weather_process(weather_target)
+        print(f"  • Weather: local process following {weather_target}")
+    print("  • A weather server on another machine connects with:")
+    print(f"      python -m server.weather_server --world HOST:{server.actual_port}")
+    print("    That process is separate, so it can run under its own cgroup.")
     try:
         from client.settings import get_local_ips
         local_ips = get_local_ips()

@@ -1,6 +1,7 @@
 import math
 import random
 
+from server.ai import is_penned
 from server.blocks import BLOCKS, CHUNK_SIZE
 
 
@@ -15,6 +16,7 @@ class MobSpawner:
         self.despawn_dist_chance = 64.0
         self.min_spawn_dist = 24.0
         self.max_spawn_dist = 54.0
+        self._pen_budget = 1
 
     def _get_players(self):
         players = list(self.world.players.values())
@@ -25,7 +27,9 @@ class MobSpawner:
     def update(self, dt):
         players = self._get_players()
 
-        # 1. Despawn checks
+        # 1. Despawn checks. At most one pen search per tick, so a distant herd
+        # cannot all flood-fill on the same frame.
+        self._pen_budget = 1
         if players:
             for entity in self.world.entities:
                 if not getattr(entity, "is_mob", False) or not getattr(entity, "alive", True):
@@ -34,6 +38,8 @@ class MobSpawner:
                     math.hypot(entity.pos[0] - p.pos[0], entity.pos[2] - p.pos[2])
                     for p in players
                 )
+                if min_dist > self.despawn_dist_chance and self._penned_livestock(entity, dt):
+                    continue
                 if min_dist > self.despawn_dist_immediate:
                     entity.alive = False
                 elif min_dist > self.despawn_dist_chance:
@@ -46,6 +52,32 @@ class MobSpawner:
         if self.spawn_timer >= 2.0:
             self.spawn_timer = 0.0
             self.try_spawn(players)
+
+    def _penned_livestock(self, entity, dt):
+        """Livestock that cannot walk more than 16 blocks stay, even past despawn range.
+
+        The walk is cached for a few seconds. Once an animal has been seen inside a
+        pen, that result is kept while its chunk is unloaded so walking away does
+        not erase the herd.
+        """
+        if not getattr(entity, "breed_food", ()):
+            return False
+        remaining = getattr(entity, "_pen_timer", 0.0) - dt
+        if remaining > 0.0:
+            entity._pen_timer = remaining
+            return bool(getattr(entity, "_penned", False))
+        if self._pen_budget <= 0:
+            # Not searched yet: keep it until its own turn. A previous answer stands.
+            entity._pen_timer = 0.0
+            return bool(getattr(entity, "_penned", True))
+        entity._pen_timer = 4.0
+        x = math.floor(entity.pos[0])
+        y = math.floor(entity.pos[1] + 1e-3)
+        z = math.floor(entity.pos[2])
+        if self.world.chunk_key(x, y, z) in self.world.chunks:
+            self._pen_budget -= 1
+            entity._penned = is_penned(self.world, entity, limit=16.0)
+        return bool(getattr(entity, "_penned", False))
 
     def try_spawn(self, players=None):
         if players is None:
@@ -119,18 +151,23 @@ class MobSpawner:
                                 break
                         continue
 
-                    # 1. Hostile mob spawn (zombie or spider): valid in dark caves (day or night) or surface at night
-                    can_zombie = self.can_spawn_zombie_at(x, y, z)
-                    can_spider = self.can_spawn_spider_at(x, y, z)
-                    if can_zombie or can_spider:
-                        group_size = random.randint(1, 2)
-                        mob_choices = []
-                        if can_zombie:
-                            mob_choices.append("zombie")
-                        if can_spider:
-                            mob_choices.append("spider")
-                        mob_choice = random.choice(mob_choices)
-                        check_fn = self.can_spawn_spider_at if mob_choice == "spider" else self.can_spawn_zombie_at
+                    # 1. Hostile mobs: dark caves or the surface at night.
+                    # Deserts raise their own skeleton, zombie, and spider.
+                    ready = [
+                        (mob_name, check)
+                        for mob_name, check in self.hostile_mob_types(x, z)
+                        if check(x, y, z)
+                    ]
+                    if ready:
+                        from server.biomes import biome_at
+                        from server.mobs import MOBS
+
+                        biome = biome_at(int(x), int(z), self.world.seed, self.world.biomes)
+                        weights = [MOBS[name].spawn.weight_for(biome.id) for name, _check in ready]
+                        mob_choice = random.choices([name for name, _check in ready], weights=weights, k=1)[0]
+                        check_fn = next(check for name, check in ready if name == mob_choice)
+                        span = MOBS[mob_choice].spawn.group_size
+                        group_size = random.randint(span[0], span[1])
                         for _ in range(group_size):
                             if current_mobs >= self.max_mobs:
                                 break
@@ -146,15 +183,18 @@ class MobSpawner:
 
                     # 2. Passive mob spawn: valid on grassy surface in daylight
                     elif not is_night and self._can_spawn_at(x, y, z):
-                        herd_size = random.randint(1, 3)
+                        from server.mobs import MOBS
+
                         mob_type = self._passive_mob_type(x, z)
+                        span = MOBS[mob_type].spawn.group_size
+                        herd_size = random.randint(span[0], span[1])
                         for _ in range(herd_size):
                             if current_mobs >= self.max_mobs:
                                 break
                             hx = x + random.randint(-2, 2)
                             hz = z + random.randint(-2, 2)
                             hy = self._find_ground_near(hx, hz, near_y=y)
-                            if hy is not None and self._can_spawn_at(hx, hy, hz):
+                            if hy is not None and self._can_spawn_at(hx, hy, hz, mob_type):
                                 self.world.spawn_mob(mob_type, pos=[hx + 0.5, hy + 1.0, hz + 0.5])
                                 current_mobs += 1
                                 spawned = True
@@ -295,27 +335,30 @@ class MobSpawner:
                     return y
         return None
 
-    # Grassy lowlands where cattle are common. Deserts and forests stay mostly pig and sheep.
-    PASTURE_BIOMES = frozenset(
-        {
-            "plains",
-            "lowland_plains",
-            "highland_plains",
-            "savanna",
-            "savanna_hills",
-            "wildflower_patch",
-            "rose_thicket",
-            "sunburst_glade",
-            "lavender_hollow",
-            "orchid_clearing",
-        }
-    )
-
     def passive_mob_weights(self, biome_id):
-        """Return (mob ids, weights). Cows are the common herd animal on plains and savannas."""
-        if biome_id in self.PASTURE_BIOMES:
-            return ("cow", "pig", "sheep"), (6, 2, 2)
-        return ("cow", "pig", "sheep"), (1, 5, 5)
+        """Return (mob ids, weights) for passive mobs whose spawn rule accepts this biome."""
+        from server.mobs import mobs_in_group
+
+        mobs = mobs_in_group("passive", biome_id)
+        return tuple(mob.id for mob in mobs), tuple(mob.spawn.weight_for(biome_id) for mob in mobs)
+
+    def _spawn_check(self, mob_id):
+        from server.mobs import MOBS, spawn_allowed
+
+        definition = MOBS[mob_id]
+
+        def check(x, y, z):
+            return spawn_allowed(definition, self.world, x, y, z)
+
+        return check
+
+    def hostile_mob_types(self, x, z):
+        """Hostile kinds that belong in this column, each with its spawn check."""
+        from server.biomes import biome_at
+        from server.mobs import mobs_in_group
+
+        biome = biome_at(int(x), int(z), self.world.seed, self.world.biomes)
+        return tuple((mob.id, self._spawn_check(mob.id)) for mob in mobs_in_group("hostile", biome.id))
 
     def _passive_mob_type(self, x, z):
         from server.biomes import biome_at
@@ -325,182 +368,28 @@ class MobSpawner:
         return random.choices(kinds, weights=weights, k=1)[0]
 
     def _can_spawn_at(self, x, y, z, mob_type=None):
-        if mob_type == "zombie":
+        if mob_type in ("zombie", "desert_zombie"):
             return self.can_spawn_zombie_at(x, y, z)
-        if mob_type == "spider":
+        if mob_type in ("spider", "desert_spider"):
             return self.can_spawn_spider_at(x, y, z)
+        from server.mobs import MOBS, mobs_in_group, spawn_allowed
 
-        ground = self.world.get_block(x, y, z)
-        if ground not in ("grass", "dirt", "muddy_grass"):
-            return False
-
-        # Above must be clear
-        b1 = self.world.get_block(x, y + 1, z)
-        b2 = self.world.get_block(x, y + 2, z)
-
-        from server.fluid import is_water
-
-        if is_water(b1) or is_water(b2):
-            return False
-
-        b1_obj = BLOCKS.get(b1)
-        b2_obj = BLOCKS.get(b2)
-        if b1_obj and b1_obj.solid:
-            return False
-        if b2_obj and b2_obj.solid:
-            return False
-
-        # Lighting check
-        if getattr(self.world, "lighting", None) is not None:
-            skylight = self.world.lighting.get_skylight(x, y + 1, z)
-            if skylight < 7:
-                return False
-
-        return True
+        if mob_type:
+            definition = MOBS.get(mob_type)
+            return definition is not None and spawn_allowed(definition, self.world, x, y, z)
+        return any(spawn_allowed(mob, self.world, x, y, z) for mob in mobs_in_group("passive", ""))
 
     def can_spawn_zombie_at(self, x, y, z, skylight=None, blocklight=None):
-        """Check if a zombie can spawn at (x, y, z) ground block.
+        """Zombie spawn rule from assets/mobs/zombie.lua."""
+        from server.mobs import MOBS, spawn_allowed
 
-        Conditions:
-        - Solid ground (not air, not fluid, solid block).
-        - Clear headroom at y+1 and y+2 (not solid, not water).
-        - Spawning is prevented if skylight > 7.
-        - Spawning is prevented if block light blue > 7, green > 7, or uv > 7.
-        - Red light (and infrared) does NOT prevent zombie spawning.
-        """
-        ground = self.world.get_block(x, y, z)
-        if not ground or ground == "air":
-            return False
-
-        from server.fluid import is_fluid
-
-        if is_fluid(ground):
-            return False
-
-        b_obj = BLOCKS.get(ground)
-        if not b_obj or not getattr(b_obj, "solid", False):
-            return False
-
-        # Above must be clear (2 blocks headroom)
-        b1 = self.world.get_block(x, y + 1, z)
-        b2 = self.world.get_block(x, y + 2, z)
-
-        if is_fluid(b1) or is_fluid(b2):
-            return False
-
-        b1_obj = BLOCKS.get(b1)
-        b2_obj = BLOCKS.get(b2)
-        if b1_obj and getattr(b1_obj, "solid", False):
-            return False
-        if b2_obj and getattr(b2_obj, "solid", False):
-            return False
-
-        # Lighting check:
-        # Spawning is prevented by skylight > 7 or blue, green, or UV light > 7.
-        # Red light won't work to prevent zombie spawning.
-        if skylight is None:
-            if hasattr(self.world, "get_current_skylight"):
-                skylight = self.world.get_current_skylight(x, y + 1, z)
-            elif getattr(self.world, "lighting", None) is not None:
-                skylight = self.world.lighting.get_skylight(x, y + 1, z)
-            elif hasattr(self.world, "get_skylight"):
-                skylight = self.world.get_skylight(x, y + 1, z)
-            else:
-                skylight = 0
-
-        if skylight > 7:
-            return False
-
-        if blocklight is None:
-            if hasattr(self.world, "get_blocklight"):
-                blocklight = self.world.get_blocklight(x, y + 1, z)
-            elif getattr(self.world, "lighting", None) is not None:
-                blocklight = self.world.lighting.get_blocklight(x, y + 1, z)
-            else:
-                blocklight = (0, 0, 0, 0, 0)
-
-        if isinstance(blocklight, dict):
-            g = blocklight.get("g", blocklight.get("green", 0))
-            b = blocklight.get("b", blocklight.get("blue", 0))
-            uv = blocklight.get("uv", 0)
-        elif isinstance(blocklight, (list, tuple)):
-            g = blocklight[1] if len(blocklight) > 1 else 0
-            b = blocklight[2] if len(blocklight) > 2 else 0
-            uv = blocklight[3] if len(blocklight) > 3 else 0
-        else:
-            g = b = uv = 0
-
-        if b > 7 or g > 7 or uv > 7:
-            return False
-
-        return True
+        return spawn_allowed(MOBS["zombie"], self.world, x, y, z, skylight=skylight, blocklight=blocklight)
 
     def can_spawn_spider_at(self, x, y, z, skylight=None, blocklight=None):
-        """Check if a spider can spawn at (x, y, z) ground block.
+        """Spider spawn rule from assets/mobs/spider.lua. One block of headroom."""
+        from server.mobs import MOBS, spawn_allowed
 
-        Conditions:
-        - Solid ground (not air, not fluid, solid block).
-        - Clear headroom at y+1 (not solid, not fluid).
-        - Spawning is prevented if skylight > 7.
-        - Spawning is prevented if block light blue > 7, green > 7, or uv > 7.
-        """
-        ground = self.world.get_block(x, y, z)
-        if not ground or ground == "air":
-            return False
-
-        from server.fluid import is_fluid
-
-        if is_fluid(ground):
-            return False
-
-        b_obj = BLOCKS.get(ground)
-        if not b_obj or not getattr(b_obj, "solid", False):
-            return False
-
-        # Headroom: y+1 must be clear (spider is 0.9 high)
-        b1 = self.world.get_block(x, y + 1, z)
-        if is_fluid(b1):
-            return False
-        b1_obj = BLOCKS.get(b1)
-        if b1_obj and getattr(b1_obj, "solid", False):
-            return False
-
-        if skylight is None:
-            if hasattr(self.world, "get_current_skylight"):
-                skylight = self.world.get_current_skylight(x, y + 1, z)
-            elif getattr(self.world, "lighting", None) is not None:
-                skylight = self.world.lighting.get_skylight(x, y + 1, z)
-            elif hasattr(self.world, "get_skylight"):
-                skylight = self.world.get_skylight(x, y + 1, z)
-            else:
-                skylight = 0
-
-        if skylight > 7:
-            return False
-
-        if blocklight is None:
-            if hasattr(self.world, "get_blocklight"):
-                blocklight = self.world.get_blocklight(x, y + 1, z)
-            elif getattr(self.world, "lighting", None) is not None:
-                blocklight = self.world.lighting.get_blocklight(x, y + 1, z)
-            else:
-                blocklight = (0, 0, 0, 0, 0)
-
-        if isinstance(blocklight, dict):
-            g = blocklight.get("g", blocklight.get("green", 0))
-            b = blocklight.get("b", blocklight.get("blue", 0))
-            uv = blocklight.get("uv", 0)
-        elif isinstance(blocklight, (list, tuple)):
-            g = blocklight[1] if len(blocklight) > 1 else 0
-            b = blocklight[2] if len(blocklight) > 2 else 0
-            uv = blocklight[3] if len(blocklight) > 3 else 0
-        else:
-            g = b = uv = 0
-
-        if b > 7 or g > 7 or uv > 7:
-            return False
-
-        return True
+        return spawn_allowed(MOBS["spider"], self.world, x, y, z, skylight=skylight, blocklight=blocklight)
 
     def can_spawn_mob_at(self, x, y, z, mob_type="zombie", max_light=7, min_light=0, allowed_blocks=None):
         """Check if a mob of mob_type can spawn at (x, y, z)."""

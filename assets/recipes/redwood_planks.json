@@ -1,0 +1,11 @@
+{
+  "id": "redwood_planks",
+  "type": "crafting_shapeless",
+  "ingredients": [
+    "redwood_log"
+  ],
+  "result": {
+    "item": "redwood_planks",
+    "count": 4
+  }
+}

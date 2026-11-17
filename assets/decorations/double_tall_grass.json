@@ -1,0 +1,6 @@
+{
+  "id": "double_tall_grass",
+  "block": "double_tall_grass",
+  "chance": 0.12,
+  "surfaces": ["grass", "podzol"]
+}

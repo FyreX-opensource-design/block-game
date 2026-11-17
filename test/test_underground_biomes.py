@@ -78,7 +78,7 @@ class TestUndergroundBiomes(unittest.TestCase):
                 res = biome_at(x, z, 42, biomes, y=20, underground_biomes=ubs)
                 if isinstance(res, UndergroundBiome):
                     found_3d = True
-                    self.assertIn(res.id, ("limestone_caverns", "crystal_caverns"))
+                    self.assertIn(res.id, ("limestone_caverns", "crystal_caverns", "ice_caves"))
                     break
             if found_3d:
                 break

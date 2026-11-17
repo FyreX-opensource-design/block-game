@@ -3,7 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 
 CHUNK_SIZE = 16
-WORLD_HEIGHT = 128
+WORLD_HEIGHT = 256
 SECTION_COUNT = WORLD_HEIGHT // CHUNK_SIZE
 
 LIGHT_MIN = 0
@@ -52,6 +52,121 @@ def parse_light_levels(val):
             v = int(max(0, min(LIGHT_MAX, val[0])))
             return (v, v, v, v, v)
     return (0, 0, 0, 0, 0)
+
+
+class Fluorescence:
+    """How a block's surface shifts color as UV light on it rises.
+
+    ``start`` and ``full`` are UV levels from 0 to 15. Nothing happens below
+    ``start``. At ``full`` the surface has moved ``strength`` of the way
+    toward ``color`` and glows by that same amount in the dark. ``texture``
+    is an overlay: its color tints the glow and its alpha decides which
+    pixels react. ``packed`` is the vec4 the mesh hands to the shader.
+    """
+
+    __slots__ = ("color", "start", "full", "strength", "packed", "texture")
+
+    def __init__(self, color, start, full, strength, packed, texture=None):
+        self.color = color
+        self.start = float(start)
+        self.full = float(full)
+        self.strength = float(strength)
+        self.packed = packed
+        self.texture = texture
+
+
+def _smoothstep(edge0, edge1, x):
+    span = edge1 - edge0
+    if span <= 0.0:
+        return 1.0 if x >= edge1 else 0.0
+    t = max(0.0, min(1.0, (float(x) - edge0) / span))
+    return t * t * (3.0 - 2.0 * t)
+
+
+def fluorescence_response(uv_level, spec):
+    """Shift amount at a UV level, in the same units the world shader uses."""
+    if spec is None or spec.strength <= 0.0:
+        return 0.0
+    end = spec.full if spec.full > spec.start else spec.start + 0.05
+    return _smoothstep(spec.start, end, float(uv_level)) * spec.strength
+
+
+def _fluor_channel(value, name):
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"fluorescence {name} must be a number") from exc
+    return max(0.0, min(float(LIGHT_MAX), number))
+
+
+def _fluor_color(value):
+    if isinstance(value, str):
+        text = value.strip()
+        if text.startswith("#"):
+            text = text[1:]
+        if len(text) == 3:
+            text = "".join(ch * 2 for ch in text)
+        if len(text) not in (6, 8):
+            raise ValueError("fluorescence color must be #rrggbb")
+        try:
+            return tuple(int(text[i : i + 2], 16) / 255.0 for i in (0, 2, 4))
+        except ValueError as exc:
+            raise ValueError("fluorescence color must be #rrggbb") from exc
+    if isinstance(value, dict):
+        value = (
+            value.get("r", value.get("red")),
+            value.get("g", value.get("green")),
+            value.get("b", value.get("blue")),
+        )
+    if isinstance(value, (list, tuple)) and len(value) >= 3:
+        try:
+            channels = [float(value[0]), float(value[1]), float(value[2])]
+        except (TypeError, ValueError) as exc:
+            raise ValueError("fluorescence color must be rgb") from exc
+        if any(channel > 1.0 for channel in channels):
+            channels = [channel / 255.0 for channel in channels]
+        return tuple(max(0.0, min(1.0, channel)) for channel in channels)
+    raise ValueError("fluorescence color must be an rgb list or #rrggbb")
+
+
+def parse_fluorescence(value):
+    """Parse a block ``fluorescence`` object. None means the block ignores UV."""
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ValueError("fluorescence must be an object with color, start, and full")
+    texture = str(value.get("texture") or "") or None
+    if "color" in value:
+        color = _fluor_color(value["color"])
+    elif texture:
+        color = (1.0, 1.0, 1.0)
+    else:
+        raise ValueError("fluorescence needs a color or a texture")
+    start = _fluor_channel(value.get("start", 1), "start")
+    full = _fluor_channel(value.get("full", 8), "full")
+    try:
+        strength = float(value.get("strength", 1))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("fluorescence strength must be a number") from exc
+    strength = max(0.0, min(4.0, strength))
+    # The shader packs start and full as integers and strength in sixteenths.
+    start_i = int(round(start))
+    full_i = int(round(full))
+    if full_i < start_i:
+        start_i, full_i = full_i, start_i
+    strength_i = int(round(strength * 16.0))
+    strength_q = strength_i / 16.0
+    if strength_q <= 0.0:
+        return None
+    packed_a = float(start_i + full_i * 16 + strength_i * 256)
+    return Fluorescence(
+        color,
+        float(start_i),
+        float(full_i),
+        strength_q,
+        (color[0], color[1], color[2], packed_a),
+        texture,
+    )
 
 
 def get_block_opacity(block_obj):
@@ -171,6 +286,9 @@ class LightingSystem:
         self._batch_depth = 0
         self._batch_keys = set()
         self._batch_emitters = set()
+        self._batch_full_relight = False
+        self._pending_light = []
+        self._pending_light_set = set()
 
     def begin_batch(self):
         """Mark light dirty without recomputing until :meth:`end_batch`.
@@ -186,17 +304,25 @@ class LightingSystem:
             return
         keys = self._batch_keys
         emitters = self._batch_emitters
+        full_relight = self._batch_full_relight
         self._batch_keys = set()
         self._batch_emitters = set()
+        self._batch_full_relight = False
         if not keys and not emitters:
             return
         ordered = sorted(keys, key=lambda k: -k[1])
+        spread = full_relight or not emitters
         for ckey in ordered:
             chunk = self.world.chunks.get(ckey)
             if chunk is not None and not getattr(chunk, "light_valid", False):
-                self.compute_chunk_lighting(*ckey)
+                self.compute_chunk_lighting(*ckey, spread=spread)
+        if emitters and not full_relight:
+            for ckey in ordered:
+                self._queue_neighbor_light(*ckey)
+            return
         origins = ordered or list(emitters)
-        for _ in range(3 if emitters else 2):
+        passes = 3 if emitters and full_relight else (1 if emitters else 2)
+        for _ in range(passes):
             re_invalidated = [
                 ckey
                 for ckey, chunk in self.world.chunks.items()
@@ -308,17 +434,19 @@ class LightingSystem:
     def set_blocklight(self, x, y, z, r, g, b, uv=0, ir=0):
         key = (int(x), int(y), int(z))
         levels = parse_light_levels((r, g, b, uv, ir))
+        previous = self.light_sources.get(key, (0, 0, 0, 0, 0))
         if any(v > 0 for v in levels):
             self.light_sources[key] = levels
         else:
             self.light_sources.pop(key, None)
-        self.on_block_changed(x, y, z, was_emitter=True)
+        decreased = any(old > new for old, new in zip(previous, levels))
+        self.on_block_changed(x, y, z, was_emitter=True, light_decreased=decreased)
 
     def clear_blocklight(self, x, y, z):
         key = (int(x), int(y), int(z))
         if key in self.light_sources:
             del self.light_sources[key]
-            self.on_block_changed(x, y, z, was_emitter=True)
+            self.on_block_changed(x, y, z, was_emitter=True, light_decreased=True)
 
     def ensure_chunk_lit(self, chunk):
         if not getattr(chunk, "light_valid", False):
@@ -330,7 +458,34 @@ class LightingSystem:
                     self.compute_chunk_lighting(cx, ty, cz)
             self.compute_chunk_lighting(chunk.cx, chunk.cy, chunk.cz)
 
-    def compute_chunk_lighting(self, cx, cy, cz):
+    def _queue_neighbor_light(self, cx, cy, cz):
+        for dx, dy, dz in ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)):
+            key = (cx + dx, cy + dy, cz + dz)
+            if key in self._pending_light_set or key not in self.world.chunks:
+                continue
+            self._pending_light_set.add(key)
+            self._pending_light.append(key)
+
+    def drain_pending_light(self, limit=1):
+        """Relight one queued neighbor. Lava spread fills these in across frames."""
+        done = 0
+        while self._pending_light and done < limit:
+            key = self._pending_light.pop(0)
+            self._pending_light_set.discard(key)
+            chunk = self.world.chunks.get(key)
+            if chunk is None:
+                continue
+            before_block = chunk.blocklight.copy() if hasattr(chunk, "blocklight") else None
+            before_sky = chunk.skylight.copy() if hasattr(chunk, "skylight") else None
+            self.compute_chunk_lighting(*key, spread=False)
+            changed = before_block is None or not np.array_equal(chunk.blocklight, before_block)
+            changed = changed or before_sky is None or not np.array_equal(chunk.skylight, before_sky)
+            if changed:
+                self.world.mark_dirty(*key)
+            done += 1
+        return done
+
+    def compute_chunk_lighting(self, cx, cy, cz, spread=True):
         chunk = self.world.chunks.get((cx, cy, cz))
         if chunk is None:
             return
@@ -540,6 +695,8 @@ class LightingSystem:
             chunk.blocklight.fill(0)
 
         chunk.light_valid = True
+        if not spread:
+            return
 
         # Propagate boundary skylight spillover into neighbors
         if np.any(chunk.skylight > 0):
@@ -589,8 +746,32 @@ class LightingSystem:
                                 nch.light_valid = False
                                 self.world.mark_dirty(ncx, ncy, ncz)
 
-    def on_block_changed(self, x, y, z, was_emitter=False):
+    def _peek_skylight(self, x, y, z):
+        """Read stored skylight without recomputing.
+
+        ``get_skylight`` relights the column. Calling it while a fluid tick is
+        marking chunks dirty recomputes those chunks once per changed cell.
+        """
+        if y >= WORLD_HEIGHT:
+            return 15
+        if y < 0:
+            return 0
+        chunk = self.world.chunk_at(x, y, z)
+        if chunk is None or not hasattr(chunk, "skylight"):
+            return 15
+        lx = int(x) - chunk.cx * CHUNK_SIZE
+        ly = int(y) - chunk.cy * CHUNK_SIZE
+        lz = int(z) - chunk.cz * CHUNK_SIZE
+        return int(chunk.skylight[ly, lz, lx])
+
+    def on_block_changed(self, x, y, z, was_emitter=False, light_decreased=False, full_relight=True):
         """Called when a block is placed, broken, or updated at (x, y, z)."""
+        emit = self.get_emission(x, y, z)
+        is_emitter = (
+            was_emitter
+            or any(v > 0 for v in emit)
+            or (int(x), int(y), int(z)) in self.light_sources
+        )
         cx = x // CHUNK_SIZE
         cy = y // CHUNK_SIZE
         cz = z // CHUNK_SIZE
@@ -616,14 +797,10 @@ class LightingSystem:
         elif ly == CHUNK_SIZE - 1 and cy < SECTION_COUNT - 1:
             affected.add((cx, cy + 1, cz))
 
-        # Check if block emits light, previously emitted light, or is a registered light source
-        emit = self.get_emission(x, y, z)
-        is_emitter = (
-            was_emitter
-            or any(v > 0 for v in emit)
-            or (int(x), int(y), int(z)) in self.light_sources
-        )
-        if is_emitter:
+        # A removed light has to be cleared from the neighborhood or it echoes
+        # back in from chunk borders. Added light only needs the edited chunk;
+        # spillover pulls in the neighbors that actually get brighter.
+        if light_decreased:
             for dcy in (-1, 0, 1):
                 ty = cy + dcy
                 if not (0 <= ty < SECTION_COUNT):
@@ -632,8 +809,10 @@ class LightingSystem:
                     for dcx in (-1, 0, 1):
                         affected.add((cx + dcx, ty, cz + dcz))
 
-        # Vertical skylight downward propagation (only if sunlight can reach this height)
-        if y >= WORLD_HEIGHT - 1 or self.get_skylight(x, y + 1, z) > 0:
+        # Vertical skylight downward propagation (only if sunlight can reach this height).
+        # A fluid's small opacity change is handled inside its own section; walking
+        # three sections down is what made lava flow hitch.
+        if full_relight and (y >= WORLD_HEIGHT - 1 or self._peek_skylight(x, y + 1, z) > 0):
             for dcy in range(1, 4):
                 if cy - dcy >= 0:
                     affected.add((cx, cy - dcy, cz))
@@ -645,7 +824,7 @@ class LightingSystem:
         for ckey in valid_keys:
             ch = self.world.chunks[ckey]
             ch.light_valid = False
-            if is_emitter and hasattr(ch, "blocklight"):
+            if light_decreased and hasattr(ch, "blocklight"):
                 ch.blocklight.fill(0)
             self.world.mark_dirty(*ckey)
 
@@ -653,13 +832,18 @@ class LightingSystem:
             self._batch_keys.update(valid_keys)
             if is_emitter:
                 self._batch_emitters.add((cx, cy, cz))
+            if full_relight:
+                self._batch_full_relight = True
             return
 
         # Immediately recompute lighting for affected chunks so no chunk is left with stale or zero light.
+        # Spread into neighbors now. A batched fluid tick defers that work so
+        # flowing lava does not rebuild the whole neighborhood in one frame.
         for ckey in valid_keys:
-            self.compute_chunk_lighting(*ckey)
+            self.compute_chunk_lighting(*ckey, spread=True)
         if is_emitter:
-            for _ in range(3):
+            passes = 3 if full_relight else 1
+            for _ in range(passes):
                 re_invalidated = [
                     ckey for ckey in valid_keys
                     if not getattr(self.world.chunks[ckey], "light_valid", False)

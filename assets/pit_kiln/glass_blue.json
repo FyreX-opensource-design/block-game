@@ -1,0 +1,7 @@
+{
+  "input": "sand",
+  "logs": "#logs",
+  "fire": "blue_fire",
+  "result": {"item": "glass", "count": 1},
+  "time": 10
+}

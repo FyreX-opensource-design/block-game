@@ -1,0 +1,16 @@
+{
+  "id": "redwood_door",
+  "type": "crafting_shaped",
+  "pattern": [
+    "##",
+    "##",
+    "##"
+  ],
+  "key": {
+    "#": "redwood_planks"
+  },
+  "result": {
+    "item": "redwood_door",
+    "count": 3
+  }
+}

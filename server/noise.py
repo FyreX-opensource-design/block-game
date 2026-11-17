@@ -3,7 +3,7 @@ import math
 
 import numpy as np
 
-from server.blocks import STONE_BASE, WATER_LEVEL
+from server.blocks import STONE_BASE, TERRAIN_LIMIT, WATER_LEVEL
 
 MASK = 0xFFFFFFFF
 
@@ -182,6 +182,115 @@ def _get_transition_params(biomes):
     return beach_c, ocean_w, floor_base, floor_detail, ocean_curve, inland_list, coast_cfg
 
 
+def _variant_band(biome, biomes):
+    """Climate interval owned by the island's parent, or None."""
+    prev = -1.0
+    for base in biomes:
+        if getattr(base, "variant_of", None):
+            continue
+        if base.id == biome.variant_of:
+            return prev, float(base.ceiling)
+        prev = float(base.ceiling)
+    return None
+
+
+def _island_relief(x, z, seed, spec, grid):
+    """Low hills across an island. Zero when the asset asks for none."""
+    amp = float(spec.get("relief", 0.0) or 0.0)
+    if amp <= 0.0:
+        return 0.0
+    scale = float(spec.get("relief_scale", 0.03) or 0.03)
+    offset = spec.get("relief_offset") or (11.2, -6.4)
+    ox = float(offset[0])
+    oz = float(offset[1])
+    if grid:
+        noise = fbm_grid(np.asarray(x, dtype=np.float64) * scale + ox, np.asarray(z, dtype=np.float64) * scale + oz, 2, int(seed) + 2201)
+    else:
+        noise = fbm(float(x) * scale + ox, float(z) * scale + oz, 2, int(seed) + 2201)
+    return (noise - 0.5) * 2.0 * amp
+
+
+def _blend_island(heights, value, in_band, biome, climate, band, relief=0.0):
+    """Lift an ocean band into an island without raising the open sea above y=60."""
+    spec = biome.island
+    threshold = float(biome.variant_noise.get("threshold", 0.5))
+    above = bool(biome.variant_noise.get("above", True))
+    shore = max(0.0, float(spec.get("shore", 0.0)))
+    core = max(1e-4, float(spec.get("core", 0.08)))
+    crest = max(0.0, float(spec.get("crest", 0.0)))
+    rise = max(0.0, float(spec.get("rise", 0.0)))
+    value = np.asarray(value, dtype=np.float64)
+    if above:
+        inside = value >= threshold
+        start = threshold if shore <= 0.0 else threshold - shore
+        depth = np.clip((value - threshold) / core, 0.0, 1.0)
+    else:
+        inside = value <= threshold
+        start = threshold if shore <= 0.0 else threshold + shore
+        depth = np.clip((threshold - value) / core, 0.0, 1.0)
+    span = shore if shore > 0.0 else 1.0
+    if above:
+        t = np.clip((value - start) / span, 0.0, 1.0)
+        approach = value >= start
+    else:
+        t = np.clip((start - value) / span, 0.0, 1.0)
+        approach = value <= start
+    t = t * t * (3.0 - 2.0 * t)
+    depth = depth * depth * (3.0 - 2.0 * depth)
+    # The rim sits just above the open-sea cap, then the crest climbs inland.
+    edge = float(spec.get("edge", float(WATER_LEVEL) - 2.0))
+    plateau = float(WATER_LEVEL) + 1.0 + rise + crest
+    # Relief fades with depth, so the beach stays a slope and the interior rolls.
+    land = edge + (plateau - edge) * depth + np.asarray(relief, dtype=np.float64) * depth
+    shallow = np.minimum(heights + (60.0 - heights) * t, 60.0)
+    # The climate edge can cut through a high crest. Meet the beach line
+    # there instead of dropping into the drowned shallows beside it.
+    prev, ceil = band
+    margin = max(1e-4, float(spec.get("fade", 0.06)))
+    climate_a = np.asarray(climate, dtype=np.float64)
+    edge_in = np.clip((climate_a - prev) / margin, 0.0, 1.0)
+    edge_out = np.clip((ceil - climate_a) / margin, 0.0, 1.0)
+    fade = edge_in * edge_out
+    fade = fade * fade * (3.0 - 2.0 * fade)
+    meet = np.maximum(np.asarray(heights, dtype=np.float64), edge)
+    land = meet + (land - meet) * fade
+    target = np.where(inside, land, np.where(approach, np.maximum(heights, shallow), heights))
+    return np.where(in_band, target, heights)
+
+
+def _raise_islands(x, z, seed, biomes, heights, climate):
+    """Raise columns where an ocean variant declares an island."""
+    from server.biomes import all_biomes
+
+    islands = [
+        biome
+        for biome in all_biomes(tuple(biomes))
+        if getattr(biome, "island", None) and biome.variant_noise and biome.variant_of
+    ]
+    if not islands:
+        return heights
+    grid = isinstance(heights, np.ndarray) and heights.ndim > 0
+    work = np.array(heights, dtype=np.float64, copy=True)
+    climate_a = np.asarray(climate, dtype=np.float64)
+    for biome in islands:
+        band = _variant_band(biome, biomes)
+        if band is None:
+            continue
+        prev, ceil = band
+        in_band = (climate_a > prev) & (climate_a <= ceil)
+        if not np.any(in_band):
+            continue
+        if grid:
+            value = biome.variant_noise_grid(x, z, seed)
+        else:
+            value = biome._variant_value(float(x), float(z), int(seed))
+        relief = _island_relief(x, z, seed, biome.island, grid)
+        work = _blend_island(work, value, in_band, biome, climate_a, (prev, ceil), relief)
+    if grid:
+        return work
+    return float(np.asarray(work))
+
+
 def terrain_grid(x, z, seed, biomes=None):
     broad = fbm_grid(x * 0.014, z * 0.014, 4, seed)
     detail = fbm_grid(x * 0.05 + 12.3, z * 0.05 - 4.7, 3, seed)
@@ -225,6 +334,11 @@ def terrain_grid(x, z, seed, biomes=None):
 
     terrace = np.rint((detail - 0.5) * 4.0) * 2.0
     h_inland = base_h + offset + (lift - 8.0) * (scale - 1.0) + terrace * cliff_w + cliff_s
+    # The high country keeps rising after the foothills, spread over a wide
+    # climate band so a peak can meet the clouds without a wall at the tree line.
+    high = np.clip((climate - 0.72) / 0.22, 0.0, 1.0)
+    high = high * high * (3.0 - 2.0 * high)
+    h_inland = h_inland + high * 48.0
 
     if len(non_inland) >= 2:
         ocean_c = float(non_inland[0].ceiling)
@@ -260,10 +374,12 @@ def terrain_grid(x, z, seed, biomes=None):
         t_oc = np.clip((beach_c - climate) / ocean_w, 0.0, 1.0)
         s_oc = apply_curve_grid(t_oc, ocean_curve)
         final_h = np.rint(h_inland + (floor - h_inland) * s_oc)
-    raw_h = np.clip(final_h, 50, 122).astype(np.int16)
+    raw_h = np.clip(final_h, 50, TERRAIN_LIMIT).astype(np.int16)
     from server.rivers import carve_river_grid
 
-    return carve_river_grid(x, z, raw_h, seed, climate)
+    carved = carve_river_grid(x, z, raw_h, seed, climate)
+    raised = _raise_islands(x, z, seed, biomes, carved, climate)
+    return np.clip(np.rint(raised), 50, TERRAIN_LIMIT).astype(np.int16)
 
 
 def hash3(x, y, z, seed=0):
@@ -403,6 +519,9 @@ def _cached_terrain_height(x, z, seed, biomes_tuple):
 
     terrace = round((detail - 0.5) * 4.0) * 2.0
     h_inland = base_h + offset + (lift - 8.0) * (scale - 1.0) + terrace * cliff_w + cliff_s
+    high = min(1.0, max(0.0, (climate - 0.72) / 0.22))
+    high = high * high * (3.0 - 2.0 * high)
+    h_inland += high * 48.0
 
     if len(non_inland) >= 2:
         ocean_c = float(non_inland[0].ceiling)
@@ -436,10 +555,12 @@ def _cached_terrain_height(x, z, seed, biomes_tuple):
         t_oc = min(1.0, max(0.0, (beach_c - climate) / ocean_w))
         s_oc = apply_curve_scalar(t_oc, ocean_curve)
         final_h = round(h_inland + (floor - h_inland) * s_oc)
-    raw_h = int(max(50, min(122, final_h)))
+    raw_h = int(max(50, min(TERRAIN_LIMIT, final_h)))
     from server.rivers import carve_river_scalar
 
-    return carve_river_scalar(x, z, raw_h, seed, climate)
+    carved = carve_river_scalar(x, z, raw_h, seed, climate)
+    raised = _raise_islands(x, z, seed, biomes_tuple, carved, climate)
+    return int(max(50, min(TERRAIN_LIMIT, round(raised))))
 
 
 def terrain_height(x, z, seed=0, biomes=None):

@@ -3,7 +3,7 @@
 import math
 import numpy as np
 
-from server.blocks import BRACKISH_WATER, SALT_WATER, WATER, WATER_LEVEL
+from server.blocks import BRACKISH_WATER, SALT_WATER, TERRAIN_LIMIT, WATER, WATER_LEVEL
 from server.noise import fbm, fbm_grid
 
 # Noise parameters for winding river meanders
@@ -173,11 +173,11 @@ def carve_river_scalar(x, z, h_raw, seed, climate):
     estuary = 1.0 + 0.35 * max(0.0, min(1.0, (COAST_UPPER - climate) / 0.10))
     channel_w = BASE_CHANNEL_W * estuary
 
-    # Dynamic bank width: scales with required carve depth (h_raw - 64)
-    # Lowland/plains have tight, natural banks (3-6 blocks) to avoid flattening the world,
-    # while mountains scale up to 0.055 to ensure slopes stay <= 2.5 blocks/m.
+    # Dynamic bank width: scales with required carve depth (h_raw - 64).
+    # Lowland rivers keep a tight bank. The cap is wide enough that a peak
+    # near the cloud deck still meets the valley in a walkable slope.
     dh = max(2.0, float(h_raw) - float(WATER_LEVEL))
-    bank_w = max(0.010, min(0.055, dh * 0.0016)) * estuary
+    bank_w = max(0.010, min(0.22, dh * 0.0016)) * estuary
     valley_w = channel_w + bank_w
 
     if r_dist >= valley_w:
@@ -194,7 +194,7 @@ def carve_river_scalar(x, z, h_raw, seed, climate):
 
     h_c = target_h * headwater + float(h_raw) * (1.0 - headwater)
     h_carved = min(float(h_raw), h_c)
-    return int(max(50, min(122, round(h_carved))))
+    return int(max(50, min(TERRAIN_LIMIT, round(h_carved))))
 
 
 def carve_river_grid(xx, zz, heights, seed, climate):
@@ -204,7 +204,7 @@ def carve_river_grid(xx, zz, heights, seed, climate):
     channel_w = BASE_CHANNEL_W * estuary
 
     dh = np.maximum(2.0, heights.astype(np.float64) - float(WATER_LEVEL))
-    bank_w = np.clip(dh * 0.0016, 0.010, 0.055) * estuary
+    bank_w = np.clip(dh * 0.0016, 0.010, 0.22) * estuary
     valley_w = channel_w + bank_w
 
     r_dist = _river_dist_grid(xx, zz, seed)
@@ -223,7 +223,7 @@ def carve_river_grid(xx, zz, heights, seed, climate):
     target_h = np.where(in_channel, channel_bed, np.where(in_valley, bank_h, heights.astype(np.float64)))
     h_c = target_h * headwater + heights.astype(np.float64) * (1.0 - headwater)
     carved = np.minimum(heights.astype(np.float64), h_c)
-    return np.clip(np.rint(carved), 50, 122).astype(heights.dtype)
+    return np.clip(np.rint(carved), 50, TERRAIN_LIMIT).astype(heights.dtype)
 
 
 def is_river_channel_grid(xx, zz, seed, climate):

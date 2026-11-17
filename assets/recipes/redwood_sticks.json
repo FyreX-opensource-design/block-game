@@ -1,0 +1,15 @@
+{
+  "id": "redwood_sticks",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#",
+    "#"
+  ],
+  "key": {
+    "#": "redwood_planks"
+  },
+  "result": {
+    "item": "stick",
+    "count": 4
+  }
+}

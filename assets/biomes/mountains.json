@@ -9,11 +9,11 @@
   "ceiling": 0.70,
   "min_size": 20,
   "tree_chance": 0.005,
-  "height_offset": 12,
+  "height_offset": 40,
   "height_scale": 1.2,
   "cliff": false,
   "transition": {
-    "blend": 0.08,
+    "blend": 0.2,
     "curve": "smoothstep"
   },
   "trees": ["pine", "oak"],

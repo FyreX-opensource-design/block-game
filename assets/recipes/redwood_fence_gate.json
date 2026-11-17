@@ -1,0 +1,16 @@
+{
+  "id": "redwood_fence_gate",
+  "type": "crafting_shaped",
+  "pattern": [
+    "S#S",
+    "S#S"
+  ],
+  "key": {
+    "#": "redwood_planks",
+    "S": "#sticks"
+  },
+  "result": {
+    "item": "redwood_fence_gate",
+    "count": 1
+  }
+}

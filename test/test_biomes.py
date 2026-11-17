@@ -69,7 +69,7 @@ class BiomeTests(unittest.TestCase):
             for x in range(-160, 161, 4):
                 biome = biome_at(x, z, 2, BIOMES)
                 # Cool forest climate is birch forest; it should be as wooded as oak forest.
-                key = "forest" if biome.id in ("forest", "birch_forest") else biome.id
+                key = "forest" if biome.id in ("forest", "birch_forest", "spruce_forest", "redwood_forest") else biome.id
                 if key in counts:
                     counts[key][0] += 1
                     if tree_at(x, z, 2):

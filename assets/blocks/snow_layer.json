@@ -1,0 +1,18 @@
+{
+  "id": "snow_layer",
+  "lang": "block.snow_layer",
+  "tab": ["natural"],
+  "type": "snow_layer",
+  "layers": 8,
+  "hardness": 0.2,
+  "tool": "shovel",
+  "mining_level": 0,
+  "loot_table": "blocks/snow_layer",
+  "sound": "grass",
+  "fluid_breakable": true,
+  "textures": {
+    "top": "snow",
+    "side": "snow",
+    "bottom": "snow"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "id": "black_lava",
+  "lang": "block.black_lava",
+  "creative": false,
+  "model": "cube",
+  "render": "cutout",
+  "solid": false,
+  "opacity": 0.95,
+  "hardness": 100.0,
+  "tool": "none",
+  "mining_level": 0,
+  "light": {"r": 6, "g": 1, "b": 2, "uv": 1, "ir": 8},
+  "properties": {"fluid": "black_lava", "level": 8, "lava": "fire"},
+  "textures": {"top": "black_lava", "side": "black_lava", "bottom": "black_lava"}
+}

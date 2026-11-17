@@ -1,0 +1,14 @@
+{
+  "id": "spruce_log",
+  "lang": "block.spruce_log",
+  "tab": [
+    "building",
+    "natural"
+  ],
+  "model": "block",
+  "block": "spruce_log",
+  "max_stack": 64,
+  "left": "break",
+  "right": "place",
+  "durability": 0
+}
