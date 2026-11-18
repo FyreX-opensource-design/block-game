@@ -2,6 +2,6 @@
   "input": "clay",
   "logs": "#logs",
   "fire": "blue_fire",
-  "result": {"item": "brick", "count": 2},
-  "time": 8
+  "result": {"item": "brick", "count": 1},
+  "time": 300
 }

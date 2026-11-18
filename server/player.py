@@ -70,6 +70,7 @@ class Player:
         self.health = float(DEFAULT_MAX_HEALTH)
         self.hurt_time = 0.0
         self.fire_kind = ""
+        self.fire_left = 0.0
         self.dead = False
         self.death_cause = ""
         self._fall_peak = None
@@ -225,6 +226,48 @@ class Player:
         self._lava_timer = 0.0
         self._starve_timer = 0.0
         self._regen_timer = 0.0
+        self.fire_kind = ""
+        self.fire_left = 0.0
+
+    def _touching_water(self):
+        """Water puts a body out. Lava is a fluid too, and it does not."""
+        if self.world is None:
+            return False
+        from server.fluid import is_water
+
+        min_x = math.floor(self.pos[0] - self.radius)
+        max_x = math.floor(self.pos[0] + self.radius - 1e-6)
+        min_y = math.floor(self.pos[1])
+        max_y = math.floor(self.pos[1] + self.height - 1e-4)
+        min_z = math.floor(self.pos[2] - self.radius)
+        max_z = math.floor(self.pos[2] + self.radius - 1e-6)
+        for y in range(min_y, max_y + 1):
+            for z in range(min_z, max_z + 1):
+                for x in range(min_x, max_x + 1):
+                    if is_water(self.world.get_block(x, y, z)):
+                        return True
+        return False
+
+    def _update_body_fire(self, dt):
+        """Stay alight for a bit after stepping out of lava or a flame."""
+        from server.fire import body_flame, fire_type
+
+        if self._touching_water():
+            self.fire_kind = ""
+            self.fire_left = 0.0
+            return
+        standing = body_flame(self.world, self.pos, self.radius, self.height)
+        if standing:
+            self.fire_kind = standing
+            self.fire_left = fire_type(standing).body_burn
+            return
+        if self.fire_kind and self.fire_left > 0.0:
+            self.fire_left = max(0.0, self.fire_left - max(0.0, float(dt)))
+            if self.fire_left <= 0.0:
+                self.fire_kind = ""
+            return
+        self.fire_kind = ""
+        self.fire_left = 0.0
 
     def head_in_block(self):
         """Return True when the player's head is inside a solid block."""
@@ -291,15 +334,14 @@ class Player:
         """
         events = []
         self.hurt_time = max(0.0, self.hurt_time - max(0.0, float(dt)))
-        try:
-            from server.fire import body_flame
-
-            self.fire_kind = body_flame(self.world, self.pos, self.radius, self.height)
-        except Exception:
-            self.fire_kind = ""
         if not self.survival or self.dead:
             self.reset_damage_state()
             return events
+        try:
+            self._update_body_fire(dt)
+        except Exception:
+            self.fire_kind = ""
+            self.fire_left = 0.0
 
         if grounded is None:
             grounded = bool(self.on_ground)

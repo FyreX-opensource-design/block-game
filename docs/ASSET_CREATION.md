@@ -607,8 +607,12 @@ at their personal spawn point (`/spawnpoint`), then the world spawn.
 ## 13. Pit Kilns
 
 A pit kiln is a dug hole, not a placed station. The hole is one air block with a
-solid floor, solid blocks on all four sides, and air above. Right-clicking it
-packs in fiber, logs, and one item stack. Lighting the open top cooks that stack.
+solid floor, soil blocks on all four sides, and air above. The soil tag is
+`assets/tags/blocks/soil.json` (dirt, grass, mud, muddy grass, and podzol). Snow
+layers are solid, and they do not count. Right-clicking it
+packs in fiber, logs, and one item stack. Fiber is the only thing an empty hole
+accepts; logs and the item stack go in after the first fiber. Lighting the open
+top cooks that stack.
 Shift-right-click still places a block into the hole instead.
 
 While the pit is short of an ingredient, the straw bed and each log are drawn
@@ -623,6 +627,7 @@ lists the counts.
 - `fiber` (list of item ids): Items that count toward the fiber. Wheat and plant fiber both qualify. The `#fiber` item tag is also accepted.
 - `fiber_count` (int): How many fiber items the pit takes. Default `8`.
 - `log_count` (int): How many logs, all of the same wood. Default `3`. A different wood is refused until those slots are full; further logs can be the item stack.
+- `walls` (string): Block tag for the four sides. Default `#soil`. The floor only has to be solid.
 - `time` (float): Seconds a recipe takes when it does not set its own `time`.
 - `igniters` (object): Item id to the fire it lights.
   - `fire` (string): A fire type from `assets/fire/`. `fire` is ordinary fire. `blue_fire` is the blue flame.
@@ -641,7 +646,7 @@ Each file in `assets/pit_kiln/` is one conversion. The filename is the id unless
 When more than one recipe matches, the closer one wins: a named input beats a
 tag, a named log beats `#logs`, and a named fire beats `*`. Birch fuel with
 ordinary fire makes more charcoal than any log, and blue fire makes more still.
-Clay becomes bricks. Sand becomes glass. Blue fire finishes those faster.
+Clay becomes bricks. Sand becomes glass. Each recipe sets its own time.
 
 ### Example (`assets/pit_kiln/charcoal.json`)
 ```json
@@ -673,6 +678,7 @@ limits the simulation (`tick_interval`, `max_new_flames`, `flame_cap`,
 - `burn_window` (seconds): How long a flame keeps burning the blocks it touches before it is likely to die.
 - `cooldown` (seconds): A cell that just went out cannot be lit again until this passes.
 - `hold_life` (seconds): Life restored each tick while the flame is still on fuel inside the burn window.
+- `body_burn` (seconds): How long a player keeps burning after stepping out of this fire or the lava that lights it. Water puts the burn out.
 
 Burn times for logs, planks, and leaves are the `times` object in
 `assets/tags/blocks/burnable.json`. Plants are not solid, so a flame replaces

@@ -3,6 +3,7 @@
   "fiber": ["wheat", "plant_fiber"],
   "fiber_count": 8,
   "log_count": 3,
+  "walls": "#soil",
   "time": 20,
   "igniters": {
     "fire_stick": {"fire": "fire", "consume": true},

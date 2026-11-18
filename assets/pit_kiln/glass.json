@@ -3,5 +3,5 @@
   "logs": "#logs",
   "fire": "fire",
   "result": {"item": "glass", "count": 1},
-  "time": 20
+  "time": 400
 }

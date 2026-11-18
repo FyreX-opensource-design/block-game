@@ -164,10 +164,10 @@ Multiple crafting tiers and interaction methods:
 - **Flint Knapping**:
   - Right-clicking flint against hard stone surfaces knaps it into `knapped_flint`.
 - **Pit Kiln**:
-  - Dig a one-block hole with a solid floor and solid sides. Right-click in wheat or plant fiber (8), logs of one wood (3), and one stack of the item to convert.
+  - Dig a one-block hole with a solid floor and soil on all four sides (dirt, grass, mud, muddy grass, or podzol). Snow and stone do not count as walls. The hole only takes wheat or plant fiber until some fiber is in. Then add the rest of the fiber (8), logs of one wood (3), and one stack of the item to convert.
   - The straw and logs build up in the hole as they are added. A packed pit fills the block. The crosshair lists the counts.
-  - Light the top with a fire stick (fiber and a stick; used up), flint and steel (knapped flint and iron), or sulfuric steel (sulfur and iron, blue fire).
-  - The wood and the fire pick the result. Birch fuel and blue fire yield more charcoal. Clay becomes bricks and sand becomes glass, sooner under blue fire.
+  - Light the top with a fire stick (fiber and a stick; used up), flint and steel (knapped flint and iron), or sulfuric steel (sulfur and iron, blue fire). The same tools light the open face of any solid block: flint and steel and a fire stick set ordinary fire, and sulfuric steel sets blue fire.
+  - The wood and the fire pick the result. Birch fuel and blue fire yield more charcoal. Clay becomes bricks and sand becomes glass.
   - Breaking the flame pauses the firing. Right-click a finished pit to take the result. Breaking the pit returns what is still inside.
 - **In-World Block-Hit Recipes**:
   - Hitting specific blocks with specific items transforms or harvests materials without breaking the block in creative mode.

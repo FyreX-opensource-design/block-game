@@ -14,6 +14,7 @@ from server.pit_kiln import (
     pit_elements,
     pit_is_packed,
     pit_status,
+    light_face,
     spend_igniter,
 )
 from server.recipes import craft_match
@@ -30,7 +31,7 @@ def _dig(world, x=8, y=40, z=8):
     for ix in range(x - 2, x + 3):
         for iz in range(z - 2, z + 3):
             world.set_block(ix, y - 1, iz, "stone")
-            world.set_block(ix, y, iz, "stone")
+            world.set_block(ix, y, iz, "dirt")
             world.set_block(ix, y + 1, iz, "air")
             world.set_block(ix, y + 2, iz, "air")
     world.set_block(x, y, z, "air")
@@ -86,6 +87,23 @@ class PitKilnTests(unittest.TestCase):
         blue = spend_igniter(make_stack("sulfuric_steel", 1))
         self.assertEqual(stack_damage(blue), 1)
 
+    def test_steel_lights_the_face_it_clicks(self):
+        world = _world()
+        x, y, z = _dig(world)
+        placed = light_face(world, x, y - 1, z, 0, 1, 0, "flint_and_steel")
+        self.assertEqual(placed, (x, y, z, "fire"))
+        self.assertEqual(world.get_block(x, y, z), "fire")
+        self.assertIsNone(light_face(world, x, y - 1, z, 0, 1, 0, "sulfuric_steel"))
+        world.set_block(x, y, z, "air")
+        placed = light_face(world, x, y - 1, z, 0, 1, 0, "sulfuric_steel")
+        self.assertEqual(placed, (x, y, z, "blue_fire"))
+        self.assertEqual(world.get_block(x, y, z), "blue_fire")
+        world.set_block(x, y, z, "air")
+        self.assertEqual(light_face(world, x, y - 1, z, 0, 1, 0, "fire_stick"), (x, y, z, "fire"))
+        world.set_block(x + 2, y, z, "tall_grass")
+        self.assertIsNone(light_face(world, x + 2, y, z, 0, 1, 0, "flint_and_steel"))
+        self.assertIsNone(light_face(world, x + 1, y, z, 0, 0, 0, "flint_and_steel"))
+
     def test_the_pit_shows_how_full_it_is(self):
         world = _world()
         x, y, z = _dig(world)
@@ -137,26 +155,28 @@ class PitKilnTests(unittest.TestCase):
         birch = find_pit_recipe("log", "birch_log", "fire")
         blue = find_pit_recipe("log", "log", "blue_fire")
         both = find_pit_recipe("log", "birch_log", "blue_fire")
-        self.assertEqual(oak.result, "charcoal")
-        self.assertEqual(birch.result, "charcoal")
+        self.assertEqual(oak.id, "charcoal")
+        self.assertEqual(birch.id, "charcoal_birch")
+        self.assertEqual(blue.id, "charcoal_blue")
+        self.assertEqual(both.id, "charcoal_birch_blue")
         self.assertGreater(birch.count, oak.count)
         self.assertGreater(blue.count, oak.count)
         self.assertGreater(both.count, birch.count)
         self.assertGreater(both.count, blue.count)
-        self.assertLess(both.time, oak.time)
 
         bricks = find_pit_recipe("clay", "log", "fire")
         hot_bricks = find_pit_recipe("clay", "birch_log", "blue_fire")
+        self.assertEqual(bricks.id, "bricks")
+        self.assertEqual(hot_bricks.id, "bricks_blue")
         self.assertEqual(bricks.result, "brick")
         self.assertEqual(hot_bricks.result, "brick")
-        self.assertGreater(hot_bricks.count, bricks.count)
-        self.assertLess(hot_bricks.time, bricks.time)
 
         glass = find_pit_recipe("sand", "log", "fire")
         hot_glass = find_pit_recipe("sand", "log", "blue_fire")
+        self.assertEqual(glass.id, "glass")
+        self.assertEqual(hot_glass.id, "glass_blue")
         self.assertEqual(glass.result, "glass")
         self.assertEqual(hot_glass.result, "glass")
-        self.assertLess(hot_glass.time, glass.time)
         self.assertGreater(len(PIT_RECIPES), 0)
 
     def test_a_hole_is_packed_then_fired(self):
@@ -164,6 +184,11 @@ class PitKilnTests(unittest.TestCase):
         x, y, z = _dig(world)
         self.assertIsNone(world.pit_kilns.add(x, y + 5, z, "wheat", 1) or None)
         self.assertEqual(world.pit_kilns.add(4, y, 4, "wheat", 1), 0)
+        world.set_block(x + 1, y, z, "snow_layer")
+        self.assertEqual(world.pit_kilns.add(x, y, z, "wheat", 1), 0)
+        world.set_block(x + 1, y, z, "stone")
+        self.assertEqual(world.pit_kilns.add(x, y, z, "wheat", 1), 0)
+        world.set_block(x + 1, y, z, "dirt")
 
         kilns = _fill(world, x, y, z)
         pit = kilns.pit_at(x, y, z)
@@ -177,6 +202,10 @@ class PitKilnTests(unittest.TestCase):
 
         other = _world()
         ox, oy, oz = _dig(other)
+        self.assertEqual(other.pit_kilns.add(ox, oy, oz, "log", 1), 0)
+        self.assertEqual(other.pit_kilns.add(ox, oy, oz, "clay", 1), 0)
+        self.assertIsNone(other.pit_kilns.pit_at(ox, oy, oz))
+        self.assertEqual(other.pit_kilns.add(ox, oy, oz, "wheat", 1), 1)
         self.assertEqual(other.pit_kilns.add(ox, oy, oz, "log", 1), 1)
         self.assertEqual(other.pit_kilns.add(ox, oy, oz, "birch_log", 1), 0)
         self.assertEqual(other.pit_kilns.add(ox, oy, oz, "log_x", 2), 2)

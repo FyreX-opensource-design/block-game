@@ -68,6 +68,7 @@ class FireType:
         burn_window=4.2,
         cooldown=6.0,
         hold_life=0.5,
+        body_burn=6.0,
     ):
         self.id = str(fire_id)
         self.priority = int(priority)
@@ -80,6 +81,7 @@ class FireType:
         self.burn_window = max(0.0, float(burn_window))
         self.cooldown = max(0.0, float(cooldown))
         self.hold_life = max(0.0, float(hold_life))
+        self.body_burn = max(0.0, float(body_burn))
 
     def roll(self, span):
         lo, hi = span
@@ -116,6 +118,7 @@ def _fire_type_from_mapping(entry, source=""):
         burn_window=_number(entry.get("burn_window", 4.2), 4.2),
         cooldown=_number(entry.get("cooldown", 6.0), 6.0),
         hold_life=_number(entry.get("hold_life", 0.5), 0.5),
+        body_burn=_number(entry.get("body_burn", 6.0), 6.0),
     )
 
 

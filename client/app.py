@@ -554,6 +554,8 @@ class Game(pyglet.window.Window):
                     if "saturation" in pkt:
                         self.player.saturation = float(pkt["saturation"])
                     self.player.hurt_time = float(pkt.get("hurt_time", self.player.hurt_time))
+                    if "fire_kind" in pkt:
+                        self.player.fire_kind = str(pkt.get("fire_kind") or "")
                     if pkt.get("dead"):
                         self.player.dead = True
             elif p_type == "gamemode":
@@ -580,6 +582,8 @@ class Game(pyglet.window.Window):
                     other.yaw = float(pkt.get("yaw", other.yaw))
                     other.pitch = float(pkt.get("pitch", other.pitch))
                     other.held_item = str(pkt.get("held", other.held_item))
+                    if "fire" in pkt:
+                        other.fire_kind = str(pkt.get("fire") or "")
                     other.bow_pull = max(0.0, min(1.0, float(pkt.get("pull", 0.0) or 0.0)))
                     other.nocked_arrow = str(pkt.get("nock", "") or "")
                     hspeed = math.hypot(other.vel[0], other.vel[2])
@@ -4478,6 +4482,9 @@ class Game(pyglet.window.Window):
         if self._handle_pit_kiln(hit, modifiers):
             return
 
+        if self._handle_igniter(hit):
+            return
+
         if self._handle_block_hit_interaction(hit):
             return
 
@@ -4706,6 +4713,38 @@ class Game(pyglet.window.Window):
                     [0.0, 2.0, 0.0],
                     pickup_delay=0.2,
                 )
+
+    def _handle_igniter(self, hit):
+        """Flint and steel, sulfuric steel, and fire sticks light the face they click."""
+        if hit is None or self.world is None or self.selected >= len(self.hotbar):
+            return False
+        held_slot = self.hotbar[self.selected]
+        held_id = stack_id(held_slot)
+        if not held_id:
+            return False
+        from server.pit_kiln import igniter_spec, light_face, spend_igniter
+
+        if igniter_spec(held_id) is None:
+            return False
+        placed = light_face(
+            self.world,
+            hit["x"],
+            hit["y"],
+            hit["z"],
+            hit.get("nx", 0),
+            hit.get("ny", 0),
+            hit.get("nz", 0),
+            held_id,
+        )
+        if placed is None:
+            return False
+        x, y, z, kind = placed
+        if self.network_client is not None:
+            self.network_client.send_set_block(x, y, z, kind)
+        if self.gamemode != "creative":
+            self.hotbar[self.selected] = spend_igniter(held_slot)
+        self._upload_block_change(x, y, z)
+        return True
 
     def _handle_tool_interaction(self, hit):
         """Apply an asset-defined tool right-click to the targeted block."""

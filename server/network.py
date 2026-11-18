@@ -634,6 +634,7 @@ class MultiplayerServer:
                 "saturation": float(getattr(player, "saturation", 5.0)),
                 "hurt_time": float(player.hurt_time),
                 "dead": bool(player.dead),
+                "fire_kind": str(getattr(player, "fire_kind", "") or ""),
             }
         )
 
@@ -705,10 +706,35 @@ class MultiplayerServer:
                 if not cause:
                     cause = str(getattr(player, "death_cause", "") or "")
                 self._respawn_client_player(client, player, cause)
-            elif events or getattr(client, "_last_synced_health", None) != player.health or getattr(client, "_last_synced_hunger", None) != player.hunger:
+                client._last_synced_fire = str(getattr(player, "fire_kind", "") or "")
+            fire_kind = str(getattr(player, "fire_kind", "") or "")
+            if not player.dead and (
+                events
+                or getattr(client, "_last_synced_health", None) != player.health
+                or getattr(client, "_last_synced_hunger", None) != player.hunger
+                or getattr(client, "_last_synced_fire", None) != fire_kind
+            ):
                 client._last_synced_health = player.health
                 client._last_synced_hunger = player.hunger
+                client._last_synced_fire = fire_kind
                 self._send_player_health(client, player)
+            if getattr(client, "_last_broadcast_fire", "") != fire_kind:
+                client._last_broadcast_fire = fire_kind
+                self.broadcast(
+                    {
+                        "type": "player_move",
+                        "uuid": uuid,
+                        "pos": list(player.pos),
+                        "vel": list(getattr(client, "vel", None) or [0.0, 0.0, 0.0]),
+                        "yaw": float(getattr(client, "yaw", 0.0)),
+                        "pitch": float(getattr(client, "pitch", 0.0)),
+                        "held": str(getattr(client, "held_item", "") or ""),
+                        "pull": float(getattr(client, "bow_pull", 0.0) or 0.0),
+                        "nock": str(getattr(client, "nocked_arrow", "") or ""),
+                        "fire": fire_kind,
+                    },
+                    exclude=uuid,
+                )
 
     def _tick_weather(self, dt):
         session = self.weather_session
@@ -958,6 +984,7 @@ class MultiplayerServer:
                 "held": client.held_item,
                 "pull": client.bow_pull,
                 "nock": client.nocked_arrow,
+                "fire": str(getattr(player, "fire_kind", "") or "") if player is not None else "",
             }
             self.broadcast(move_msg, exclude=client.uuid)
 

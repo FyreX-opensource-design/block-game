@@ -136,6 +136,8 @@ class LavaTests(unittest.TestCase):
         self.assertEqual(fire_type("fire").extinguish_chance, ordinary["extinguish_chance"])
         self.assertEqual(tuple(fire_type("fire").life), tuple(ordinary["life"]))
         self.assertEqual(fire_type("blue_fire").cooldown, blue["cooldown"])
+        self.assertEqual(fire_type("fire").body_burn, ordinary["body_burn"])
+        self.assertEqual(fire_type("blue_fire").body_burn, blue["body_burn"])
         self.assertGreater(fire_type("blue_fire").priority, fire_type("fire").priority)
         self.assertEqual(FIRE_SIMULATION.tick_interval, limits["tick_interval"])
         self.assertEqual(FIRE_SIMULATION.max_new_flames, limits["max_new_flames"])
@@ -212,6 +214,47 @@ class LavaTests(unittest.TestCase):
         before = player.health
         player.update_health(0.5)
         self.assertLess(player.health, before)
+
+    def test_a_player_keeps_burning_after_leaving_lava(self):
+        world = World(seed=3, caves=[])
+        world.load_chunk(0, 0, 0)
+        world.set_block(4, 11, 4, "lava")
+        player = Player(world)
+        player.gamemode = "survival"
+        player.health = 1000.0
+        player.max_health = 1000.0
+        player.pos = [4.5, 11.0, 4.5]
+        player.update_health(0.05)
+        self.assertEqual(player.fire_kind, "fire")
+        player.pos = [8.5, 11.0, 8.5]
+        player.update_health(0.05)
+        self.assertEqual(player.fire_kind, "fire")
+        self.assertGreater(player.fire_left, 0.0)
+        left = player.fire_left
+        player.update_health(left)
+        self.assertEqual(player.fire_kind, "")
+
+        player.pos = [4.5, 11.0, 4.5]
+        player.update_health(0.05)
+        player.pos = [8.5, 11.0, 8.5]
+        world.set_block(8, 11, 8, "water")
+        player.update_health(0.05)
+        self.assertEqual(player.fire_kind, "")
+
+    def test_multiplayer_health_tells_the_client_it_is_on_fire(self):
+        from server.network import MultiplayerServer
+
+        player = Player(None)
+        player.fire_kind = "blue_fire"
+        sent = []
+
+        class _Client:
+            def send(self, packet):
+                sent.append(packet)
+
+        MultiplayerServer._send_player_health(object(), _Client(), player)
+        self.assertEqual(sent[0]["type"], "health")
+        self.assertEqual(sent[0]["fire_kind"], "blue_fire")
 
     def test_an_underground_cave_floor_can_hold_a_lava_pool(self):
         world = World(seed=4, caves=[])

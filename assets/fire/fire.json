@@ -9,5 +9,6 @@
   "extinguish_chance": 0.2,
   "burn_window": 10.0,
   "cooldown": 6.0,
-  "hold_life": 8.0
+  "hold_life": 8.0,
+  "body_burn": 6.0
 }

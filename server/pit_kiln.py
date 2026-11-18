@@ -38,13 +38,14 @@ class PitRecipe:
 
 
 class PitKilnRules:
-    def __init__(self, block, fiber, fiber_count, log_count, time, igniters):
+    def __init__(self, block, fiber, fiber_count, log_count, time, igniters, walls):
         self.block = block
         self.fiber = frozenset(fiber)
         self.fiber_count = int(fiber_count)
         self.log_count = int(log_count)
         self.time = float(time)
         self.igniters = dict(igniters)
+        self.walls = str(walls)
 
 
 def _rank(pattern, actual):
@@ -116,6 +117,11 @@ def load_pit_rules(path=None):
             "consume": bool(spec.get("consume", False)),
             "damage": int(spec.get("damage", 0) or 0),
         }
+    walls = str(data.get("walls", "#soil"))
+    if walls.startswith("#"):
+        walls = walls[1:]
+    if not walls:
+        raise ValueError("pit kiln needs a wall tag")
     return PitKilnRules(
         block,
         fiber,
@@ -123,6 +129,7 @@ def load_pit_rules(path=None):
         _whole(data.get("log_count", 3), "log_count"),
         _number(data.get("time", 20), "time"),
         igniters,
+        walls,
     )
 
 
@@ -211,6 +218,32 @@ def split_stacks(item_id, count):
         stacks.append(make_stack(item_id, taken))
         left -= taken
     return stacks
+
+
+def light_face(world, x, y, z, nx, ny, nz, item_id):
+    """Place this starter's fire against the open face of a solid block.
+
+    Returns ``(x, y, z, fire id)`` when a flame is placed.
+    """
+    spec = igniter_spec(item_id)
+    if world is None or spec is None:
+        return None
+    kind = str(spec["fire"])
+    if kind not in BLOCKS:
+        return None
+    support = BLOCKS.get(world.get_block(int(x), int(y), int(z)))
+    if support is None or not getattr(support, "solid", False):
+        return None
+    px, py, pz = int(x) + int(nx), int(y) + int(ny), int(z) + int(nz)
+    from server.blocks import WORLD_HEIGHT
+
+    if py <= 0 or py >= WORLD_HEIGHT:
+        return None
+    if world.get_block(px, py, pz) not in ("", AIR, None):
+        return None
+    if not world.set_block(px, py, pz, kind):
+        return None
+    return (px, py, pz, kind)
 
 
 def spend_igniter(slot):
@@ -488,7 +521,7 @@ class PitKilnSystem:
         self._load()
 
     def is_pit(self, x, y, z):
-        """An open hole, or one already packed: solid floor and four solid sides."""
+        """An open hole, or one already packed: solid floor and four soil sides."""
         x, y, z = int(x), int(y), int(z)
         if y <= 1 or y + 1 >= self._height():
             return False
@@ -498,7 +531,7 @@ class PitKilnSystem:
         if not self.world.is_solid(x, y - 1, z):
             return False
         for dx, dz in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-            if not self.world.is_solid(x + dx, y, z + dz):
+            if not has_block_tag(self.world.get_block(x + dx, y, z + dz), PIT_RULES.walls):
                 return False
         above = self.world.get_block(x, y + 1, z)
         return above in ("", AIR, None) or bool(flame_kind(above))
@@ -673,6 +706,9 @@ class PitKilnSystem:
         self.import_data(store.read_meta(SAVE_FILE))
 
     def _accept(self, pit, item_id, count, limit):
+        # The hole stays empty until fiber goes in. Logs and the item stack follow.
+        if pit.fiber_total <= 0 and not is_fiber(item_id):
+            return 0
         if is_fiber(item_id) and pit.fiber_total < PIT_RULES.fiber_count:
             taken = min(count, PIT_RULES.fiber_count - pit.fiber_total)
             pit.fiber[item_id] = pit.fiber.get(item_id, 0) + taken
