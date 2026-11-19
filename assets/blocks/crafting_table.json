@@ -7,6 +7,7 @@
   "tool": "axe",
   "mining_level": 0,
   "sound": "wood",
+  "catalysts": 2,
   "loot_table": "blocks/crafting_table",
   "textures": {
     "up": "oak_crafting_table_top",

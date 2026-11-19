@@ -1804,27 +1804,15 @@ class Game(pyglet.window.Window):
         elif s_info is not None:
             broken_id = s_info["base_id"]
             if s_info.get("waterlogged"):
-                from server.fluid import WATER_LEVEL_BLOCKS
+                from server.fluid import fluid_block_at_level, get_fluid_type
 
-                lvl = s_info.get("level", 8)
-                if lvl >= 8:
-                    next_block = "water"
-                elif lvl in WATER_LEVEL_BLOCKS:
-                    next_block = WATER_LEVEL_BLOCKS[lvl]
-                else:
-                    next_block = AIR
+                next_block = fluid_block_at_level(get_fluid_type(block_id), s_info.get("level", 8))
         elif v_info is not None:
             broken_id = v_info["base_id"]
             if v_info.get("waterlogged"):
-                from server.fluid import WATER_LEVEL_BLOCKS
+                from server.fluid import fluid_block_at_level, get_fluid_type
 
-                lvl = v_info.get("level", 8)
-                if lvl >= 8:
-                    next_block = "water"
-                elif lvl in WATER_LEVEL_BLOCKS:
-                    next_block = WATER_LEVEL_BLOCKS[lvl]
-                else:
-                    next_block = AIR
+                next_block = fluid_block_at_level(get_fluid_type(block_id), v_info.get("level", 8))
         else:
             broken_id = block_id
 
@@ -2035,7 +2023,7 @@ class Game(pyglet.window.Window):
             vertical_slab_bounds,
             vertical_slab_offset_bounds,
         )
-        from server.fluid import is_water
+        from server.fluid import is_fluid, is_water
 
         held_is_slab = is_slab(held.block)
 
@@ -3061,37 +3049,38 @@ class Game(pyglet.window.Window):
                 if should_offset:
                     block_to_place = offset_candidate
 
-        # Check waterlogging if placing into water
-        if (held_is_slab or is_vertical_slab(held.block)) and is_water(adj_block):
-            from server.fluid import get_fluid_level, is_fluid_source
+        # A slab placed in a fluid keeps that fluid in its open half.
+        if (held_is_slab or is_vertical_slab(held.block)) and is_fluid(adj_block):
+            from server.fluid import get_fluid_level, get_fluid_type, is_fluid_source
             from server.blocks import (
+                get_fluidlogged_slab,
+                get_fluidlogged_vertical_slab,
                 get_slab_info,
-                get_waterlogged_slab,
                 get_vertical_slab_info,
-                get_waterlogged_vertical_slab,
             )
             f_level = get_fluid_level(adj_block)
             is_src = is_fluid_source(adj_block) or f_level >= 8
             target_level = 8 if is_src else f_level
+            fluid = get_fluid_type(adj_block) or "water"
 
             v_info = get_vertical_slab_info(block_to_place)
             s_info = get_slab_info(block_to_place)
             if v_info is not None:
-                wl_v = get_waterlogged_vertical_slab(block_to_place, level=target_level)
+                wl_v = get_fluidlogged_vertical_slab(block_to_place, level=target_level, fluid=fluid)
                 if wl_v:
                     block_to_place = wl_v
             elif s_info is not None:
                 half = s_info["half"]
                 if half == "bottom":
                     if is_src or f_level > 4:
-                        wl_s = get_waterlogged_slab(s_info["base_id"], half="bottom", level=target_level)
+                        wl_s = get_fluidlogged_slab(s_info["base_id"], half="bottom", level=target_level, fluid=fluid)
                         if wl_s:
                             block_to_place = wl_s
                     else:
-                        # f_level <= 4: bottom slab displaces shallow flowing water -> remains dry
+                        # Shallow flow stays below the top of a bottom slab, so the slab stays dry.
                         pass
                 elif half == "top":
-                    wl_s = get_waterlogged_slab(s_info["base_id"], half="top", level=target_level)
+                    wl_s = get_fluidlogged_slab(s_info["base_id"], half="top", level=target_level, fluid=fluid)
                     if wl_s:
                         block_to_place = wl_s
 
@@ -4138,7 +4127,7 @@ class Game(pyglet.window.Window):
             if changed:
                 self.network_client.send_furnace_update_slots(f.x, f.y, f.z, changed)
 
-    def _set_inventory(self, opened, container_type="player", furnace_pos=None, container_block=None):
+    def _set_inventory(self, opened, container_type="player", furnace_pos=None, container_block=None, catalyst_count=0):
         if self.chat.open:
             self.chat.close_chat()
         if not opened:
@@ -4158,6 +4147,11 @@ class Game(pyglet.window.Window):
         if opened:
             self.inventory.container_type = container_type
             self.inventory.container_block = container_block
+            if container_type == "crafting_table":
+                player_pos = tuple(self.player.pos) if self.player and getattr(self.player, "pos", None) is not None else None
+                self.inventory.set_catalyst_count(catalyst_count, self.hotbar, self.storage, self.world, player_pos)
+            else:
+                self.inventory.set_catalyst_count(0, self.hotbar, self.storage)
             if container_type == "furnace" and furnace_pos is not None and self.world is not None:
                 self.inventory.furnace = self.world.get_or_create_furnace(*furnace_pos, block_id=container_block)
                 if self.network_client is not None:
@@ -4470,7 +4464,15 @@ class Game(pyglet.window.Window):
                 station = getattr(target_obj, "station", None)
                 base = getattr(target_obj, "base_id", target_block) if target_obj else target_block
                 if station == "crafting_table" or base == "crafting_table":
-                    self._set_inventory(True, container_type="crafting_table", container_block=target_block)
+                    from server.crafting import paired_catalyst_count
+
+                    catalysts = paired_catalyst_count(self.world, hit["x"], hit["y"], hit["z"])
+                    self._set_inventory(
+                        True,
+                        container_type="crafting_table",
+                        container_block=target_block,
+                        catalyst_count=catalysts,
+                    )
                     return
                 if station == "furnace" or base == "furnace":
                     self._set_inventory(True, container_type="furnace", furnace_pos=furnace_pos, container_block=target_block)
@@ -4824,7 +4826,6 @@ class Game(pyglet.window.Window):
             get_filled_bucket,
             is_empty_bucket,
             is_filled_bucket,
-            is_lava,
             is_water,
             is_water_source,
         )
@@ -4847,7 +4848,7 @@ class Game(pyglet.window.Window):
                 if is_waterlogged_slab(target_block) and is_water_source(target_block):
                     s_info = get_slab_info(target_block)
                     unlogged_id = s_info["base_id"] if s_info["half"] == "bottom" else f"{s_info['base_id']}_top"
-                    filled_id = get_filled_bucket(held_id, "water")
+                    filled_id = get_filled_bucket(held_id, get_fluid_type(target_block) or "water")
                     if filled_id:
                         if self.network_client is not None:
                             self.network_client.send_set_block(fx, fy, fz, unlogged_id)
@@ -4868,7 +4869,7 @@ class Game(pyglet.window.Window):
                         return True
                 elif is_waterlogged_vertical_slab(target_block) and is_water_source(target_block):
                     unlogged_id = get_unwaterlogged_vertical_slab(target_block)
-                    filled_id = get_filled_bucket(held_id, "water")
+                    filled_id = get_filled_bucket(held_id, get_fluid_type(target_block) or "water")
                     if filled_id:
                         if self.network_client is not None:
                             self.network_client.send_set_block(fx, fy, fz, unlogged_id)
@@ -4923,9 +4924,10 @@ class Game(pyglet.window.Window):
             hx, hy, hz = hit["x"], hit["y"], hit["z"]
             cur_target = self.world.get_block(hx, hy, hz)
             from server.blocks import (
+                get_fluidlogged_slab,
+                get_fluidlogged_vertical_slab,
                 get_slab_info,
                 get_vertical_slab_info,
-                get_waterlogged_vertical_slab,
                 is_slab,
                 is_vertical_slab,
             )
@@ -4933,13 +4935,8 @@ class Game(pyglet.window.Window):
 
             s_info = get_slab_info(cur_target)
             vs_info = get_vertical_slab_info(cur_target)
-            placing_lava = is_lava(fluid_id)
-            if not placing_lava and s_info is not None and not s_info["double"] and not is_water_source(cur_target):
-                logged_id = (
-                    f"{s_info['base_id']}_waterlogged"
-                    if s_info["half"] == "bottom"
-                    else f"{s_info['base_id']}_top_waterlogged"
-                )
+            if s_info is not None and not s_info["double"] and not is_water_source(cur_target):
+                logged_id = get_fluidlogged_slab(s_info["base_id"], half=s_info["half"], level=8, fluid=fluid_id)
                 if self.network_client is not None:
                     self.network_client.send_set_block(hx, hy, hz, logged_id)
                 self.world.set_block(hx, hy, hz, logged_id)
@@ -4955,8 +4952,8 @@ class Game(pyglet.window.Window):
                         if leftover > 0:
                             self._spawn_loose_item(empty_id, leftover, list(self.player.pos), pickup_delay=0.5)
                 return True
-            elif not placing_lava and vs_info is not None and not is_water_source(cur_target):
-                logged_id = get_waterlogged_vertical_slab(cur_target, level=8)
+            elif vs_info is not None and not is_water_source(cur_target):
+                logged_id = get_fluidlogged_vertical_slab(cur_target, level=8, fluid=fluid_id)
                 if logged_id:
                     if self.network_client is not None:
                         self.network_client.send_set_block(hx, hy, hz, logged_id)

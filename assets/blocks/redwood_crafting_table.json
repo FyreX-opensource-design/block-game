@@ -1,0 +1,21 @@
+{
+  "id": "redwood_crafting_table",
+  "lang": "block.redwood_crafting_table",
+  "station": "crafting_table",
+  "tab": "building",
+  "model": "cube",
+  "hardness": 2.5,
+  "tool": "axe",
+  "mining_level": 0,
+  "sound": "wood",
+  "catalysts": 2,
+  "loot_table": "blocks/redwood_crafting_table",
+  "textures": {
+    "up": "redwood_crafting_table_top",
+    "north": "redwood_crafting_table_north_south",
+    "east": "redwood_crafting_table_east_west",
+    "south": "redwood_crafting_table_north_south",
+    "west": "redwood_crafting_table_east_west",
+    "down": "redwood_log_top"
+  }
+}

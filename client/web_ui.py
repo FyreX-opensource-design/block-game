@@ -176,6 +176,22 @@ HTML_CONTENT = """<!DOCTYPE html>
     gap: 16px;
     margin-bottom: 14px;
   }
+  .catalyst-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+  .catalyst-caption {
+    font-size: 12px;
+    color: #9ca3af;
+  }
+  .catalyst-col {
+    display: grid;
+    grid-auto-flow: column;
+    grid-template-rows: repeat(3, 54px);
+    gap: 6px;
+  }
   .arrow {
     font-size: 26px;
     color: #9ca3af;
@@ -713,6 +729,23 @@ HTML_CONTENT = """<!DOCTYPE html>
       const area = document.createElement('div');
       area.className = 'crafting-area';
 
+      const catalysts = state.catalysts || [];
+      if (catalysts.length) {
+        const wrap = document.createElement('div');
+        wrap.className = 'catalyst-wrap';
+        const caption = document.createElement('div');
+        caption.className = 'catalyst-caption';
+        caption.textContent = 'Catalysts';
+        wrap.appendChild(caption);
+        const col = document.createElement('div');
+        col.className = 'catalyst-col';
+        catalysts.forEach((stack, idx) => {
+          col.appendChild(createSlot(stack, `table_catalyst:${idx}`));
+        });
+        wrap.appendChild(col);
+        area.appendChild(wrap);
+      }
+
       const grid = document.createElement('div');
       grid.className = 'slot-grid grid-craft-3x3';
       (state.container_craft || []).forEach((stack, idx) => {
@@ -936,6 +969,8 @@ class WebCompanion:
 
             table_craft = [self._slot_to_dict(s) for s in getattr(inv, "container_craft", [])]
             table_preview = self._slot_to_dict(getattr(inv, "table_preview", empty_stack()))
+            catalyst_count = int(getattr(inv, "catalyst_count", 0) or 0)
+            catalyst_slots = list(getattr(inv, "container_catalysts", []))[:catalyst_count]
 
             furnace_data = None
             if container_type == "furnace" and inv.furnace is not None:
@@ -993,6 +1028,7 @@ class WebCompanion:
                 "craft_preview": craft_preview,
                 "container_craft": table_craft,
                 "table_preview": table_preview,
+                "catalysts": [self._slot_to_dict(s) for s in catalyst_slots],
                 "furnace": furnace_data,
                 "creative_tabs": tabs,
                 "current_tab": inv.tab,

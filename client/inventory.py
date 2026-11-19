@@ -47,6 +47,8 @@ class CreativeInventory:
         self.container_type = "player"
         self.container_block = None
         self.container_craft = empty_slots(9)
+        self.container_catalysts = []
+        self.catalyst_count = 0
         self.furnace = None
         self.table_preview = empty_stack()
         self.drag_button = None
@@ -190,6 +192,33 @@ class CreativeInventory:
                     y + craft_top - row * (CELL + GAP),
                     f"table_craft:{index}",
                     self.container_craft[index],
+                )
+        catalyst_count = min(self.catalyst_count, len(self.container_catalysts))
+        if catalyst_count:
+            columns = (catalyst_count + 2) // 3
+            step = CELL + GAP
+            rows = min(3, catalyst_count)
+            slot_left = origin_x + grid_w - columns * step + GAP
+            column_top = y + craft_top + CELL
+            column_bottom = y + craft_top - (rows - 1) * step
+            frame.label(
+                "Catalysts",
+                slot_left - 10,
+                (column_top + column_bottom) / 2,
+                14,
+                "right",
+                "center",
+                MUTED,
+            )
+            for index in range(catalyst_count):
+                column = index // 3
+                row = index % 3
+                self._slot(
+                    frame,
+                    origin_x + grid_w - (columns - column) * step + GAP,
+                    y + craft_top - row * step,
+                    f"table_catalyst:{index}",
+                    self.container_catalysts[index],
                 )
         result_x = origin_x + 3 * (CELL + GAP) + 36
         result_y = y + craft_top - (CELL + GAP)
@@ -392,6 +421,17 @@ class CreativeInventory:
                 return None
             self._click_slot(self.container_craft, index, button)
             return None
+        if kind == "table_catalyst":
+            index = int(value)
+            if index < 0 or index >= self.catalyst_count:
+                return None
+            while len(self.container_catalysts) <= index:
+                self.container_catalysts.append(empty_stack())
+            if shift:
+                self._shift_click_slot(self.container_catalysts, index, [hotbar, storage])
+                return None
+            self._click_slot(self.container_catalysts, index, button)
+            return None
         if kind == "table_result":
             if shift:
                 self._shift_take_table_result(self.container_craft, [hotbar, storage])
@@ -437,6 +477,49 @@ class CreativeInventory:
             source_slots[index] = make_stack(item_id, leftover)
         else:
             source_slots[index] = empty_stack()
+
+    def _catalyst_stacks(self):
+        count = min(self.catalyst_count, len(self.container_catalysts))
+        stacks = []
+        for slot in self.container_catalysts[:count]:
+            have = stack_count(slot)
+            stacks.append((stack_id(slot), have) if have else ("", 0))
+        return tuple(stacks)
+
+    def _spend_catalysts(self, uses):
+        for index, amount in uses:
+            if index < 0 or index >= len(self.container_catalysts):
+                continue
+            slot = normalize_stack(self.container_catalysts[index])
+            left = stack_count(slot) - int(amount)
+            self.container_catalysts[index] = make_stack(stack_id(slot), left) if left > 0 else empty_stack()
+
+    def set_catalyst_count(self, count, hotbar, storage, world=None, player_pos=None):
+        count = max(0, int(count))
+        while len(self.container_catalysts) > count:
+            self._return_slot(self.container_catalysts, len(self.container_catalysts) - 1, hotbar, storage, world, player_pos)
+            self.container_catalysts.pop()
+        while len(self.container_catalysts) < count:
+            self.container_catalysts.append(empty_stack())
+        self.catalyst_count = count
+
+    def _return_slot(self, slots, index, hotbar, storage, world, player_pos):
+        slot = normalize_stack(slots[index])
+        sid = stack_id(slot)
+        scnt = stack_count(slot)
+        if not sid or scnt <= 0:
+            slots[index] = empty_stack()
+            return
+        slots[index] = empty_stack()
+        self.held = sid
+        self.held_count = scnt
+        self.held_damage = stack_damage(slot)
+        self.held_infinite = False
+        self.stash_held(hotbar, storage, [])
+        if self.held and self.held_count > 0:
+            if world is not None and player_pos is not None:
+                world.spawn_item(self.held, count=self.held_count, pos=player_pos)
+            self.clear_held()
 
     def _get_table_recipe_types(self):
         if not self.container_block:
@@ -500,7 +583,7 @@ class CreativeInventory:
             matched = craft_match(ids)
             if matched is None:
                 break
-            res_id, res_count, indexes = matched
+            res_id, res_count, indexes = matched[:3]
             room = 0
             limit = stack_limit(res_id)
             for group in target_groups:
@@ -524,10 +607,10 @@ class CreativeInventory:
             if len(craft) < 9:
                 break
             ids = tuple(stack_id(slot) if stack_count(slot) else "" for slot in craft)
-            matched = craft_match(ids, recipe_types=recipe_types)
+            matched = craft_match(ids, recipe_types=recipe_types, catalysts=self._catalyst_stacks())
             if matched is None:
                 break
-            res_id, res_count, indexes = matched
+            res_id, res_count, indexes = matched[:3]
             room = 0
             limit = stack_limit(res_id)
             for group in target_groups:
@@ -543,18 +626,19 @@ class CreativeInventory:
                 s = normalize_stack(craft[idx])
                 left = stack_count(s) - 1
                 craft[idx] = make_stack(stack_id(s), left) if left > 0 else empty_stack()
+            self._spend_catalysts(matched[3] if len(matched) > 3 else ())
             add_to_inventory(target_groups, res_id, res_count)
 
     def _take_table_result(self, craft):
         if len(craft) < 9:
             return
         ids = tuple(stack_id(slot) if stack_count(slot) else "" for slot in craft)
-        matched = craft_match(ids, recipe_types=self._get_table_recipe_types())
+        matched = craft_match(ids, recipe_types=self._get_table_recipe_types(), catalysts=self._catalyst_stacks())
         if matched is None:
             return
         if self.held_infinite:
             self.clear_held()
-        result_id, result_count, indexes = matched
+        result_id, result_count, indexes = matched[:3]
         if self.held and self.held != result_id:
             return
         have = self.held_count if self.held else 0
@@ -564,6 +648,7 @@ class CreativeInventory:
             slot = normalize_stack(craft[index])
             left = stack_count(slot) - 1
             craft[index] = make_stack(stack_id(slot), left) if left > 0 else empty_stack()
+        self._spend_catalysts(matched[3] if len(matched) > 3 else ())
         self.held = result_id
         self.held_count = have + result_count
         self.held_infinite = False
@@ -593,26 +678,18 @@ class CreativeInventory:
         ids = tuple(stack_id(slot) if stack_count(slot) else "" for slot in list(craft)[:9])
         if len(ids) < 9:
             ids = ids + ("",) * (9 - len(ids))
-        matched = craft_match(ids, recipe_types=self._get_table_recipe_types())
+        matched = craft_match(ids, recipe_types=self._get_table_recipe_types(), catalysts=self._catalyst_stacks())
         if matched is None:
             return empty_stack()
         return make_stack(matched[0], matched[1])
 
     def dismiss_container(self, hotbar, storage, world=None, player_pos=None):
         if self.container_type == "crafting_table":
-            for index in range(len(self.container_craft)):
-                slot = normalize_stack(self.container_craft[index])
-                sid = stack_id(slot)
-                scnt = stack_count(slot)
-                if sid and scnt > 0:
-                    self.container_craft[index] = empty_stack()
-                    self.held = sid
-                    self.held_count = scnt
-                    self.stash_held(hotbar, storage, [])
-                    if self.held and self.held_count > 0:
-                        if world is not None and player_pos is not None:
-                            world.spawn_item(self.held, count=self.held_count, pos=player_pos)
-                        self.clear_held()
+            for slots in (self.container_craft, self.container_catalysts):
+                for index in range(len(slots)):
+                    self._return_slot(slots, index, hotbar, storage, world, player_pos)
+        self.catalyst_count = 0
+        self.container_catalysts = []
         self.container_type = "player"
         self.container_block = None
         self.furnace = None
@@ -756,7 +833,7 @@ class CreativeInventory:
             return
         if self.held_infinite:
             self.clear_held()
-        result_id, result_count, indexes = matched
+        result_id, result_count, indexes = matched[:3]
         if self.held and self.held != result_id:
             return
         have = self.held_count if self.held else 0
@@ -893,6 +970,9 @@ class CreativeInventory:
         elif self.hover and self.hover.startswith("table_craft:"):
             index = int(self.hover.split(":", 1)[1])
             slot = self.container_craft[index] if index < len(self.container_craft) else ""
+        elif self.hover and self.hover.startswith("table_catalyst:"):
+            index = int(self.hover.split(":", 1)[1])
+            slot = self.container_catalysts[index] if index < len(self.container_catalysts) else ""
         elif self.hover and self.hover.startswith("table_result:"):
             slot = self.table_preview
         elif self.hover and self.hover == "furnace:input":

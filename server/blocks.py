@@ -135,6 +135,11 @@ class Block:
         self.opacity = opacity
         self.tabs = tuple(tabs)
         self.properties = dict(properties or {})
+        raw_catalysts = self.properties.get("catalysts", 0)
+        try:
+            self.catalysts = max(0, int(raw_catalysts))
+        except (TypeError, ValueError):
+            self.catalysts = 0
         lo = light_opacity if light_opacity is not None else self.properties.get("light_opacity")
         self.light_opacity = int(lo) if lo is not None else None
         if self.light_opacity is not None:
@@ -642,6 +647,36 @@ def get_vertical_slab_info(block_or_id):
         "waterlogged": waterlogged,
         "level": level,
     }
+
+
+def fluid_logged_block_id(waterlogged_id, fluid):
+    """The block id of a slab holding `fluid`. Water keeps the waterlogged ids."""
+    if not waterlogged_id or not fluid or fluid == "water":
+        return waterlogged_id
+    return waterlogged_id.replace("_waterlogged", f"_{fluid}_logged", 1)
+
+
+def get_fluidlogged_vertical_slab(block_or_id, level=8, fluid="water"):
+    """Vertical slab filled with `fluid` at this level, or None."""
+    base = get_waterlogged_vertical_slab(block_or_id, level)
+    if not base:
+        return None
+    logged = fluid_logged_block_id(base, fluid)
+    if logged in BLOCKS:
+        return logged
+    return base if fluid in (None, "", "water") else None
+
+
+def get_fluidlogged_slab(base_id, half="bottom", level=8, fluid="water"):
+    """Horizontal slab filled with `fluid` at this level."""
+    base = get_waterlogged_slab(base_id, half, level)
+    logged = fluid_logged_block_id(base, fluid)
+    if logged in BLOCKS:
+        return logged
+    dry = f"{get_slab_info(base_id)['base_id'] if get_slab_info(base_id) else base_id}"
+    if half == "top":
+        dry = f"{dry}_top"
+    return base if fluid in (None, "", "water") else (dry if dry in BLOCKS else base)
 
 
 def get_waterlogged_vertical_slab(block_or_id, level=8):
@@ -3520,6 +3555,11 @@ def _load_registry():
             rotation_type = "horizontal"
         if not rotation_type and is_vertical_slab_type:
             rotation_type = "horizontal"
+        if "catalysts" in entry or "catalysts" in properties:
+            raw_catalysts = entry["catalysts"] if "catalysts" in entry else properties["catalysts"]
+            if isinstance(raw_catalysts, bool) or not isinstance(raw_catalysts, int) or not 0 <= raw_catalysts <= 6:
+                raise ValueError(f"{entry['id']} catalysts must be a whole number from 0 to 6")
+            properties["catalysts"] = raw_catalysts
         base_props = dict(properties)
         if is_tall_plant_type:
             base_props["tall_plant"] = True
@@ -5902,7 +5942,79 @@ def _load_registry():
                 return v_slabs_by_id[prefix[:-len(suf)]], f
         return None, None
 
+    fluid_block_ids = {}
+    fluid_dir = ASSETS / "fluids"
+    if fluid_dir.is_dir():
+        for path in fluid_dir.glob("*.json"):
+            try:
+                data = json.loads(path.read_text())
+            except json.JSONDecodeError:
+                continue
+            fluid_block_ids[path.stem] = str(data.get("block", path.stem))
+    other_fluids = sorted((fluid_id for fluid_id in fluid_block_ids if fluid_id != "water"), key=len, reverse=True)
+
+    def _ensure_fluid_logged(name):
+        if "logged" not in name:
+            return None
+        for fluid_id in other_fluids:
+            token = f"_{fluid_id}_logged"
+            found = name.find(token)
+            if found < 0:
+                continue
+            rest = name[found + len(token):]
+            if rest and not (rest[0] == "_" and rest[1:].isdigit()):
+                continue
+            template = blocks.get(name[:found] + "_waterlogged" + rest)
+            if template is None or not (template.properties or {}).get("waterlogged"):
+                return None
+            props = dict(template.properties)
+            props["fluid"] = fluid_id
+            fluid_block = blocks.get(fluid_block_ids.get(fluid_id, fluid_id))
+            light = None
+            if fluid_block is not None:
+                lava_kind = (fluid_block.properties or {}).get("lava")
+                if lava_kind:
+                    props["lava"] = lava_kind
+                else:
+                    props.pop("lava", None)
+                if any(fluid_block.light or ()):
+                    light = fluid_block.light
+            else:
+                props.pop("lava", None)
+            label = fluid_id.replace("_", " ").title()
+            logged = Block(
+                name,
+                template.name.replace("Waterlogged", label),
+                template.solid,
+                template.full_cube,
+                list(template.face_uvs),
+                [dict(element) for element in template.elements],
+                cutout=template.cutout,
+                opacity=template.opacity,
+                properties=props,
+                base_id=template.base_id,
+                is_variant=True,
+                hardness=template.hardness,
+                tool=template.tool,
+                mining_level=template.mining_level,
+                loot_table=template.loot_table,
+                light=light,
+                gravity=template.gravity,
+                fluid_breakable=False,
+                tint=template.tint,
+                waterlogged=True,
+                slab=template.slab,
+                slab_half=template.slab_half,
+                translucent=template.translucent,
+            )
+            return _register_dyn(name, logged)
+        return None
+
     def _resolve_dynamic(name):
+        logged = _ensure_fluid_logged(name)
+        if logged is not None:
+            return logged
+
         if name.startswith("double_slab_"):
             rest = name[len("double_slab_"):]
             if rest in h_slabs_by_id:

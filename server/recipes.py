@@ -39,6 +39,7 @@ class Recipe:
         source_result=None,
         flowing_fluid=None,
         source_fluid=None,
+        catalysts=(),
     ):
         self.id = recipe_id
         self.shaped = shaped
@@ -60,6 +61,7 @@ class Recipe:
         self.source_result = source_result if source_result is not None else result
         self.flowing_fluid = flowing_fluid
         self.source_fluid = source_fluid
+        self.catalysts = tuple(catalysts)
 
 
 def _trim(rows):
@@ -133,39 +135,112 @@ def _shapeless_matches(actual_items, recipe_ingredients):
     return len(remaining_actual) == 0
 
 
-def match_grid(ids, recipes, recipe_types=None):
+def _catalyst_slot(entry):
+    """(item id, count) for a filled catalyst slot. A bare id counts as one."""
+    if isinstance(entry, tuple):
+        if len(entry) >= 2:
+            return entry[0], int(entry[1])
+        return (entry[0] if entry else ""), 1
+    return entry, 1
+
+
+def _catalyst_slots(required, available):
+    """(slot index, amount) pairs that satisfy a recipe's catalysts, or None.
+
+    Each entry takes its own slot, and that slot must hold at least the count.
+    """
+    if not required:
+        return ()
+    from server.tags import matches_ingredient
+
+    pool = []
+    for index, entry in enumerate(available):
+        item, have = _catalyst_slot(entry)
+        if item and have > 0:
+            pool.append((index, item, have))
+    chosen = []
+    for expected, need in required:
+        found = None
+        for place, (index, actual, have) in enumerate(pool):
+            if have >= need and matches_ingredient(expected, actual):
+                found = place
+                chosen.append((index, need))
+                break
+        if found is None:
+            return None
+        pool.pop(found)
+    return tuple(chosen)
+
+
+def _uses_tag(recipe):
+    if recipe.shaped:
+        return any(str(cell).startswith("#") for row in recipe.pattern for cell in row)
+    return any(str(ingredient).startswith("#") for ingredient in recipe.ingredients)
+
+
+def match_grid(ids, recipes, recipe_types=None, catalysts=()):
     norm_ids = tuple(BLOCKS[i].base_id if i in BLOCKS and getattr(BLOCKS[i], "base_id", None) else i for i in ids)
     window = _window(norm_ids)
     filled = [index for index, block_id in enumerate(norm_ids) if block_id]
     allowed_types = set(recipe_types) if recipe_types else set(CRAFTING_TYPES)
+    catalyst_ids = tuple(catalysts or ())
     # A tag recipe such as "#logs -> planks" matches every wood. Remember it, but
-    # prefer a later recipe that names the ingredient exactly.
+    # prefer a recipe that names the ingredient exactly, shaped or shapeless.
     tagged = None
     for recipe in recipes:
         if recipe.type not in allowed_types:
+            continue
+        used = _catalyst_slots(getattr(recipe, "catalysts", ()), catalyst_ids)
+        if used is None:
             continue
         if recipe.shaped:
             if window is None:
                 continue
             pattern, forward, mirrored = window
             if _pattern_matches(pattern, recipe.pattern):
-                return recipe.result, recipe.count, forward
-            if _pattern_matches(pattern, _mirror(recipe.pattern)):
-                return recipe.result, recipe.count, mirrored
-            continue
+                indexes = forward
+            elif _pattern_matches(pattern, _mirror(recipe.pattern)):
+                indexes = mirrored
+            else:
+                continue
+            if _uses_tag(recipe):
+                if tagged is None:
+                    tagged = (recipe.result, recipe.count, indexes, used)
+                continue
+            return recipe.result, recipe.count, indexes, used
         actual_items = [norm_ids[index] for index in filled]
         if not _shapeless_matches(actual_items, recipe.ingredients):
             continue
-        if any(str(ingredient).startswith("#") for ingredient in recipe.ingredients):
+        if _uses_tag(recipe):
             if tagged is None:
-                tagged = (recipe.result, recipe.count, filled)
+                tagged = (recipe.result, recipe.count, filled, used)
             continue
-        return recipe.result, recipe.count, filled
+        return recipe.result, recipe.count, filled, used
     return tagged
 
 
-def craft_match(ids, recipe_types=None):
-    return match_grid(ids, RECIPES, recipe_types=recipe_types)
+def craft_match(ids, recipe_types=None, catalysts=()):
+    return match_grid(ids, RECIPES, recipe_types=recipe_types, catalysts=catalysts)
+
+
+def _recipe_catalysts(raw, recipe_id):
+    if isinstance(raw, str):
+        raw = [raw]
+    if not isinstance(raw, list) or len(raw) > 6:
+        raise ValueError(f"{recipe_id} catalysts must be a list of up to 6 items")
+    parsed = []
+    for item in raw:
+        if isinstance(item, str):
+            parsed.append((_block_name(item, recipe_id), 1))
+            continue
+        if not isinstance(item, dict):
+            raise ValueError(f"{recipe_id} catalyst must be an item name or an item and count")
+        name = item.get("item", item.get("id", ""))
+        count = int(item.get("count", 1))
+        if not 1 <= count <= 64:
+            raise ValueError(f"{recipe_id} catalyst count must be from 1 to 64")
+        parsed.append((_block_name(name, recipe_id), count))
+    return tuple(parsed)
 
 
 def _block_name(token, recipe_id):
@@ -285,6 +360,7 @@ def recipe_from_mapping(entry, source):
         raise ValueError(f"{recipe_id} needs a result item")
     result_id = _block_name(result["item"], recipe_id)
     count = int(result.get("count", 1))
+    catalysts = _recipe_catalysts(entry.get("catalysts", []), recipe_id)
     if not 1 <= count <= 64:
         raise ValueError(f"{recipe_id} result count must be from 1 to 64")
 
@@ -307,14 +383,14 @@ def recipe_from_mapping(entry, source):
                     raise ValueError(f"{recipe_id} pattern uses {symbol}, which is not in its key")
                 cells.append(key[symbol])
             mapped.append(cells)
-        return Recipe(recipe_id, True, _trim(mapped), (), result_id, count, recipe_type)
+        return Recipe(recipe_id, True, _trim(mapped), (), result_id, count, recipe_type, catalysts=catalysts)
     if "ingredients" in entry:
         if "pattern" in entry:
             raise ValueError(f"{recipe_id} must be shaped or shapeless")
         ingredients = [_block_name(item, recipe_id) for item in entry.get("ingredients", [])]
         if not ingredients or len(ingredients) > 9:
             raise ValueError(f"{recipe_id} needs 1 to 9 ingredients")
-        return Recipe(recipe_id, False, (), tuple(sorted(ingredients)), result_id, count, recipe_type)
+        return Recipe(recipe_id, False, (), tuple(sorted(ingredients)), result_id, count, recipe_type, catalysts=catalysts)
     if "ingredient" in entry:
         raw_ing = entry.get("ingredient")
         if isinstance(raw_ing, dict):

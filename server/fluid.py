@@ -402,6 +402,14 @@ def _fluid_falling_block(fluid_type):
     return cand if cand in BLOCKS else WATER_FALLING
 
 
+def fluid_block_at_level(fluid_type, level):
+    """The source or flowing block a logged slab leaves behind at this level."""
+    fluid_type = fluid_type or "water"
+    if int(level) >= 8:
+        return fluid_type if fluid_type in BLOCKS else "water"
+    return _fluid_level_block(fluid_type, int(level))
+
+
 def _fluid_level_block(fluid_type, level):
     l_map = FLUID_LEVEL_BLOCKS.get(fluid_type)
     if l_map and level in l_map:
@@ -922,10 +930,10 @@ def compute_new_fluid_state(world, x, y, z):
     from server.blocks import (
         get_double_vertical_slab_info,
         get_slab_info,
+        get_fluidlogged_slab,
+        get_fluidlogged_vertical_slab,
         get_unwaterlogged_vertical_slab,
         get_vertical_slab_info,
-        get_waterlogged_slab,
-        get_waterlogged_vertical_slab,
     )
 
     if get_double_vertical_slab_info(cur) is not None:
@@ -936,21 +944,25 @@ def compute_new_fluid_state(world, x, y, z):
         if is_fluid_source(cur):
             return cur
         max_level = 0
+        chosen = None
+        held = get_fluid_type(cur) if vs_info["waterlogged"] else None
         above = world.get_block(x, y + 1, z) if (y + 1 < WORLD_HEIGHT) else AIR
-        if is_fluid(above):
+        above_type = get_fluid_type(above)
+        if above_type:
             max_level = 7
+            chosen = above_type
         for dx, dz in CARDINALS:
             if (dx, dz) == CARDINAL_FOR_FACING.get(vs_info["facing"]):
                 continue
             nx = x + dx
             nz = z + dz
             nbr = world.get_block(nx, y, nz)
-            if not is_fluid(nbr):
+            nbr_type = get_fluid_type(nbr)
+            if not nbr_type:
                 continue
             nbr_vs = get_vertical_slab_info(nbr)
             if nbr_vs is not None and (-dx, -dz) == CARDINAL_FOR_FACING.get(nbr_vs["facing"]):
                 continue
-            nbr_type = get_fluid_type(nbr) or "water"
             nbr_def = get_fluid_def(nbr_type)
             nbr_level = get_fluid_level(nbr)
             pot = _step_down_level(nbr, nbr_level, nbr_def)
@@ -959,14 +971,14 @@ def compute_new_fluid_state(world, x, y, z):
             if _blocks_horizontal_spread(world, nx, y, nz, nbr, fluid_type=nbr_type):
                 continue
             dirs = find_dropoff_directions(world, nx, y, nz, max_dist=nbr_def.dropoff_distance)
-            if (-dx, -dz) in dirs:
-                if pot > max_level:
-                    max_level = pot
-        if max_level <= 0:
+            if (-dx, -dz) in dirs and (pot > max_level or (pot == max_level and nbr_type == held)):
+                max_level = pot
+                chosen = nbr_type
+        if max_level <= 0 or not chosen:
             if vs_info["waterlogged"]:
                 return get_unwaterlogged_vertical_slab(cur)
             return cur
-        return get_waterlogged_vertical_slab(cur, level=max_level)
+        return get_fluidlogged_vertical_slab(cur, level=max_level, fluid=chosen)
 
     s_info = get_slab_info(cur)
     if s_info is not None:
@@ -974,20 +986,24 @@ def compute_new_fluid_state(world, x, y, z):
             return cur
 
         max_level = 0
+        chosen = None
+        held = get_fluid_type(cur) if s_info["waterlogged"] else None
         if s_info["half"] == "bottom":
             above = world.get_block(x, y + 1, z) if (y + 1 < WORLD_HEIGHT) else AIR
-            if is_fluid(above):
+            above_type = get_fluid_type(above)
+            if above_type:
                 max_level = 7
+                chosen = above_type
             for dx, dz in CARDINALS:
                 nx = x + dx
                 nz = z + dz
                 nbr = world.get_block(nx, y, nz)
-                if not is_fluid(nbr):
+                nbr_type = get_fluid_type(nbr)
+                if not nbr_type:
                     continue
                 nbr_vs = get_vertical_slab_info(nbr)
                 if nbr_vs is not None and (-dx, -dz) == CARDINAL_FOR_FACING.get(nbr_vs["facing"]):
                     continue
-                nbr_type = get_fluid_type(nbr) or "water"
                 nbr_def = get_fluid_def(nbr_type)
                 nbr_level = get_fluid_level(nbr)
                 pot = _step_down_level(nbr, nbr_level, nbr_def)
@@ -996,20 +1012,20 @@ def compute_new_fluid_state(world, x, y, z):
                 if _blocks_horizontal_spread(world, nx, y, nz, nbr, fluid_type=nbr_type):
                     continue
                 dirs = find_dropoff_directions(world, nx, y, nz, max_dist=nbr_def.dropoff_distance)
-                if (-dx, -dz) in dirs:
-                    if pot > max_level:
-                        max_level = pot
+                if (-dx, -dz) in dirs and (pot > max_level or (pot == max_level and nbr_type == held)):
+                    max_level = pot
+                    chosen = nbr_type
         elif s_info["half"] == "top":
             for dx, dz in CARDINALS:
                 nx = x + dx
                 nz = z + dz
                 nbr = world.get_block(nx, y, nz)
-                if not is_fluid(nbr):
+                nbr_type = get_fluid_type(nbr)
+                if not nbr_type:
                     continue
                 nbr_vs = get_vertical_slab_info(nbr)
                 if nbr_vs is not None and (-dx, -dz) == CARDINAL_FOR_FACING.get(nbr_vs["facing"]):
                     continue
-                nbr_type = get_fluid_type(nbr) or "water"
                 nbr_def = get_fluid_def(nbr_type)
                 nbr_level = get_fluid_level(nbr)
                 pot = _step_down_level(nbr, nbr_level, nbr_def)
@@ -1018,15 +1034,15 @@ def compute_new_fluid_state(world, x, y, z):
                 if _blocks_horizontal_spread(world, nx, y, nz, nbr, fluid_type=nbr_type):
                     continue
                 dirs = find_dropoff_directions(world, nx, y, nz, max_dist=nbr_def.dropoff_distance)
-                if (-dx, -dz) in dirs:
-                    if pot > max_level:
-                        max_level = pot
+                if (-dx, -dz) in dirs and (pot > max_level or (pot == max_level and nbr_type == held)):
+                    max_level = pot
+                    chosen = nbr_type
 
-        if max_level <= 0:
+        if max_level <= 0 or not chosen:
             if s_info["waterlogged"]:
                 return f"{s_info['base_id']}_top" if s_info["half"] == "top" else s_info["base_id"]
             return cur
-        return get_waterlogged_slab(s_info["base_id"], half=s_info["half"], level=max_level)
+        return get_fluidlogged_slab(s_info["base_id"], half=s_info["half"], level=max_level, fluid=chosen)
 
     if is_fluid_source(cur):
         return cur
@@ -1243,7 +1259,12 @@ class FluidSystem:
                 else:
                     cur_level = get_fluid_level(cur)
                     if _step_down_level(cur, cur_level, cur_def) > 0:
-                        from server.blocks import get_vertical_slab_info, get_waterlogged_vertical_slab
+                        from server.blocks import (
+                            get_fluidlogged_slab,
+                            get_fluidlogged_vertical_slab,
+                            get_slab_info,
+                            get_vertical_slab_info,
+                        )
 
                         cur_vs = get_vertical_slab_info(cur)
                         flow_dirs = find_dropoff_directions(self.world, x, y, z, max_dist=cur_def.dropoff_distance)
@@ -1279,11 +1300,19 @@ class FluidSystem:
                                 flow_dx=dx,
                                 flow_dz=dz,
                             ):
-                                expected = (
-                                    get_waterlogged_vertical_slab(dest, level=target_level)
-                                    if dest_vs is not None
-                                    else _fluid_level_block(cur_type, target_level)
-                                )
+                                if dest_vs is not None:
+                                    expected = get_fluidlogged_vertical_slab(dest, level=target_level, fluid=cur_type)
+                                else:
+                                    dest_slab = get_slab_info(dest)
+                                    if dest_slab is not None and not dest_slab["double"]:
+                                        expected = get_fluidlogged_slab(
+                                            dest_slab["base_id"],
+                                            half=dest_slab["half"],
+                                            level=target_level,
+                                            fluid=cur_type,
+                                        )
+                                    else:
+                                        expected = _fluid_level_block(cur_type, target_level)
                                 nbr_level = get_fluid_level(dest) if (is_fluid(dest) and get_fluid_type(dest) == cur_type) else 0
                                 if nbr_level < target_level and dest != expected:
                                     self._enqueue((tx, y, tz))

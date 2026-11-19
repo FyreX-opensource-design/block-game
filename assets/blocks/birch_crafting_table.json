@@ -1,0 +1,21 @@
+{
+  "id": "birch_crafting_table",
+  "lang": "block.birch_crafting_table",
+  "station": "crafting_table",
+  "tab": "building",
+  "model": "cube",
+  "hardness": 2.5,
+  "tool": "axe",
+  "mining_level": 0,
+  "sound": "wood",
+  "catalysts": 2,
+  "loot_table": "blocks/birch_crafting_table",
+  "textures": {
+    "up": "birch_crafting_table_top",
+    "north": "birch_crafting_table_north_south",
+    "east": "birch_crafting_table_east_west",
+    "south": "birch_crafting_table_north_south",
+    "west": "birch_crafting_table_east_west",
+    "down": "birch_log_top"
+  }
+}

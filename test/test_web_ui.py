@@ -111,6 +111,16 @@ class WebCompanionTests(unittest.TestCase):
         self.assertEqual(len(data["container_craft"]), 9)
         self.assertEqual(data["container_craft"][0]["id"], "planks")
         self.assertEqual(data["table_preview"]["id"], "crafting_table")
+        self.assertEqual(data["catalysts"], [])
+
+        self.game.inventory.set_catalyst_count(2, self.game.hotbar, self.game.storage)
+        self.game.inventory.container_catalysts[0] = make_stack("stick", 2)
+        data = self.client.get("/api/state").get_json()
+        self.assertEqual(len(data["catalysts"]), 2)
+        self.assertEqual(data["catalysts"][0]["id"], "stick")
+        page = self.client.get("/").get_data(as_text=True)
+        self.assertIn("table_catalyst:", page)
+        self.assertIn("Catalysts", page)
 
     def test_container_switching_furnace(self):
         # In-game right click on furnace

@@ -11,6 +11,7 @@ from server.fluid import (
     compute_new_fluid_state,
     find_dropoff_directions,
     get_fluid_level,
+    is_lava,
     is_water,
     is_water_source,
 )
@@ -859,6 +860,48 @@ class TestFluidDefinitionsAndInteractions(unittest.TestCase):
 
         # Water CANNOT flow out the solid back: West (4, 81, 5) remains AIR!
         self.assertEqual(self.world.get_block(4, 81, 5), AIR)
+
+    def test_salt_water_fills_a_vertical_slab_as_salt_water(self):
+        self.world.set_block(5, 80, 5, STONE)
+        self.world.set_block(6, 80, 5, STONE)
+        self.world.set_block(6, 81, 4, STONE)
+        self.world.set_block(6, 81, 6, STONE)
+        self.world.set_block(7, 81, 5, STONE)
+        self.world.set_block(5, 81, 5, "smooth_sandstone_vertical_slab_west")
+        self.world.set_block(6, 81, 5, "salt_water")
+        filled = compute_new_fluid_state(self.world, 5, 81, 5)
+        self.assertEqual(filled, "smooth_sandstone_vertical_slab_west_salt_water_logged_7")
+        from server.fluid import get_fluid_type
+
+        self.assertEqual(get_fluid_type(filled), "salt_water")
+
+    def test_a_vertical_slab_in_flowing_lava_does_not_become_water(self):
+        for x in range(2, 8):
+            self.world.set_block(x, 80, 4, STONE)
+            self.world.set_block(x, 81, 3, STONE)
+            self.world.set_block(x, 81, 5, STONE)
+        self.world.set_block(1, 81, 4, STONE)
+        self.world.set_block(2, 81, 4, "lava")
+        for _ in range(20):
+            self.world.update_fluids(0.5)
+        flow_x = next(
+            x for x in range(3, 8) if str(self.world.get_block(x, 81, 4)).startswith("lava_")
+        )
+        self.world.set_block(flow_x, 81, 4, "planks_vertical_slab")
+        for _ in range(20):
+            self.world.update_fluids(0.5)
+
+        from server.fluid import get_fluid_type
+
+        placed = self.world.get_block(flow_x, 81, 4)
+        self.assertEqual(get_fluid_type(placed), "lava")
+        self.assertTrue(is_lava(placed))
+        self.assertIn("lava_logged", placed)
+        for x in range(2, 8):
+            block = self.world.get_block(x, 81, 4)
+            self.assertFalse(is_water(block) and not is_lava(block), block)
+            if get_fluid_type(block):
+                self.assertEqual(get_fluid_type(block), "lava")
 
     def test_vertical_slab_channel_flow_not_into_back(self):
         # Floor at y=80

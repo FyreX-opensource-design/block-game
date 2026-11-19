@@ -1,0 +1,21 @@
+{
+  "id": "spruce_crafting_table",
+  "lang": "block.spruce_crafting_table",
+  "station": "crafting_table",
+  "tab": "building",
+  "model": "cube",
+  "hardness": 2.5,
+  "tool": "axe",
+  "mining_level": 0,
+  "sound": "wood",
+  "catalysts": 2,
+  "loot_table": "blocks/spruce_crafting_table",
+  "textures": {
+    "up": "spruce_crafting_table_top",
+    "north": "spruce_crafting_table_north_south",
+    "east": "spruce_crafting_table_east_west",
+    "south": "spruce_crafting_table_north_south",
+    "west": "spruce_crafting_table_east_west",
+    "down": "spruce_log_top"
+  }
+}

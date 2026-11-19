@@ -339,6 +339,22 @@ class SnowTests(unittest.TestCase):
         self.assertGreater(player.pos[0], 1.6)
         self.assertAlmostEqual(player.pos[1], 6.375, delta=0.08)
 
+    def test_ice_hides_the_faces_inside_a_sheet(self):
+        from server.mesh import build_chunk_mesh
+
+        world = World(seed=1, caves=[], ores=[], features=[])
+        cy = _clear_column(world, 0, 0, 4)
+        world.set_block(2, 4, 2, "ice")
+        world.set_block(3, 4, 2, "ice")
+        mesh = build_chunk_mesh(world, 0, cy, 0)
+        self.assertIsNotNone(mesh.translucent)
+        # Two cubes share one face, so the pair keeps 10 quads instead of 12.
+        self.assertEqual(len(mesh.translucent[0]), 10 * 4)
+
+        world.set_block(3, 4, 2, "salt_ice")
+        seam = build_chunk_mesh(world, 0, cy, 0)
+        self.assertEqual(len(seam.translucent[0]), 12 * 4)
+
     def test_snow_layer_mesh_uses_its_height(self):
         from server.mesh import build_chunk_mesh
 

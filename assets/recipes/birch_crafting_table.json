@@ -1,0 +1,17 @@
+{
+  "id": "birch_crafting_table",
+  "type": "crafting_shaped",
+  "pattern": [
+    "#k",
+    "bb"
+  ],
+  "key": {
+    "#": "birch_log",
+    "b": "bricks",
+    "k": "flint"
+  },
+  "result": {
+    "item": "birch_crafting_table",
+    "count": 1
+  }
+}

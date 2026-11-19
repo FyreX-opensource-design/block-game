@@ -1,0 +1,21 @@
+{
+  "id": "pine_crafting_table",
+  "lang": "block.pine_crafting_table",
+  "station": "crafting_table",
+  "tab": "building",
+  "model": "cube",
+  "hardness": 2.5,
+  "tool": "axe",
+  "mining_level": 0,
+  "sound": "wood",
+  "catalysts": 2,
+  "loot_table": "blocks/pine_crafting_table",
+  "textures": {
+    "up": "pine_crafting_table_top",
+    "north": "pine_crafting_table_north_south",
+    "east": "pine_crafting_table_east_west",
+    "south": "pine_crafting_table_north_south",
+    "west": "pine_crafting_table_east_west",
+    "down": "pine_log_top"
+  }
+}

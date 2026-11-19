@@ -1,7 +1,8 @@
 import unittest
 
 from client.inventory import CreativeInventory
-from server.blocks import CRAFTING_TABLE, FURNACE
+from server.blocks import BLOCKS, CRAFTING_TABLE, FURNACE
+from server.crafting import paired_catalyst_count
 from server.furnace import Furnace
 from server.items import ITEMS
 from server.recipes import (
@@ -11,6 +12,8 @@ from server.recipes import (
     RECIPES,
     craft_match,
     fuel_burn_time,
+    match_grid,
+    recipe_from_mapping,
     recipes_of,
     smelt_match,
 )
@@ -470,6 +473,136 @@ class CraftingAndFurnaceTests(unittest.TestCase):
         dropped_items = {e.item: e.count for e in world.entities}
         self.assertEqual(dropped_items.get("raw_iron"), 2)
 
+
+class _Blocks:
+    def __init__(self):
+        self.blocks = {}
+
+    def get_block(self, x, y, z):
+        return self.blocks.get((int(x), int(y), int(z)), "air")
+
+    def set_block(self, x, y, z, block_id):
+        self.blocks[(int(x), int(y), int(z))] = block_id
+
+
+class PairedCraftingTableTests(unittest.TestCase):
+    def test_the_table_asset_names_its_catalyst_slots(self):
+        self.assertEqual(BLOCKS["crafting_table"].catalysts, 2)
+        self.assertEqual(BLOCKS["furnace"].catalysts, 0)
+
+    def test_two_tables_side_by_side_open_catalyst_slots(self):
+        world = _Blocks()
+        world.set_block(4, 10, 4, "crafting_table")
+        self.assertEqual(paired_catalyst_count(world, 4, 10, 4), 0)
+        world.set_block(5, 10, 4, "crafting_table")
+        self.assertEqual(paired_catalyst_count(world, 4, 10, 4), 2)
+        self.assertEqual(paired_catalyst_count(world, 5, 10, 4), 2)
+        world.set_block(5, 10, 4, "furnace")
+        self.assertEqual(paired_catalyst_count(world, 4, 10, 4), 0)
+        world.set_block(4, 11, 4, "crafting_table")
+        self.assertEqual(paired_catalyst_count(world, 4, 10, 4), 0)
+
+    def test_a_catalyst_recipe_uses_the_extra_slots(self):
+        recipe = recipe_from_mapping(
+            {
+                "id": "bound_sticks",
+                "type": "crafting_shapeless",
+                "ingredients": ["stick", "stick"],
+                "catalysts": [{"item": "plant_fiber", "count": 3}, "flint"],
+                "result": {"item": "stick", "count": 1},
+            },
+            "memory",
+        )
+        self.assertEqual(recipe.catalysts, (("plant_fiber", 3), ("flint", 1)))
+        grid = ("stick", "stick", "", "")
+        short = (("plant_fiber", 2), ("flint", 1))
+        ready = (("plant_fiber", 5), ("flint", 1))
+        self.assertIsNone(match_grid(grid, (recipe,)))
+        self.assertIsNone(match_grid(grid, (recipe,), catalysts=short))
+        matched = match_grid(grid, (recipe,), catalysts=ready)
+        self.assertEqual(matched[:2], ("stick", 1))
+        self.assertEqual(matched[3], ((0, 3), (1, 1)))
+
+        inv = CreativeInventory()
+        inv.container_type = "crafting_table"
+        inv.container_block = "crafting_table"
+        inv.set_catalyst_count(2, empty_slots(9), empty_slots(27))
+        inv.container_catalysts[0] = make_stack("plant_fiber", 5)
+        inv.container_catalysts[1] = make_stack("flint", 1)
+        # A normal recipe still crafts while the catalysts sit unused.
+        inv.container_craft[0] = make_stack("planks", 1)
+        inv.container_craft[3] = make_stack("planks", 1)
+        inv._take_table_result(inv.container_craft)
+        self.assertEqual(inv.held, "stick")
+        self.assertEqual(stack_count(inv.container_catalysts[0]), 5)
+        self.assertEqual(stack_count(inv.container_catalysts[1]), 1)
+
+        spent = match_grid(grid, (recipe,), catalysts=inv._catalyst_stacks())
+        inv._spend_catalysts(spent[3])
+        self.assertEqual(stack_count(inv.container_catalysts[0]), 2)
+        self.assertEqual(stack_id(inv.container_catalysts[1]), "")
+
+    def test_the_paired_ui_draws_catalyst_slots_and_gives_them_back(self):
+        inv = CreativeInventory()
+        inv.container_type = "crafting_table"
+        storage = empty_slots(27)
+        hotbar = empty_slots(9)
+        inv.set_catalyst_count(2, hotbar, storage)
+        inv.container_catalysts[1] = make_stack("stick", 4)
+        frame = inv.layout(1280, 720, hotbar, 0, (0, 0), storage, container_type="crafting_table")
+        actions = {hit.action for hit in frame.hits}
+        self.assertIn("table_catalyst:0", actions)
+        self.assertIn("table_catalyst:1", actions)
+        self.assertNotIn("table_catalyst:2", actions)
+        label = next(item for item in frame.labels if item.text == "Catalysts")
+        for hit in frame.hits:
+            if not hit.action.startswith(("table_", "store:", "hotbar:")):
+                continue
+            if hit.action.startswith("table_catalyst:"):
+                self.assertLess(label.x, hit.x)
+            inside = hit.x <= label.x <= hit.x + hit.w and hit.y <= label.y <= hit.y + hit.h
+            self.assertFalse(inside, hit.action)
+
+        inv.apply("table_catalyst:1", "left", hotbar, 0, storage)
+        self.assertEqual(inv.held, "stick")
+        self.assertEqual(inv.held_count, 4)
+
+        inv.container_catalysts[0] = make_stack("plant_fiber", 2)
+        inv.dismiss_container(hotbar, storage)
+        self.assertEqual(inv.catalyst_count, 0)
+        self.assertEqual(stack_id(storage[0]), "plant_fiber")
+        self.assertEqual(stack_count(storage[0]), 2)
+
+
+class WoodCraftingTableTests(unittest.TestCase):
+    WOODS = ("birch", "spruce", "acacia", "redwood", "pine")
+
+    def test_each_wood_table_crafts_and_opens_the_same_grid(self):
+        for wood in self.WOODS:
+            block_id = f"{wood}_crafting_table"
+            block = BLOCKS[block_id]
+            self.assertEqual(block.station, "crafting_table")
+            self.assertEqual(block.recipe_types, ("crafting_shaped", "crafting_shapeless"))
+            self.assertEqual(block.catalysts, 2)
+            self.assertEqual(block.name, f"{wood.title()} Crafting Table")
+            self.assertEqual(ITEMS[block_id].block, block_id)
+            self.assertEqual(fuel_burn_time(block_id), 15.0)
+            grid = (f"{wood}_log", "flint", "", "bricks", "bricks", "", "", "", "")
+            matched = craft_match(grid)
+            self.assertEqual(matched[0], block_id)
+            self.assertEqual(matched[1], 1)
+            player = craft_match((f"{wood}_log", "flint", "bricks", "bricks"))
+            self.assertEqual(player[0], block_id)
+
+        oak = craft_match(("log", "flint", "", "bricks", "bricks", "", "", "", ""))
+        self.assertEqual(oak[0], "crafting_table")
+
+        world = _Blocks()
+        world.set_block(2, 8, 2, "birch_crafting_table")
+        world.set_block(3, 8, 2, "birch_crafting_table")
+        self.assertEqual(paired_catalyst_count(world, 2, 8, 2), 2)
+        world.set_block(3, 8, 2, "crafting_table")
+        self.assertEqual(paired_catalyst_count(world, 2, 8, 2), 0)
 
 
 if __name__ == "__main__":
